@@ -7,13 +7,11 @@ pub struct NaiveQuery {
     k: usize,
 }
 
-impl NaiveQuery {
-    pub fn new(query_vector: HighDimVector, k: usize) -> Self {
+impl Query for NaiveQuery {
+    fn new(query_vector: HighDimVector, k: usize) -> Self {
         NaiveQuery { query_vector, k }
     }
-}
 
-impl Query for NaiveQuery {
     fn execute(&self, data: &Vec<HighDimVector>, metric: DistanceMetric) -> Vec<QueryResult> {
         let mut results = data
             .iter()
