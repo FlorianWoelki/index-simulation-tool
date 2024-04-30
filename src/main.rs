@@ -63,7 +63,7 @@ fn check_image_search() {
 
     let k = 10;
     let query = NaiveQuery::new(query_vector, k);
-    let query_results = query.execute(index.indexed_data(), DistanceMetric::Euclidean);
+    let query_results = query.execute(index.indexed_data(), index.metric());
 
     for result in query_results {
         println!("Index: {}, Distance: {}", result.index, result.distance);

@@ -1,6 +1,6 @@
-use crate::{data::HighDimVector, query::QueryResult};
+use crate::data::HighDimVector;
 
-use super::{calculate_distance, DistanceMetric, Index};
+use super::{DistanceMetric, Index};
 
 pub struct NaiveIndex {
     vectors: Vec<HighDimVector>,
@@ -27,25 +27,11 @@ impl Index for NaiveIndex {
         }
     }
 
-    fn query(&self, query: &HighDimVector) -> QueryResult {
-        let mut nearest = None;
-        let mut min_distance = f64::MAX;
-
-        for (i, vector) in self.vectors.iter().enumerate() {
-            let distance = calculate_distance(vector, query, self.metric);
-            if distance < min_distance {
-                min_distance = distance;
-                nearest = Some(i);
-            }
-        }
-
-        QueryResult {
-            index: nearest.unwrap_or(0),
-            distance: min_distance,
-        }
-    }
-
     fn indexed_data(&self) -> &Vec<HighDimVector> {
         &self.indexed_vectors
+    }
+
+    fn metric(&self) -> DistanceMetric {
+        self.metric
     }
 }

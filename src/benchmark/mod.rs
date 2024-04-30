@@ -35,10 +35,9 @@ impl Benchmark {
         let index_execution_time = start_time.elapsed();
 
         // Perform the query.
-        let query_results = self.query_type.execute(
-            &self.index_type.indexed_data(),
-            crate::index::DistanceMetric::Euclidean,
-        );
+        let query_results = self
+            .query_type
+            .execute(&self.index_type.indexed_data(), self.index_type.metric());
         let query_execution_time = start_time.elapsed() - index_execution_time;
 
         let total_execution_time = start_time.elapsed();

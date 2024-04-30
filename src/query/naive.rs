@@ -1,7 +1,4 @@
-use crate::{
-    data::HighDimVector,
-    index::{calculate_distance, DistanceMetric},
-};
+use crate::{data::HighDimVector, index::DistanceMetric};
 
 use super::{Query, QueryResult};
 
@@ -22,7 +19,7 @@ impl Query for NaiveQuery {
             .iter()
             .enumerate()
             .map(|(index, vector)| {
-                let distance = calculate_distance(vector, &self.query_vector, metric);
+                let distance = self.query_vector.distance(vector, metric);
                 QueryResult { index, distance }
             })
             .collect::<Vec<QueryResult>>();
