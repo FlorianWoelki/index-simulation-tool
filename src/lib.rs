@@ -1,9 +1,18 @@
+pub enum DistanceMetric {
+    Euclidean,
+    Manhattan,
+    Cosine,
+}
+
 pub trait Index {
-    fn new() -> Self
+    fn new(metric: DistanceMetric) -> Self
     where
         Self: Sized;
     fn add_vector(&mut self, vector: HighDimVector);
+    fn bulk_add_vectors(&mut self, vectors: Vec<HighDimVector>);
     fn find_nearest(&self, query: &HighDimVector) -> Option<&HighDimVector>;
+    fn clear(&mut self);
+    fn size(&self) -> usize;
 }
 
 /// Represents a high-dimensional vector.
@@ -29,29 +38,6 @@ impl HighDimVector {
     pub fn new(dimensions: Vec<f64>) -> Self {
         HighDimVector { dimensions }
     }
-
-    /// Calculates the Euclidean distance between this vector and another.
-    ///
-    /// # Parameters
-    /// * `other` - A reference to another `HighDimVector` to calculate the distance to.
-    ///
-    /// # Returns
-    /// Returns the Euclidean distance as an `f64`.
-    ///
-    /// # Examples
-    /// ```
-    /// let vector1 = HighDimVector::new(vec![1.0, 2.0, 3.0]);
-    /// let vector2 = HighDimVector::new(vec![4.0, 5.0, 6.0]);
-    /// let distance = vector1.distance(&vector2);
-    /// ```
-    pub fn distance(&self, other: &Self) -> f64 {
-        self.dimensions
-            .iter()
-            .zip(other.dimensions.iter())
-            .map(|(a, b)| (a - b).powi(2))
-            .sum::<f64>()
-            .sqrt()
-    }
 }
 
 /// A naive implementation of an index using a vector to store high-dimensional vectors.
@@ -61,6 +47,7 @@ impl HighDimVector {
 pub struct NaiveIndex {
     /// A vector of `HighDimVector` representing the high-dimensional vectors.
     vectors: Vec<HighDimVector>,
+    metric: DistanceMetric,
 }
 
 impl Index for NaiveIndex {
@@ -72,9 +59,10 @@ impl Index for NaiveIndex {
     /// ```
     /// let index = NaiveIndex::new();
     /// ```
-    fn new() -> Self {
+    fn new(metric: DistanceMetric) -> Self {
         NaiveIndex {
             vectors: Vec::new(),
+            metric,
         }
     }
 
@@ -90,6 +78,10 @@ impl Index for NaiveIndex {
     /// ```
     fn add_vector(&mut self, vector: HighDimVector) {
         self.vectors.push(vector);
+    }
+
+    fn bulk_add_vectors(&mut self, vectors: Vec<HighDimVector>) {
+        self.vectors.extend(vectors);
     }
 
     /// Finds the nearest vector in the index to a given query vector.
@@ -109,9 +101,52 @@ impl Index for NaiveIndex {
     /// let nearest = index.find_nearest(&query).unwrap();
     /// ```
     fn find_nearest(&self, query: &HighDimVector) -> Option<&HighDimVector> {
-        self.vectors
-            .iter()
-            .min_by(|a, b| a.distance(query).partial_cmp(&b.distance(query)).unwrap())
+        self.vectors.iter().min_by(|a, b| {
+            self.distance(a, query)
+                .partial_cmp(&self.distance(b, query))
+                .unwrap()
+        })
+    }
+
+    fn clear(&mut self) {
+        self.vectors.clear();
+    }
+
+    fn size(&self) -> usize {
+        self.vectors.len()
+    }
+}
+
+impl NaiveIndex {
+    fn distance(&self, a: &HighDimVector, b: &HighDimVector) -> f64 {
+        match self.metric {
+            DistanceMetric::Euclidean => a
+                .dimensions
+                .iter()
+                .zip(b.dimensions.iter())
+                .map(|(a, b)| (a - b).powi(2))
+                .sum::<f64>()
+                .sqrt(),
+
+            DistanceMetric::Manhattan => a
+                .dimensions
+                .iter()
+                .zip(b.dimensions.iter())
+                .map(|(a, b)| (a - b).abs())
+                .sum::<f64>(),
+
+            DistanceMetric::Cosine => {
+                let dot_product: f64 = a
+                    .dimensions
+                    .iter()
+                    .zip(b.dimensions.iter())
+                    .map(|(x, y)| x * y)
+                    .sum();
+                let norm_a: f64 = a.dimensions.iter().map(|x| x.powi(2)).sum::<f64>().sqrt();
+                let norm_b: f64 = b.dimensions.iter().map(|x| x.powi(2)).sum::<f64>().sqrt();
+                1.0 - dot_product / (norm_a * norm_b)
+            }
+        }
     }
 }
 
@@ -121,7 +156,7 @@ mod tests {
 
     #[test]
     fn test_nearest_neighbor() {
-        let mut index = NaiveIndex::new();
+        let mut index = NaiveIndex::new(DistanceMetric::Euclidean);
         index.add_vector(HighDimVector::new(vec![1.0, 2.0, 3.0]));
         index.add_vector(HighDimVector::new(vec![4.0, 5.0, 6.0]));
         index.add_vector(HighDimVector::new(vec![7.0, 8.0, 9.0]));

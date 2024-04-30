@@ -1,10 +1,10 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use index_simulation_tool::{HighDimVector, Index, NaiveIndex};
+use index_simulation_tool::{DistanceMetric, HighDimVector, Index, NaiveIndex};
 
 fn benchmark_index<I: Index>(c: &mut Criterion) {
     let mut group = c.benchmark_group("Indexing");
 
-    let mut index = I::new();
+    let mut index = I::new(DistanceMetric::Euclidean);
     let vectors = (0..1000)
         .map(|i| HighDimVector::new(vec![i as f64, i as f64, i as f64]))
         .collect::<Vec<_>>();
