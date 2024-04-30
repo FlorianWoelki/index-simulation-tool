@@ -1,3 +1,11 @@
+pub trait Index {
+    fn new() -> Self
+    where
+        Self: Sized;
+    fn add_vector(&mut self, vector: HighDimVector);
+    fn find_nearest(&self, query: &HighDimVector) -> Option<&HighDimVector>;
+}
+
 /// Represents a high-dimensional vector.
 ///
 /// This struct is used to store and manipulate high-dimensional vectors
@@ -55,7 +63,7 @@ pub struct NaiveIndex {
     vectors: Vec<HighDimVector>,
 }
 
-impl NaiveIndex {
+impl Index for NaiveIndex {
     /// Constructs a new `NaiveIndex`.
     ///
     /// Initialises an empty vector to store `HighDimVector` instances.
@@ -64,7 +72,7 @@ impl NaiveIndex {
     /// ```
     /// let index = NaiveIndex::new();
     /// ```
-    pub fn new() -> Self {
+    fn new() -> Self {
         NaiveIndex {
             vectors: Vec::new(),
         }
@@ -80,7 +88,7 @@ impl NaiveIndex {
     /// let mut index = NaiveIndex::new();
     /// index.add_vector(HighDimVector::new(vec![1.0, 2.0, 3.0]));
     /// ```
-    pub fn add_vector(&mut self, vector: HighDimVector) {
+    fn add_vector(&mut self, vector: HighDimVector) {
         self.vectors.push(vector);
     }
 
@@ -100,7 +108,7 @@ impl NaiveIndex {
     /// let query = HighDimVector::new(vec![1.0, 2.1, 2.9]);
     /// let nearest = index.find_nearest(&query).unwrap();
     /// ```
-    pub fn find_nearest(&self, query: &HighDimVector) -> Option<&HighDimVector> {
+    fn find_nearest(&self, query: &HighDimVector) -> Option<&HighDimVector> {
         self.vectors
             .iter()
             .min_by(|a, b| a.distance(query).partial_cmp(&b.distance(query)).unwrap())
