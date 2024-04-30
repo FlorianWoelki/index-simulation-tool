@@ -3,6 +3,8 @@ use data::{generator::DataGenerator, HighDimVector};
 use index::{naive::NaiveIndex, DistanceMetric, Index};
 use query::{naive::NaiveQuery, Query};
 
+use crate::query::hnsw::HNSWQuery;
+
 mod benchmark;
 mod data;
 mod index;
@@ -10,10 +12,11 @@ mod query;
 
 fn main() {
     // check_image_search();
-    run_benchmark();
+    run_benchmark::<HNSWQuery>();
+    run_benchmark::<NaiveQuery>();
 }
 
-fn run_benchmark() {
+fn run_benchmark<Q: Query + 'static>() {
     let dimensions = 100;
     let num_images = 100000;
     let range = (0.0, 255.0); // Range of pixel values for grayscale images.
@@ -26,9 +29,9 @@ fn run_benchmark() {
         index.add_vector(HighDimVector::new(d));
     }
 
-    let k = 10;
+    let k = 2;
     let query_vector = HighDimVector::new(vec![128.0; dimensions]);
-    let query = Box::new(NaiveQuery::new(query_vector, k));
+    let query = Box::new(Q::new(query_vector, k));
 
     let mut benchmark = Benchmark::new(index, query);
 
