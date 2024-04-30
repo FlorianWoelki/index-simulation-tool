@@ -21,19 +21,25 @@ fn run_benchmark<Q: Query + 'static>() {
     let num_images = 100000;
     let range = (0.0, 255.0); // Range of pixel values for grayscale images.
 
+    println!("generating data...");
     let mut data_generator = DataGenerator::new(dimensions, num_images, range);
     let generated_data = data_generator.generate();
+    println!("...done");
 
+    println!("adding vectors to the index data structure...");
     let mut index = Box::new(NaiveIndex::new(DistanceMetric::Euclidean));
     for d in generated_data {
         index.add_vector(HighDimVector::new(d));
     }
+    println!("...done");
 
     let k = 2;
     let query_vector = HighDimVector::new(vec![128.0; dimensions]);
     let query = Box::new(Q::new(query_vector, k));
 
+    println!("start benchmarking...");
     let mut benchmark = Benchmark::new(index, query);
+    println!("...done");
 
     let result = benchmark.run();
 
