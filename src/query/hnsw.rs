@@ -20,6 +20,10 @@ impl Query for HNSWQuery {
     }
 
     fn execute(&self, data: &Vec<HighDimVector>, metric: DistanceMetric) -> Vec<QueryResult> {
+        if data.is_empty() {
+            return vec![];
+        }
+
         let nodes: Vec<Node> = data
             .iter()
             .map(|vector| Node {
@@ -71,5 +75,46 @@ impl Query for HNSWQuery {
         });
 
         results.into_iter().take(self.k).collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_vector(data: Vec<f64>) -> HighDimVector {
+        HighDimVector::new(data)
+    }
+
+    #[test]
+    fn test_empty_data() {
+        let query_vector = create_vector(vec![1.0, 2.0, 3.0]);
+        let query = HNSWQuery::new(query_vector, 2);
+        let data = vec![];
+
+        let result = query.execute(&data, DistanceMetric::Euclidean);
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_no_neighbors() {
+        let query_vector = create_vector(vec![1.0, 2.0]);
+        let data = vec![create_vector(vec![2.0, 3.0])];
+        let query = HNSWQuery::new(query_vector, 1);
+
+        let results = query.execute(&data, DistanceMetric::Euclidean);
+
+        assert_eq!(results.len(), 0);
+    }
+
+    #[test]
+    fn test_single_element_with_self_neighbor() {
+        let query_vector = create_vector(vec![1.0, 2.0]);
+        let data = vec![query_vector.clone()];
+        let query = HNSWQuery::new(query_vector, 1);
+
+        let results = query.execute(&data, DistanceMetric::Euclidean);
+
+        assert_eq!(results.len(), 0);
     }
 }
