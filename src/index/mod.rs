@@ -1,16 +1,17 @@
-use core::fmt;
+use std::fmt::Debug;
 
 use crate::data::HighDimVector;
 
 pub mod naive;
 
+#[derive(PartialEq)]
 pub enum DistanceMetric {
     Euclidean,
     Manhattan,
     Cosine,
 }
 
-impl fmt::Display for DistanceMetric {
+impl Debug for DistanceMetric {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             DistanceMetric::Euclidean => write!(f, "Euclidean"),
