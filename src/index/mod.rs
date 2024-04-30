@@ -1,4 +1,4 @@
-use crate::data::HighDimVector;
+use crate::{data::HighDimVector, query::QueryResult};
 
 pub mod naive;
 
@@ -14,8 +14,9 @@ pub trait Index {
     where
         Self: Sized;
     fn add_vector(&mut self, vector: HighDimVector);
-    fn find_nearest(&self, query: &HighDimVector) -> Option<&HighDimVector>;
-    fn iter(&self) -> Box<dyn Iterator<Item = &HighDimVector> + '_>;
+    fn build(&mut self);
+    fn query(&self, query: &HighDimVector) -> QueryResult;
+    fn indexed_data(&self) -> &Vec<HighDimVector>;
 }
 
 pub fn calculate_distance(a: &HighDimVector, b: &HighDimVector, metric: DistanceMetric) -> f64 {

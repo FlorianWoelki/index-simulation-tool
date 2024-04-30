@@ -1,14 +1,45 @@
+use benchmark::Benchmark;
 use data::{generator::DataGenerator, HighDimVector};
 use index::{naive::NaiveIndex, DistanceMetric, Index};
-use query::range::range_query;
+use query::{naive::NaiveQuery, Query};
 
+mod benchmark;
 mod data;
 mod index;
 mod query;
 
 fn main() {
-    check_image_search();
-    //check_text_search();
+    // check_image_search();
+    run_benchmark();
+}
+
+fn run_benchmark() {
+    let dimensions = 100;
+    let num_images = 100000;
+    let range = (0.0, 255.0); // Range of pixel values for grayscale images.
+
+    let mut data_generator = DataGenerator::new(dimensions, num_images, range);
+    let generated_data = data_generator.generate();
+
+    let mut index = Box::new(NaiveIndex::new(DistanceMetric::Euclidean));
+    for d in generated_data {
+        index.add_vector(HighDimVector::new(d));
+    }
+
+    let k = 10;
+    let query_vector = HighDimVector::new(vec![128.0; dimensions]);
+    let query = Box::new(NaiveQuery::new(query_vector, k));
+
+    let mut benchmark = Benchmark::new(index, query);
+
+    let result = benchmark.run();
+
+    println!("Total Execution time: {:?}", result.total_execution_time);
+    println!("Index Execution time: {:?}", result.index_execution_time);
+    println!("Query Execution time: {:?}", result.query_execution_time);
+    println!("Precision: {}", result.precision);
+    println!("Recall: {}", result.recall);
+    println!("F1 Score: {}", result.f1_score);
 }
 
 fn check_image_search() {
@@ -25,44 +56,16 @@ fn check_image_search() {
         index.add_vector(high_dim_vector);
     }
 
+    index.build();
+
     // Creating a simulated query image with all pixels at intensity 128.
     let query_vector = HighDimVector::new(vec![128.0; dimensions]);
 
-    /*if let Some(nearest_vector) = index.find_nearest(&query_vector) {
-        println!("Nearest image vector found: {:?}", nearest_vector);
-    } else {
-        println!("No nearest image vector found.");
-        }*/
+    let k = 10;
+    let query = NaiveQuery::new(query_vector, k);
+    let query_results = query.execute(index.indexed_data(), DistanceMetric::Euclidean);
 
-    let image_query_range = 650.0;
-    let image_results = range_query(&index, &query_vector, image_query_range);
-
-    println!("Found {} images within range.", image_results.len());
-    for (i, img) in image_results.iter().enumerate() {
-        println!("Image {}: {:?}", i, img);
-    }
-}
-
-fn check_text_search() {
-    let dimensions = 300; // Typical dimensions for text embeddings like Word2Vec.
-    let num_texts = 100;
-    let range = (-1.0, 1.0); // Range for text embeddings, often normalized.
-
-    let mut data_generator = DataGenerator::new(dimensions, num_texts, range);
-    let text_data = data_generator.generate();
-    let mut index = NaiveIndex::new(DistanceMetric::Cosine);
-
-    for vector in text_data {
-        let high_dim_vector = HighDimVector::new(vector);
-        index.add_vector(high_dim_vector);
-    }
-
-    // Creating neutral text query.
-    let query_vector = HighDimVector::new(vec![0.1; dimensions]);
-
-    if let Some(nearest_vector) = index.find_nearest(&query_vector) {
-        println!("Nearest text vector found: {:?}", nearest_vector);
-    } else {
-        println!("No nearest text vector found.");
+    for result in query_results {
+        println!("Index: {}, Distance: {}", result.index, result.distance);
     }
 }

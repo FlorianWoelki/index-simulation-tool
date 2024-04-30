@@ -1,6 +1,6 @@
 pub mod generator;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HighDimVector {
     pub dimensions: Vec<f64>,
 }
