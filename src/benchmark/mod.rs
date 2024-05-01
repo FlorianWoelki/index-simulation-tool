@@ -1,17 +1,14 @@
 use std::time::{Duration, Instant};
 
-use crate::{
-    index::Index,
-    query::{Query, QueryResult},
-};
+use crate::{index::Index, query::Query};
+
+mod metrics;
 
 pub struct BenchmarkResult {
     pub total_execution_time: Duration,
     pub index_execution_time: Duration,
     pub query_execution_time: Duration,
-    pub precision: f64,
-    pub recall: f64,
-    pub f1_score: f64,
+    pub queries_per_second: f64,
 }
 
 pub struct Benchmark {
@@ -42,19 +39,13 @@ impl Benchmark {
 
         let total_execution_time = start_time.elapsed();
 
-        let (precision, recall, f1_score) = self.calculate_metrics(&query_results);
+        let queries_per_second = metrics::calculate_queries_per_second(query_execution_time);
 
         BenchmarkResult {
             total_execution_time,
             index_execution_time,
             query_execution_time,
-            precision,
-            recall,
-            f1_score,
+            queries_per_second,
         }
-    }
-
-    fn calculate_metrics(&self, query_results: &[QueryResult]) -> (f64, f64, f64) {
-        (0.0, 0.0, 0.0)
     }
 }

@@ -46,9 +46,8 @@ fn run_benchmark<Q: Query + 'static>() {
     println!("Total Execution time: {:?}", result.total_execution_time);
     println!("Index Execution time: {:?}", result.index_execution_time);
     println!("Query Execution time: {:?}", result.query_execution_time);
-    println!("Precision: {}", result.precision);
-    println!("Recall: {}", result.recall);
-    println!("F1 Score: {}", result.f1_score);
+    println!("Queries per Second (QPS): {:?}", result.queries_per_second);
+    println!("------------------------------------");
 }
 
 fn check_image_search() {
