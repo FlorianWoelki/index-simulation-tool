@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use super::BenchmarkResult;
+
 /// Calculates the number of queries per second from the total time taken to execute
 /// the queries.
 ///
@@ -18,6 +20,24 @@ pub fn calculate_queries_per_second(total_queries_execution_time: Duration) -> f
     } else {
         0.0
     }
+}
+
+pub fn calculate_scalability_factor(
+    (queries_per_second, dataset_size, dataset_dimensionality): (f64, usize, usize),
+    previous_result: &BenchmarkResult,
+) -> f64 {
+    let current_qps = queries_per_second;
+    let previous_qps = previous_result.queries_per_second;
+
+    let dataset_size_ratio = (dataset_size as f64) / (previous_result.dataset_size as f64);
+    let dimensionality_ratio =
+        (dataset_dimensionality as f64) / (previous_result.dataset_dimensionality as f64);
+
+    let qps_scalability_factor = current_qps / previous_qps;
+
+    let overall_scalability_factor = (qps_scalability_factor) / 1.0;
+
+    overall_scalability_factor / (dataset_size_ratio * dimensionality_ratio)
 }
 
 #[cfg(test)]
