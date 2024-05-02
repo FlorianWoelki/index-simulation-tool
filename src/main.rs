@@ -35,8 +35,13 @@ fn main() {
     let current_pid = std::process::id() as usize;
     if let Some(process) = system.process(Pid::from(current_pid)) {
         println!("Current process: {}", process.name());
-        println!("Memory usage: {} KB", process.memory());
-        println!("CPU usage: {}%", process.cpu_usage());
+        let memory_mb = process.memory() as f64 / 1_048_576.0;
+        if memory_mb >= 1024f64 {
+            println!("Memory usage: {:.2} GB", memory_mb / 1024.0);
+        } else {
+            println!("Memory usage: {:.2} MB", memory_mb);
+        }
+        println!("CPU usage: {:.2}%", process.cpu_usage());
     }
 
     //run_benchmark::<HNSWQuery>(dimensions, num_images);
