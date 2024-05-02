@@ -3,6 +3,8 @@ use data::{generator::DataGenerator, HighDimVector};
 use index::{naive::NaiveIndex, DistanceMetric, Index};
 use query::{naive::NaiveQuery, Query};
 
+use clap::Parser;
+
 use crate::query::hnsw::HNSWQuery;
 
 mod benchmark;
@@ -10,14 +12,29 @@ mod data;
 mod index;
 mod query;
 
-fn main() {
-    run_benchmark::<HNSWQuery>();
-    run_benchmark::<NaiveQuery>();
+#[derive(Parser)]
+struct Args {
+    #[clap(long, short, action)]
+    dimensions: Option<usize>,
+    #[clap(long, short, action)]
+    num_images: Option<usize>,
 }
 
-fn run_benchmark<Q: Query + 'static>() {
-    let benchmark_config =
-        BenchmarkConfig::new((100, 100, 100), (100_000, 1_000_000, 100_000), (0.0, 255.0));
+fn main() {
+    let args = Args::parse();
+    let dimensions = args.dimensions.unwrap_or(100);
+    let num_images = args.num_images.unwrap_or(100_000);
+
+    run_benchmark::<HNSWQuery>(dimensions, num_images);
+    run_benchmark::<NaiveQuery>(dimensions, num_images);
+}
+
+fn run_benchmark<Q: Query + 'static>(dimensions: usize, num_images: usize) {
+    let benchmark_config = BenchmarkConfig::new(
+        (dimensions, 100, dimensions),
+        (num_images, 1_000_000, num_images),
+        (0.0, 255.0),
+    );
 
     let mut previous_benchmark_result = None;
     for config in benchmark_config.dataset_configurations() {
