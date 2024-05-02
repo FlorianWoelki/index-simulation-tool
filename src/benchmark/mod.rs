@@ -1,8 +1,11 @@
 use std::time::{Duration, Instant};
 
+use serde::Serialize;
+
 use crate::{index::Index, query::Query};
 
-mod metrics;
+pub mod logger;
+pub mod metrics;
 
 /// Configuration for running benchmark on different dataset configurations.
 ///
@@ -64,6 +67,7 @@ impl BenchmarkConfig {
     }
 }
 
+#[derive(Serialize, Clone, Copy)]
 pub struct BenchmarkResult {
     pub total_execution_time: Duration,
     pub index_execution_time: Duration,

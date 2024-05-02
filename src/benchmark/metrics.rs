@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use super::BenchmarkResult;
 
+pub const DEFAULT_SCALABILITY_FACTOR: f64 = 1.0;
+
 /// Calculates the number of queries per second from the total time taken to execute
 /// the queries.
 ///

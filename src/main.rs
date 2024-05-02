@@ -1,4 +1,7 @@
-use benchmark::{Benchmark, BenchmarkConfig, BenchmarkResult};
+use benchmark::{
+    logger::BenchmarkLogger, metrics::DEFAULT_SCALABILITY_FACTOR, Benchmark, BenchmarkConfig,
+    BenchmarkResult,
+};
 use data::{generator::DataGenerator, HighDimVector};
 use index::{naive::NaiveIndex, DistanceMetric, Index};
 use query::{naive::NaiveQuery, Query};
@@ -25,27 +28,38 @@ fn main() {
     let dimensions = args.dimensions.unwrap_or(100);
     let num_images = args.num_images.unwrap_or(100_000);
 
-    run_benchmark::<HNSWQuery>(dimensions, num_images);
+    //run_benchmark::<HNSWQuery>(dimensions, num_images);
     run_benchmark::<NaiveQuery>(dimensions, num_images);
 }
 
 fn run_benchmark<Q: Query + 'static>(dimensions: usize, num_images: usize) {
     let benchmark_config = BenchmarkConfig::new(
         (dimensions, 100, dimensions),
-        (num_images, 1_000_000, num_images),
+        (num_images, 100_000, num_images),
         (0.0, 255.0),
     );
+    let mut logger = BenchmarkLogger::new();
 
     let mut previous_benchmark_result = None;
     for config in benchmark_config.dataset_configurations() {
-        let result =
-            perform_single_benchmark::<Q>(&benchmark_config, previous_benchmark_result, config);
+        let result = perform_single_benchmark::<Q>(
+            &benchmark_config,
+            &mut logger,
+            previous_benchmark_result,
+            config,
+        );
         previous_benchmark_result = Some(result);
+    }
+
+    // TODO: Change file name to be more generic with a date.
+    if let Err(e) = logger.write_to_csv("benchmark_results.csv") {
+        eprintln!("Failed to write benchmark results to CSV: {}", e);
     }
 }
 
 fn perform_single_benchmark<Q: Query + 'static>(
     config: &BenchmarkConfig,
+    logger: &mut BenchmarkLogger,
     previous_benchmark_result: Option<BenchmarkResult>,
     (dimensions, num_images): (usize, usize),
 ) -> BenchmarkResult {
@@ -60,6 +74,8 @@ fn perform_single_benchmark<Q: Query + 'static>(
 
     let mut benchmark = Benchmark::new(index, query, previous_benchmark_result);
     let result = benchmark.run(num_images, dimensions);
+
+    logger.add_record(&result);
 
     print_benchmark_results(&result);
     result
@@ -94,7 +110,12 @@ fn print_benchmark_results(result: &BenchmarkResult) {
     println!("Index Execution time: {:?}", result.index_execution_time);
     println!("Query Execution time: {:?}", result.query_execution_time);
     println!("Queries per Second (QPS): {:?}", result.queries_per_second);
-    println!("Scalability Factor: {:?}", result.scalability_factor);
+    println!(
+        "Scalability Factor: {:?}",
+        result
+            .scalability_factor
+            .unwrap_or(DEFAULT_SCALABILITY_FACTOR)
+    );
     println!("Dataset Size: {:?}", result.dataset_size);
     println!(
         "Dataset Dimensionality: {:?}",
