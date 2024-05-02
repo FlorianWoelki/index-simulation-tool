@@ -15,25 +15,25 @@ mod metrics;
 /// For example, a 3-dimensional vector might represent an RGB color value.
 pub struct BenchmarkConfig {
     /// The starting number of dimensions for the test data vectors.
-    start_dimensions: usize,
+    pub start_dimensions: usize,
     /// The maximum number of dimensions to be tested.
-    end_dimensions: usize,
+    pub end_dimensions: usize,
     /// The increment in dimensions for each subsequent test after the
     /// initial start_dimensions.
-    step_dimensions: usize,
+    pub step_dimensions: usize,
     /// The starting number of data points to use in the dataset for the
     /// benchmarks.
-    start_num_images: usize,
+    pub start_num_images: usize,
     /// The maximum number of data points to be tested.
-    end_num_images: usize,
+    pub end_num_images: usize,
     /// The increment in the number of data points from one dataset to the
     /// next. This helps in assessing scalability and performance as the
     /// amount of data increases.
-    step_num_images: usize,
+    pub step_num_images: usize,
     /// A tuple representing the inclusive minimum and maximum values that
     /// any single element in the data vectors can take. This is crucial for
     /// generating test data with realistic variability.
-    value_range: (f64, f64),
+    pub value_range: (f64, f64),
 }
 
 impl BenchmarkConfig {
