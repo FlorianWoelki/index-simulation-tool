@@ -7,6 +7,7 @@ use index::{naive::NaiveIndex, DistanceMetric, Index};
 use query::{naive::NaiveQuery, Query};
 
 use clap::Parser;
+use sysinfo::{Pid, System};
 
 use crate::query::hnsw::HNSWQuery;
 
@@ -28,14 +29,26 @@ fn main() {
     let dimensions = args.dimensions.unwrap_or(100);
     let num_images = args.num_images.unwrap_or(100_000);
 
+    let mut system = System::new_all();
+    system.refresh_all();
+
+    let current_pid = std::process::id() as usize;
+    if let Some(process) = system.process(Pid::from(current_pid)) {
+        println!("Current process: {}", process.name());
+        println!("Memory usage: {} KB", process.memory());
+        println!("CPU usage: {}%", process.cpu_usage());
+    }
+
     //run_benchmark::<HNSWQuery>(dimensions, num_images);
     run_benchmark::<NaiveQuery>(dimensions, num_images);
+
+    system.refresh_all();
 }
 
 fn run_benchmark<Q: Query + 'static>(dimensions: usize, num_images: usize) {
     let benchmark_config = BenchmarkConfig::new(
         (dimensions, 100, dimensions),
-        (num_images, 1_000_000, num_images),
+        (num_images, 100_000, num_images),
         (0.0, 255.0),
     );
     let mut logger = BenchmarkLogger::new();
