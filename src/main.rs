@@ -35,7 +35,7 @@ fn main() {
 fn run_benchmark<Q: Query + 'static>(dimensions: usize, num_images: usize) {
     let benchmark_config = BenchmarkConfig::new(
         (dimensions, 100, dimensions),
-        (num_images, 100_000, num_images),
+        (num_images, 1_000_000, num_images),
         (0.0, 255.0),
     );
     let mut logger = BenchmarkLogger::new();
