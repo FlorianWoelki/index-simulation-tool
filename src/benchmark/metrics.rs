@@ -106,4 +106,85 @@ mod tests {
         let qps = calculate_queries_per_second(duration);
         assert_eq!(qps, 0.0);
     }
+
+    #[test]
+    fn test_scalability_factor_improvement() {
+        let previous_result = BenchmarkResult {
+            total_execution_time: Duration::from_secs(1),
+            index_execution_time: Duration::from_secs(1),
+            query_execution_time: Duration::from_secs(1),
+            queries_per_second: 100.0,
+            dataset_size: 1000,
+            dataset_dimensionality: 10,
+            scalability_factor: None,
+        };
+        let current_qps = 210.0;
+        let current_dataset_size = 2000;
+        let current_dataset_dimensionality = 10;
+
+        let scalability_factor = calculate_scalability_factor(
+            (
+                current_qps,
+                current_dataset_size,
+                current_dataset_dimensionality,
+            ),
+            &previous_result,
+        );
+
+        assert!(scalability_factor > 1.0);
+    }
+
+    #[test]
+    fn test_scalability_factor_degradation() {
+        let previous_result = BenchmarkResult {
+            total_execution_time: Duration::from_secs(1),
+            index_execution_time: Duration::from_secs(1),
+            query_execution_time: Duration::from_secs(1),
+            queries_per_second: 200.0,
+            dataset_size: 1000,
+            dataset_dimensionality: 10,
+            scalability_factor: None,
+        };
+        let current_qps = 150.0;
+        let current_dataset_size = 2000;
+        let current_dataset_dimensionality = 10;
+
+        let scalability_factor = calculate_scalability_factor(
+            (
+                current_qps,
+                current_dataset_size,
+                current_dataset_dimensionality,
+            ),
+            &previous_result,
+        );
+
+        assert!(scalability_factor < 1.0);
+    }
+
+    #[test]
+    fn test_scalability_factor_constant() {
+        let previous_result = BenchmarkResult {
+            total_execution_time: Duration::from_secs(1),
+            index_execution_time: Duration::from_secs(1),
+            query_execution_time: Duration::from_secs(1),
+            queries_per_second: 100.0,
+            dataset_size: 1000,
+            dataset_dimensionality: 10,
+            scalability_factor: None,
+        };
+        let current_qps = 100.0;
+        let current_dataset_size = 1000;
+        let current_dataset_dimensionality = 10;
+
+        let scalability_factor = calculate_scalability_factor(
+            (
+                current_qps,
+                current_dataset_size,
+                current_dataset_dimensionality,
+            ),
+            &previous_result,
+        );
+
+        assert_eq!(scalability_factor, 1.0);
+    }
 }
