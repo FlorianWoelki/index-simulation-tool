@@ -31,6 +31,9 @@ fn main() {
 
     let mut system = System::new_all();
     system.refresh_all();
+    // Sleep for a short period to allow the system to have useful data.
+    std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
+    system.refresh_all();
 
     let current_pid = std::process::id() as usize;
     if let Some(process) = system.process(Pid::from(current_pid)) {
