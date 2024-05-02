@@ -126,7 +126,7 @@ fn add_vectors_to_index(data: &Vec<Vec<f64>>) -> Box<dyn Index> {
     index
 }
 
-fn create_query<Q: Query>(config: &BenchmarkConfig, dimensions: usize) -> Box<Q> {
+fn create_query<Q: Query>(_config: &BenchmarkConfig, dimensions: usize) -> Box<Q> {
     let k = 2;
     let query_vector = HighDimVector::new(vec![128.0; dimensions]);
     Box::new(Q::new(query_vector, k))
