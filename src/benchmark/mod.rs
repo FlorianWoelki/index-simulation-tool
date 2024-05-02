@@ -11,7 +11,7 @@ pub struct BenchmarkResult {
     pub queries_per_second: f64,
     pub dataset_size: usize,
     pub dataset_dimensionality: usize,
-    pub scalability_factor: f64,
+    pub scalability_factor: Option<f64>, // Optional because the first benchmark doesn't have a previous result to compare to.
 }
 
 pub struct Benchmark {
@@ -51,12 +51,12 @@ impl Benchmark {
         let queries_per_second = metrics::calculate_queries_per_second(query_execution_time);
 
         let scalability_factor = if let Some(previous_result) = &self.previous_benchmark_result {
-            metrics::calculate_scalability_factor(
+            Some(metrics::calculate_scalability_factor(
                 (queries_per_second, dataset_size, dimensions),
                 &previous_result,
-            )
+            ))
         } else {
-            1.0
+            None
         };
 
         BenchmarkResult {
