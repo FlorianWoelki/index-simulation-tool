@@ -24,16 +24,17 @@ struct Args {
     num_images: Option<usize>,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let args = Args::parse();
     let dimensions = args.dimensions.unwrap_or(100);
     let num_images = args.num_images.unwrap_or(100_000);
 
     //run_benchmark::<NaiveQuery>(dimensions, num_images);
-    run_benchmark::<HNSWQuery>(dimensions, num_images);
+    run_benchmark::<HNSWQuery>(dimensions, num_images).await;
 }
 
-fn run_benchmark<Q: Query + 'static>(dimensions: usize, num_images: usize) {
+async fn run_benchmark<Q: Query + 'static>(dimensions: usize, num_images: usize) {
     let benchmark_config = BenchmarkConfig::new(
         (dimensions, 100, dimensions),
         (num_images, 1_000_000, num_images),
@@ -49,7 +50,8 @@ fn run_benchmark<Q: Query + 'static>(dimensions: usize, num_images: usize) {
                 &mut logger,
                 previous_benchmark_result,
                 config,
-            );
+            )
+            .await;
             previous_benchmark_result = Some(result);
         });
     }
@@ -60,7 +62,7 @@ fn run_benchmark<Q: Query + 'static>(dimensions: usize, num_images: usize) {
     }
 }
 
-fn perform_single_benchmark<Q: Query + 'static>(
+async fn perform_single_benchmark<Q: Query + 'static>(
     config: &BenchmarkConfig,
     logger: &mut BenchmarkLogger,
     previous_benchmark_result: Option<BenchmarkResult>,
@@ -72,7 +74,7 @@ fn perform_single_benchmark<Q: Query + 'static>(
         dimensions, num_images
     );
 
-    let generated_data = generate_data(config, dimensions, num_images);
+    let generated_data = generate_data(config, dimensions, num_images).await;
     let index = add_vectors_to_index(&generated_data);
     let query = create_query::<Q>(config, dimensions);
 
@@ -86,9 +88,13 @@ fn perform_single_benchmark<Q: Query + 'static>(
     result
 }
 
-fn generate_data(config: &BenchmarkConfig, dimensions: usize, num_images: usize) -> Vec<Vec<f64>> {
+async fn generate_data(
+    config: &BenchmarkConfig,
+    dimensions: usize,
+    num_images: usize,
+) -> Vec<Vec<f64>> {
     let mut data_generator = DataGenerator::new(dimensions, num_images, config.value_range);
-    let generated_data = data_generator.generate();
+    let generated_data = data_generator.generate().await;
     generated_data
 }
 
