@@ -29,29 +29,29 @@ fn main() {
     let dimensions = args.dimensions.unwrap_or(100);
     let num_images = args.num_images.unwrap_or(100_000);
 
-    measure_resources!({
-        //run_benchmark::<NaiveQuery>(dimensions, num_images);
-        run_benchmark::<HNSWQuery>(dimensions, num_images);
-    });
+    //run_benchmark::<NaiveQuery>(dimensions, num_images);
+    run_benchmark::<HNSWQuery>(dimensions, num_images);
 }
 
 fn run_benchmark<Q: Query + 'static>(dimensions: usize, num_images: usize) {
     let benchmark_config = BenchmarkConfig::new(
         (dimensions, 100, dimensions),
-        (num_images, 100_000, num_images),
+        (num_images, 1_000_000, num_images),
         (0.0, 255.0),
     );
     let mut logger = BenchmarkLogger::new();
 
     let mut previous_benchmark_result = None;
     for config in benchmark_config.dataset_configurations() {
-        let result = perform_single_benchmark::<Q>(
-            &benchmark_config,
-            &mut logger,
-            previous_benchmark_result,
-            config,
-        );
-        previous_benchmark_result = Some(result);
+        measure_resources!({
+            let result = perform_single_benchmark::<Q>(
+                &benchmark_config,
+                &mut logger,
+                previous_benchmark_result,
+                config,
+            );
+            previous_benchmark_result = Some(result);
+        });
     }
 
     // TODO: Change file name to be more generic with a date.
@@ -66,6 +66,7 @@ fn perform_single_benchmark<Q: Query + 'static>(
     previous_benchmark_result: Option<BenchmarkResult>,
     (dimensions, num_images): (usize, usize),
 ) -> BenchmarkResult {
+    println!("------------------------------------");
     println!(
         "Benchmarking with dimensions: {}, num_images: {}",
         dimensions, num_images
@@ -81,24 +82,21 @@ fn perform_single_benchmark<Q: Query + 'static>(
     logger.add_record(&result);
 
     print_benchmark_results(&result);
+    println!("------------------------------------");
     result
 }
 
 fn generate_data(config: &BenchmarkConfig, dimensions: usize, num_images: usize) -> Vec<Vec<f64>> {
-    println!("generating data...");
     let mut data_generator = DataGenerator::new(dimensions, num_images, config.value_range);
     let generated_data = data_generator.generate();
-    println!("...done");
     generated_data
 }
 
 fn add_vectors_to_index(data: &Vec<Vec<f64>>) -> Box<dyn Index> {
-    println!("adding vectors to the index data structure...");
     let mut index = Box::new(NaiveIndex::new(DistanceMetric::Euclidean));
     for d in data {
         index.add_vector(HighDimVector::new(d.clone()));
     }
-    println!("...done");
     index
 }
 
@@ -124,5 +122,4 @@ fn print_benchmark_results(result: &BenchmarkResult) {
         "Dataset Dimensionality: {:?}",
         result.dataset_dimensionality
     );
-    println!("------------------------------------");
 }

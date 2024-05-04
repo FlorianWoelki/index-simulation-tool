@@ -2,7 +2,7 @@
 macro_rules! measure_resources {
     ($block:block) => {{
         fn measure(system: &sysinfo::System, pid: usize) {
-            println!("\n");
+            print!("\n");
             println!("Measuring resources for process with PID: {}", pid);
 
             if let Some(process) = system.process(Pid::from(pid)) {
@@ -15,7 +15,7 @@ macro_rules! measure_resources {
                 }
                 println!("CPU usage: {:.2}%", process.cpu_usage());
             }
-            println!("\n");
+            print!("\n");
         }
 
         let mut system = sysinfo::System::new_all();
