@@ -8,7 +8,7 @@ pub struct DataGenerator {
     dim: usize,
     count: usize,
     range: (f64, f64),
-    system: sysinfo::System,
+    rng: ThreadRng,
 }
 
 impl DataGenerator {
@@ -17,47 +17,19 @@ impl DataGenerator {
             dim,
             count,
             range,
-            system: sysinfo::System::new(),
+            rng: thread_rng(),
         }
     }
 
-    pub async fn generate(&mut self) -> Vec<Vec<f64>> {
-        self.system.refresh_all();
-
-        let mut handles = vec![];
-
-        let chunks = self.system.cpus().len(); // Number of parallel tasks.
-        let per_chunk = self.count / chunks;
-
-        for _ in 0..chunks {
-            let dim = self.dim;
-            let range = self.range;
-
-            let handle = tokio::task::spawn_blocking(move || {
-                let uniform_dist = Uniform::from(range.0..range.1);
-                let mut data_chunk = Vec::with_capacity(dim);
-
-                for _ in 0..per_chunk {
-                    let mut inner_vec = Vec::with_capacity(dim);
-                    for _ in 0..dim {
-                        inner_vec.push(uniform_dist.sample(&mut thread_rng()));
-                    }
-                    data_chunk.push(inner_vec);
-                }
-
-                data_chunk
-            });
-
-            handles.push(handle);
-        }
-
-        let mut results = Vec::with_capacity(self.count);
-        for handle in handles {
-            let mut result = handle.await.unwrap();
-            results.append(&mut result);
-        }
-
-        results
+    pub fn generate(&mut self) -> Vec<Vec<f64>> {
+        let uniform_dist = Uniform::from(self.range.0..self.range.1);
+        (0..self.count)
+            .map(|_| {
+                (0..self.dim)
+                    .map(|_| uniform_dist.sample(&mut self.rng))
+                    .collect()
+            })
+            .collect()
     }
 }
 
@@ -65,10 +37,10 @@ impl DataGenerator {
 mod tests {
     use super::*;
 
-    #[tokio::test]
-    async fn test_data_generation() {
+    #[test]
+    fn test_data_generation() {
         let mut generator = DataGenerator::new(5, 10, (0.0, 1.0));
-        let data = generator.generate().await;
+        let data = generator.generate();
         assert_eq!(data.len(), 10);
         assert_eq!(data[0].len(), 5);
         for vector in data {
