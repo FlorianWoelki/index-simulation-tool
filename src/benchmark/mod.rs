@@ -5,6 +5,7 @@ use serde::Serialize;
 use crate::{index::Index, query::Query};
 
 pub mod logger;
+pub mod measure_macro;
 pub mod metrics;
 
 /// Configuration for running benchmark on different dataset configurations.

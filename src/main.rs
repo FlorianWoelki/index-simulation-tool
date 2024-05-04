@@ -29,28 +29,10 @@ fn main() {
     let dimensions = args.dimensions.unwrap_or(100);
     let num_images = args.num_images.unwrap_or(100_000);
 
-    let mut system = System::new_all();
-    system.refresh_all();
-    // Sleep for a short period to allow the system to have useful data.
-    std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
-    system.refresh_all();
-
-    let current_pid = std::process::id() as usize;
-    if let Some(process) = system.process(Pid::from(current_pid)) {
-        println!("Current process: {}", process.name());
-        let memory_mb = process.memory() as f64 / 1_048_576.0;
-        if memory_mb >= 1024f64 {
-            println!("Memory usage: {:.2} GB", memory_mb / 1024.0);
-        } else {
-            println!("Memory usage: {:.2} MB", memory_mb);
-        }
-        println!("CPU usage: {:.2}%", process.cpu_usage());
-    }
-
-    //run_benchmark::<HNSWQuery>(dimensions, num_images);
-    run_benchmark::<NaiveQuery>(dimensions, num_images);
-
-    system.refresh_all();
+    measure_resources!({
+        //run_benchmark::<NaiveQuery>(dimensions, num_images);
+        run_benchmark::<HNSWQuery>(dimensions, num_images);
+    });
 }
 
 fn run_benchmark<Q: Query + 'static>(dimensions: usize, num_images: usize) {
