@@ -189,5 +189,87 @@ impl HNSWIndex {
 
 #[cfg(test)]
 mod tests {
+    use crate::index::{DistanceMetric, Index};
+
     use super::*;
+
+    #[test]
+    fn test_search_knn_basic_functionality() {
+        let mut index = HNSWIndex::new(DistanceMetric::Euclidean);
+        let v0 = HighDimVector::new(0, vec![1.0, 2.0, 3.0]);
+        let v1 = HighDimVector::new(1, vec![4.0, 5.0, 6.0]);
+        let v2 = HighDimVector::new(2, vec![7.0, 8.0, 9.0]);
+
+        index.add_vector(v0);
+        index.add_vector(v1);
+        index.add_vector(v2);
+        index.build();
+
+        let query_vector = HighDimVector::new(3, vec![1.5, 2.5, 3.5]);
+        let result = index.search_knn(&query_vector, 2);
+
+        assert_eq!(result.len(), 2);
+
+        let mut result_vec = result.into_sorted_vec();
+        assert_eq!(result_vec.pop().unwrap().id, 1);
+        assert_eq!(result_vec.pop().unwrap().id, 0);
+    }
+
+    #[test]
+    fn test_search_knn_boundary_conditions() {
+        let mut index = HNSWIndex::new(DistanceMetric::Euclidean);
+        let v0 = HighDimVector::new(0, vec![1.0, 2.0, 3.0]);
+        index.add_vector(v0);
+        index.build();
+
+        let query_vector = HighDimVector::new(1, vec![1.5, 2.5, 3.5]);
+
+        let result_zero = index.search_knn(&query_vector, 0);
+        assert_eq!(result_zero.len(), 0);
+
+        let result_excess = index.search_knn(&query_vector, 10);
+        assert_eq!(result_excess.len(), 1);
+    }
+
+    #[test]
+    fn test_search_layer() {
+        let mut index = HNSWIndex::new(DistanceMetric::Euclidean);
+        let v0 = HighDimVector::new(0, vec![1.0, 2.0, 3.0]);
+        let v1 = HighDimVector::new(1, vec![4.0, 5.0, 6.0]);
+        let v2 = HighDimVector::new(2, vec![7.0, 8.0, 9.0]);
+
+        index.add_vector(v0);
+        index.add_vector(v1);
+        index.add_vector(v2);
+        index.build();
+
+        let query_vector = HighDimVector::new(3, vec![1.5, 2.5, 3.5]);
+        let ef = 2;
+        let result = index.search_layer(0, &query_vector, 0, ef);
+
+        assert_eq!(result.len(), ef);
+        assert!(result.iter().all(|n| [0, 1].contains(&n.id)));
+    }
+
+    #[test]
+    fn test_search_layer_with_candidate() {
+        let mut index = HNSWIndex::new(DistanceMetric::Euclidean);
+        let v0 = HighDimVector::new(0, vec![1.0, 2.0, 3.0]);
+        let v1 = HighDimVector::new(1, vec![4.0, 5.0, 6.0]);
+        let v2 = HighDimVector::new(2, vec![7.0, 8.0, 9.0]);
+
+        index.add_vector(v0);
+        index.add_vector(v1);
+        index.add_vector(v2);
+        index.build();
+
+        let sorted_candidates = vec![NeighborNode::new(0, 5.0), NeighborNode::new(1, 6.0)];
+        let mut visited = HashSet::new();
+        let query_vector = HighDimVector::new(3, vec![1.5, 2.5, 3.5]);
+        let result =
+            index.search_layer_with_candidate(&query_vector, &sorted_candidates, &mut visited, 0);
+
+        assert_eq!(result.len(), 3);
+        assert!(visited.contains(&1) && visited.contains(&2));
+    }
 }
