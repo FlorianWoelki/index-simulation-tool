@@ -270,6 +270,6 @@ mod tests {
             index.search_layer_with_candidate(&query_vector, &sorted_candidates, &mut visited, 0);
 
         assert_eq!(result.len(), 3);
-        assert!(visited.contains(&1) && visited.contains(&2));
+        assert!(visited.contains(&0) && visited.contains(&1) && visited.contains(&2));
     }
 }
