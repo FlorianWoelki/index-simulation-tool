@@ -2,14 +2,15 @@ use crate::index::DistanceMetric;
 
 pub mod generator;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct HighDimVector {
+    pub id: usize,
     pub dimensions: Vec<f64>,
 }
 
 impl HighDimVector {
-    pub fn new(dimensions: Vec<f64>) -> Self {
-        HighDimVector { dimensions }
+    pub fn new(id: usize, dimensions: Vec<f64>) -> Self {
+        HighDimVector { id, dimensions }
     }
 
     pub fn distance(&self, other: &HighDimVector, metric: DistanceMetric) -> f64 {
@@ -60,8 +61,8 @@ mod tests {
 
     #[test]
     fn test_distance() {
-        let a = HighDimVector::new(vec![1.0, 2.0, 3.0]);
-        let b = HighDimVector::new(vec![4.0, 5.0, 6.0]);
+        let a = HighDimVector::new(1, vec![1.0, 2.0, 3.0]);
+        let b = HighDimVector::new(2, vec![4.0, 5.0, 6.0]);
 
         assert_eq!(a.distance(&b, DistanceMetric::Euclidean), 5.196152422706632);
         assert_eq!(a.distance(&b, DistanceMetric::Manhattan), 9.0);

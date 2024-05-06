@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
-use crate::{index::Index, query::Query};
+use crate::{data::HighDimVector, index::Index};
 
 pub mod logger;
 pub mod measure_macro;
@@ -81,24 +81,24 @@ pub struct BenchmarkResult {
 
 pub struct Benchmark {
     index_type: Box<dyn Index>,
-    query_type: Box<dyn Query>,
+    query_vector: HighDimVector,
     previous_benchmark_result: Option<BenchmarkResult>,
 }
 
 impl Benchmark {
     pub fn new(
         index_type: Box<dyn Index>,
-        query_type: Box<dyn Query>,
+        query_vector: HighDimVector,
         previous_benchmark_result: Option<BenchmarkResult>,
     ) -> Self {
         Benchmark {
             index_type,
-            query_type,
+            query_vector,
             previous_benchmark_result,
         }
     }
 
-    pub fn run(&mut self, dataset_size: usize, dimensions: usize) -> BenchmarkResult {
+    pub fn run(&mut self, dataset_size: usize, dimensions: usize, k: usize) -> BenchmarkResult {
         let start_time = Instant::now();
 
         // Builds the index.
@@ -106,9 +106,7 @@ impl Benchmark {
         let index_execution_time = start_time.elapsed();
 
         // Perform the query.
-        let _query_results = self
-            .query_type
-            .execute(&self.index_type.indexed_data(), self.index_type.metric());
+        let _query_results = self.index_type.search(&self.query_vector, k);
         let query_execution_time = start_time.elapsed() - index_execution_time;
 
         let total_execution_time = start_time.elapsed();

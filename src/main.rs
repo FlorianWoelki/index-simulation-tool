@@ -3,18 +3,14 @@ use benchmark::{
     BenchmarkResult,
 };
 use data::{generator::DataGenerator, HighDimVector};
-use index::{naive::NaiveIndex, DistanceMetric, Index};
-use query::{naive::NaiveQuery, Query};
+use index::{hnsw::HNSWIndex, naive::NaiveIndex, DistanceMetric, Index};
 
 use clap::Parser;
-use sysinfo::{Pid, System};
-
-use crate::query::hnsw::HNSWQuery;
+use sysinfo::Pid;
 
 mod benchmark;
 mod data;
 mod index;
-mod query;
 
 #[derive(Parser)]
 struct Args {
@@ -28,13 +24,13 @@ struct Args {
 async fn main() {
     let args = Args::parse();
     let dimensions = args.dimensions.unwrap_or(100);
-    let num_images = args.num_images.unwrap_or(100_000);
+    let num_images = args.num_images.unwrap_or(1000);
 
-    //run_benchmark::<NaiveQuery>(dimensions, num_images);
-    run_benchmark::<HNSWQuery>(dimensions, num_images).await;
+    //run_benchmark::<NaiveIndex>(dimensions, num_images).await;
+    run_benchmark::<HNSWIndex>(dimensions, num_images).await;
 }
 
-async fn run_benchmark<Q: Query + 'static>(dimensions: usize, num_images: usize) {
+async fn run_benchmark<I: Index + 'static>(dimensions: usize, num_images: usize) {
     let benchmark_config = BenchmarkConfig::new(
         (dimensions, 100, dimensions),
         (num_images, 1_000_000, num_images),
@@ -45,7 +41,7 @@ async fn run_benchmark<Q: Query + 'static>(dimensions: usize, num_images: usize)
     let mut previous_benchmark_result = None;
     for config in benchmark_config.dataset_configurations() {
         measure_resources!({
-            let result = perform_single_benchmark::<Q>(
+            let result = perform_single_benchmark::<I>(
                 &benchmark_config,
                 &mut logger,
                 previous_benchmark_result,
@@ -62,7 +58,7 @@ async fn run_benchmark<Q: Query + 'static>(dimensions: usize, num_images: usize)
     }
 }
 
-async fn perform_single_benchmark<Q: Query + 'static>(
+async fn perform_single_benchmark<I: Index + 'static>(
     config: &BenchmarkConfig,
     logger: &mut BenchmarkLogger,
     previous_benchmark_result: Option<BenchmarkResult>,
@@ -76,10 +72,11 @@ async fn perform_single_benchmark<Q: Query + 'static>(
 
     let generated_data = generate_data(config, dimensions, num_images).await;
     let index = add_vectors_to_index(&generated_data);
-    let query = create_query::<Q>(config, dimensions);
+    let query = create_query_vector(config, dimensions);
 
     let mut benchmark = Benchmark::new(index, query, previous_benchmark_result);
-    let result = benchmark.run(num_images, dimensions);
+    let k = 5;
+    let result = benchmark.run(num_images, dimensions, k);
 
     logger.add_record(&result);
 
@@ -99,17 +96,16 @@ async fn generate_data(
 }
 
 fn add_vectors_to_index(data: &Vec<Vec<f64>>) -> Box<dyn Index> {
-    let mut index = Box::new(NaiveIndex::new(DistanceMetric::Euclidean));
-    for d in data {
-        index.add_vector(HighDimVector::new(d.clone()));
+    let mut index = Box::new(HNSWIndex::new(DistanceMetric::Euclidean));
+    for (i, d) in data.iter().enumerate() {
+        index.add_vector(HighDimVector::new(i, d.clone()));
     }
     index
 }
 
-fn create_query<Q: Query>(_config: &BenchmarkConfig, dimensions: usize) -> Box<Q> {
-    let k = 2;
-    let query_vector = HighDimVector::new(vec![128.0; dimensions]);
-    Box::new(Q::new(query_vector, k))
+fn create_query_vector(_config: &BenchmarkConfig, dimensions: usize) -> HighDimVector {
+    let query_vector = HighDimVector::new(999999999, vec![128.0; dimensions]);
+    query_vector
 }
 
 fn print_benchmark_results(result: &BenchmarkResult) {

@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use crate::data::HighDimVector;
 
+pub mod hnsw;
 pub mod naive;
 
 #[derive(PartialEq)]
@@ -35,6 +36,5 @@ pub trait Index {
         Self: Sized;
     fn add_vector(&mut self, vector: HighDimVector);
     fn build(&mut self);
-    fn indexed_data(&self) -> &Vec<HighDimVector>;
-    fn metric(&self) -> DistanceMetric;
+    fn search(&self, query_vector: &HighDimVector, k: usize) -> Vec<HighDimVector>;
 }
