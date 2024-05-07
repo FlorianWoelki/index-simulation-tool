@@ -113,7 +113,7 @@ impl HNSWIndex {
         &self.layer_to_neighbors[id][layer - 1]
     }
 
-    pub(super) fn connect_neighbor(
+    fn connect_neighbor(
         &self,
         current_id: usize,
         sorted_candidates: &Vec<NeighborNode>,

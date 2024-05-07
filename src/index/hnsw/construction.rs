@@ -108,7 +108,7 @@ impl HNSWIndex {
                 return;
             }
 
-            current_id = self.connect_neighbor(id, &sorted_candidates, level, false);
+            self.connect_neighbor(id, &sorted_candidates, level, false);
             if level == 0 {
                 break;
             }

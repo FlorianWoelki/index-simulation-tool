@@ -1,6 +1,5 @@
 use rand::{
     distributions::{Distribution, Uniform},
-    rngs::ThreadRng,
     thread_rng,
 };
 
