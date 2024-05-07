@@ -11,6 +11,7 @@ use sysinfo::Pid;
 mod benchmark;
 mod data;
 mod index;
+mod kmeans;
 
 #[derive(Parser)]
 struct Args {
