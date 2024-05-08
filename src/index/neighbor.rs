@@ -5,7 +5,7 @@ use ordered_float::OrderedFloat;
 /// and a `distance` which is a floating-point representation of the distance
 /// from a reference point, ensuring order by distance.
 #[derive(Clone, PartialEq, Debug)]
-pub(super) struct NeighborNode {
+pub struct NeighborNode {
     pub id: usize,
     pub distance: OrderedFloat<f64>,
 }

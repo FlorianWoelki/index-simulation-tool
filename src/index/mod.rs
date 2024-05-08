@@ -4,6 +4,8 @@ use crate::data::HighDimVector;
 
 pub mod hnsw;
 pub mod naive;
+pub mod neighbor;
+pub mod ssg;
 
 #[derive(PartialEq)]
 pub enum DistanceMetric {

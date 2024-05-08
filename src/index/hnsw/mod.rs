@@ -7,10 +7,9 @@ use crate::{
     index::{DistanceMetric, Index},
 };
 
-use self::neighbor::NeighborNode;
+use super::neighbor::NeighborNode;
 
 mod construction;
-mod neighbor;
 mod search;
 
 /// A Hierarchical Navigable Small World (HNSW) graph index for efficient similarity search

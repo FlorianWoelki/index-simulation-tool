@@ -2,9 +2,9 @@ use std::collections::{BinaryHeap, HashSet};
 
 use ordered_float::OrderedFloat;
 
-use crate::data::HighDimVector;
+use crate::{data::HighDimVector, index::neighbor::NeighborNode};
 
-use super::{neighbor::NeighborNode, HNSWIndex};
+use super::HNSWIndex;
 
 impl HNSWIndex {
     /// Conducts a k-nearest neighbors search using a query vector, returning a binary heap

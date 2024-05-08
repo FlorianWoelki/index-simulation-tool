@@ -1,8 +1,8 @@
 use std::{collections::HashSet, sync::RwLock};
 
-use crate::data::HighDimVector;
+use crate::{data::HighDimVector, index::neighbor::NeighborNode};
 
-use super::{neighbor::NeighborNode, HNSWIndex};
+use super::HNSWIndex;
 
 impl HNSWIndex {
     /// Initializes the index with a new item and determines the random level for the item.

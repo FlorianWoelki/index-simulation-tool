@@ -1,5 +1,3 @@
-use std::collections::BinaryHeap;
-
 use crate::data::HighDimVector;
 
 use super::{DistanceMetric, Index};
