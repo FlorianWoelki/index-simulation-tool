@@ -5,6 +5,13 @@ use crate::{data::HighDimVector, index::neighbor::NeighborNode};
 use super::SSGIndex;
 
 impl SSGIndex {
+    /// Prunes the graph for the given query ID and populates the pruned graph vector.
+    ///
+    /// # Arguments
+    ///
+    /// * `query_id` - The ID of the query node.
+    /// * `expand_neighbors` - A mutable vector to store the expanded neighbors.
+    /// * `pruned_graph` - A mutable vector to store the pruned neighbors.
     pub(super) fn prune_graph(
         &mut self,
         query_id: usize,
@@ -41,6 +48,13 @@ impl SSGIndex {
         self.populate_pruned_graph(pruned_graph, &result, query_id);
     }
 
+    /// Populates the pruned graph vector with the given result vector for the specified query ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `pruned_graph` - A mutable vector to store the pruned neighbors.
+    /// * `result` - A reference to the vector containing the pruned neighbors.
+    /// * `query_id` - The ID of the query node.
     fn populate_pruned_graph(
         &self,
         pruned_graph: &mut Vec<NeighborNode>,
@@ -58,6 +72,16 @@ impl SSGIndex {
         }
     }
 
+    /// Checks if a candidate node is occluded by any existing node in the result vector.
+    ///
+    /// # Arguments
+    ///
+    /// * `result` - A reference to the vector containing the existing nodes.
+    /// * `candidate` - A reference to the candidate node.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the candidate node is occuluded by any existing node, `false` otherwise.
     fn is_occluded(&self, result: &Vec<NeighborNode>, candidate: &NeighborNode) -> bool {
         result.iter().any(|existing| {
             let djk = self.vectors[existing.id].distance(&self.vectors[candidate.id], self.metric);
@@ -67,6 +91,13 @@ impl SSGIndex {
         })
     }
 
+    /// Interconnects the pruned neighbors for the given node index.
+    ///
+    /// # Arguments
+    ///
+    /// * `node_index` - The index of the node for which to interconnect the pruned neighbors.
+    /// * `max_neighbors` - The maximum number of neighbors to interconnect.
+    /// * `pruned_graph` - A mutable vector containing the pruned neighbors.
     pub(super) fn interconnect_pruned_neighbors(
         &self,
         node_index: usize,
@@ -96,6 +127,18 @@ impl SSGIndex {
         }
     }
 
+    /// Collects the neighbors of a node from the pruned graph vector.
+    ///
+    /// # Arguments
+    ///
+    /// * `pruned_graph` - A reference to the vector containing the pruned neighbors.
+    /// * `start_index` - The starting index in the `pruned_graph` vector.
+    /// * `max_neighbors` - The maximum number of neighbors to collect.
+    /// * `current_node_index` - The index of the current node.
+    ///
+    /// # Returns
+    ///
+    /// A vector containing the collected neighbors.
     fn collect_neighbors(
         &self,
         pruned_graph: &Vec<NeighborNode>,
@@ -127,6 +170,14 @@ impl SSGIndex {
         neighbors
     }
 
+    /// Updates the pruned neighbors list for a node in the pruned graph vector.
+    ///
+    /// # Arguments
+    ///
+    /// * `pruned_graph` - A mutable reference to the vector containing the pruned neighbors.
+    /// * `start_index` - The starting index in the `pruned_graph` vector.
+    /// * `max_neighbors` - The maximum number of neighbors to consider.
+    /// * `neighbors` - A reference to the vector containing the neighbors to update.
     fn update_pruned_neighbors_list(
         &self,
         pruned_graph: &mut Vec<NeighborNode>,
@@ -159,6 +210,13 @@ impl SSGIndex {
         }
     }
 
+    /// Fills the remaining slots in the pruned graph vector with the maximum distance value.
+    ///
+    /// # Arguments
+    ///
+    /// * `pruned_graph` - A mutable reference to the vector containing the pruned neighbors.
+    /// * `start_index` - The starting index in the `pruned_graph` vector.
+    /// * `max_neighbors` - The maximum number of neighbors to consider.
     fn fill_remaining_slots_with_max_distance(
         &self,
         pruned_graph: &mut Vec<NeighborNode>,
