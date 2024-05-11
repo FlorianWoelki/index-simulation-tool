@@ -25,6 +25,7 @@ impl SSGIndex {
     /// * `k` - The number of nearest neighbors to consider.
     pub(super) fn construct_knn_graph(&mut self, k: usize) {
         let mut neighbor_graph = vec![Vec::new(); self.vectors.len()];
+        // TODO: Consider parallel processing.
         for (i, current_vector) in self.vectors.iter().enumerate() {
             let mut neighbor_heap = BinaryHeap::with_capacity(k + 1); // Extra capacity for efficiency.
 

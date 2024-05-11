@@ -3,7 +3,7 @@ use benchmark::{
     BenchmarkResult,
 };
 use data::{generator::DataGenerator, HighDimVector};
-use index::{hnsw::HNSWIndex, naive::NaiveIndex, DistanceMetric, Index};
+use index::{hnsw::HNSWIndex, naive::NaiveIndex, ssg::SSGIndex, DistanceMetric, Index};
 
 use clap::Parser;
 use sysinfo::Pid;
@@ -28,7 +28,7 @@ async fn main() {
     let num_images = args.num_images.unwrap_or(1000);
 
     //run_benchmark::<NaiveIndex>(dimensions, num_images).await;
-    run_benchmark::<HNSWIndex>(dimensions, num_images).await;
+    run_benchmark::<SSGIndex>(dimensions, num_images).await;
 }
 
 async fn run_benchmark<I: Index + 'static>(dimensions: usize, num_images: usize) {
@@ -97,7 +97,7 @@ async fn generate_data(
 }
 
 fn add_vectors_to_index(data: &Vec<Vec<f64>>) -> Box<dyn Index> {
-    let mut index = Box::new(HNSWIndex::new(DistanceMetric::Euclidean));
+    let mut index = Box::new(SSGIndex::new(DistanceMetric::Euclidean));
     for (i, d) in data.iter().enumerate() {
         index.add_vector(HighDimVector::new(i, d.clone()));
     }
