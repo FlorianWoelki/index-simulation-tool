@@ -374,6 +374,87 @@ mod tests {
     }
 
     #[test]
+    fn test_update_pruned_neighbors_list() {
+        /*let mut result = Vec::with_capacity(max_neighbors);
+
+        for neighbor in neighbors.iter() {
+            if result.len() >= max_neighbors {
+                break;
+            }
+
+            if !self.is_occluded(&result, neighbor) {
+                result.push(neighbor.clone());
+            }
+        }
+
+        for (i, node) in result.iter().enumerate() {
+            pruned_graph[start_index + i] = node.clone();
+        }
+
+        if result.len() < max_neighbors {
+            self.fill_remaining_slots_with_max_distance(
+                pruned_graph,
+                start_index + result.len(),
+                max_neighbors,
+            );
+        }*/
+
+        let mut index = SSGIndex::new(DistanceMetric::Euclidean);
+        index.threshold = 0.1;
+        index.index_size = 3;
+
+        index.add_vector(HighDimVector::new(0, vec![0.0, 0.0]));
+        index.add_vector(HighDimVector::new(1, vec![1.0, 1.0]));
+        index.add_vector(HighDimVector::new(2, vec![2.0, 2.0]));
+        index.add_vector(HighDimVector::new(3, vec![5.0, 5.0]));
+
+        let mut pruned_graph = vec![
+            NeighborNode::new(1, 1.0),
+            NeighborNode::new(2, 2.0),
+            NeighborNode::new(3, 4.0),
+            NeighborNode::new(usize::MAX, f64::MAX),
+            NeighborNode::new(usize::MAX, f64::MAX),
+        ];
+
+        let mut neighbors = index.collect_neighbors(&pruned_graph, 0, index.index_size, 0);
+        neighbors.sort_unstable();
+
+        index.update_pruned_neighbors_list(&mut pruned_graph, 0, index.index_size, &neighbors);
+
+        assert_eq!(
+            pruned_graph.len(),
+            5,
+            "Pruned graph should remain the same size"
+        );
+        assert_eq!(pruned_graph[0].id, 1, "First node should be node 1");
+        assert_eq!(
+            pruned_graph[1].id, 3,
+            "Second node should be node 3 as node 2 is occluded"
+        );
+        assert_eq!(
+            pruned_graph[2].id,
+            usize::MAX,
+            "Third node should be a placeholder"
+        );
+
+        assert_eq!(
+            pruned_graph[0].distance.into_inner(),
+            1.0,
+            "Distance of node 1 should be correct"
+        );
+        assert_eq!(
+            pruned_graph[1].distance.into_inner(),
+            4.0,
+            "Distance of node 3 should be correct"
+        );
+        assert_eq!(
+            pruned_graph[2].distance.into_inner(),
+            f64::MAX,
+            "Distance of placeholder should be MAX"
+        );
+    }
+
+    #[test]
     fn test_fill_remaining_slots_with_max_distance() {
         let index = SSGIndex::new(DistanceMetric::Euclidean);
         let mut pruned_graph = vec![NeighborNode::new(0, 10.0); 3];
