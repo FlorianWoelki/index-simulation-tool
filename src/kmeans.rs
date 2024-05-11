@@ -2,6 +2,19 @@ use rand::seq::SliceRandom;
 
 use crate::{data::HighDimVector, index::DistanceMetric};
 
+/// Performs k-means clustering on a set of high-dimensional vectors.
+///
+/// # Arguments
+///
+/// * `k` - The number of clusters to create.
+/// * `epoch` - The number of iterations to perform.
+/// * `nodes` - A reference to a vector of high-dimensional vectors to be clustered.
+/// * `metric` - The distance metric to use for calculating distances between vectors.
+/// * `rng` - A mutable reference to a random number generator, used for initializing the cluster vectors.
+///
+/// # Returns
+///
+/// A vector of indices representing the closest node to each cluster center.
 pub fn kmeans(
     k: usize,
     epoch: usize,
@@ -13,6 +26,7 @@ pub fn kmeans(
         return vec![];
     }
 
+    // Initializes the cluster centers by randomly selecting `k` nodes from the input vector.
     let mut centers: Vec<HighDimVector> = nodes.choose_multiple(rng, k).cloned().collect();
     let mut assignments = vec![0; nodes.len()];
 
@@ -33,6 +47,7 @@ pub fn kmeans(
             assignments[i] = closest;
         }
 
+        // Recalculate the cluster centers based on the new assignments.
         let mut new_centers: Vec<Vec<f64>> = vec![vec![0.0; centers[0].dimensions.len()]; k];
         let mut counts = vec![0; k];
 
@@ -50,6 +65,7 @@ pub fn kmeans(
         }
     }
 
+    // Find the closest node to each cluster center.
     let closest_node_indices = centers.iter().map(|center| {
         let mut closest_index = 0;
         let mut closest_distance = f64::MAX;
