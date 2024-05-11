@@ -20,33 +20,33 @@ impl SSGIndex {
         expand_neighbors: &mut Vec<NeighborNode>,
         pruned_graph: &mut Vec<NeighborNode>,
     ) {
-        let visited: HashSet<usize> = self.graph[query_id].iter().copied().collect();
-        self.graph[query_id]
+        let visited = self.graph[query_id]
             .iter()
-            .filter(|&linked_id| !visited.contains(linked_id))
-            .for_each(|&linked_id| {
-                let distance =
-                    self.vectors[query_id].distance(&self.vectors[linked_id], self.metric);
-                expand_neighbors.push(NeighborNode::new(linked_id, distance));
-            });
-
+            .cloned()
+            .collect::<HashSet<usize>>();
+        expand_neighbors.extend(
+            self.graph[query_id]
+                .iter()
+                .filter(|&linked_id| !visited.contains(linked_id))
+                .map(|&linked_id| {
+                    let distance =
+                        self.vectors[query_id].distance(&self.vectors[linked_id], self.metric);
+                    NeighborNode::new(linked_id, distance)
+                }),
+        );
         expand_neighbors.sort_unstable();
 
-        let filtered_neighbors = expand_neighbors
+        let mut result = Vec::new();
+        expand_neighbors
             .iter()
             .filter(|n| n.id != query_id)
-            .cloned();
-
-        let mut result = Vec::new();
-        for p in filtered_neighbors {
-            if result.len() >= self.index_size {
-                break;
-            }
-            if !self.is_occluded(&result, &p) {
-                result.push(p);
-            }
-        }
-
+            .cloned()
+            .take(self.index_size)
+            .for_each(|node| {
+                if !self.is_occluded(&result, &node) {
+                    result.push(node);
+                }
+            });
         self.populate_pruned_graph(pruned_graph, &result, query_id);
     }
 
