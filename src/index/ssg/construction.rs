@@ -1,22 +1,10 @@
 use std::collections::BinaryHeap;
 
-use rand::seq::SliceRandom;
-use rand::thread_rng;
-
 use crate::index::neighbor::NeighborNode;
 
 use super::SSGIndex;
 
 impl SSGIndex {
-    /// Randomly initializes the root nodes for graph connectivity expansion.
-    pub(super) fn initialize_root_nodes(&mut self) {
-        let mut ids: Vec<usize> = (0..self.vectors.len()).collect();
-        ids.shuffle(&mut thread_rng());
-        for id in ids.iter().take(self.root_size) {
-            self.root_nodes.push(*id);
-        }
-    }
-
     /// Constructs the k-nearest neighbor graph for the vectors where the graph is represented as
     /// an adjacency list.
     ///
@@ -63,31 +51,6 @@ mod tests {
         data::HighDimVector,
         index::{DistanceMetric, Index},
     };
-
-    #[test]
-    fn test_initialize_root_nodes() {
-        let v0 = HighDimVector::new(0, vec![1.0, 2.0, 3.0]);
-        let v1 = HighDimVector::new(1, vec![4.0, 5.0, 6.0]);
-        let v2 = HighDimVector::new(2, vec![7.0, 8.0, 9.0]);
-        let mut ssg_index = SSGIndex::new(DistanceMetric::Euclidean);
-        ssg_index.add_vector(v0.clone());
-        ssg_index.add_vector(v1.clone());
-        ssg_index.add_vector(v2.clone());
-        ssg_index.initialize_root_nodes();
-
-        assert_eq!(
-            ssg_index.root_nodes.len(),
-            3,
-            "Root nodes should have 3 elements"
-        );
-        for i in 0..3 {
-            assert!(
-                ssg_index.root_nodes.contains(&i),
-                "Root nodes should contain {}",
-                i
-            );
-        }
-    }
 
     #[test]
     fn test_build_knn_graph() {

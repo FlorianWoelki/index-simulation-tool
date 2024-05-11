@@ -23,12 +23,26 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
-    let args = Args::parse();
+    let n = 1000;
+    let mut samples = Vec::with_capacity(n);
+    for i in 0..n {
+        samples.push(HighDimVector::new(i, vec![128.0 + i as f64; 3]));
+    }
+    let mut index = SSGIndex::new(DistanceMetric::Euclidean);
+    for sample in samples {
+        index.add_vector(sample);
+    }
+    index.build();
+    let query = HighDimVector::new(999999999, vec![208.0; 3]);
+    let result = index.search(&query, 5);
+    println!("{:?}", result);
+
+    /*let args = Args::parse();
     let dimensions = args.dimensions.unwrap_or(100);
     let num_images = args.num_images.unwrap_or(1000);
 
     //run_benchmark::<NaiveIndex>(dimensions, num_images).await;
-    run_benchmark::<SSGIndex>(dimensions, num_images).await;
+    run_benchmark::<SSGIndex>(dimensions, num_images).await;*/
 }
 
 async fn run_benchmark<I: Index + 'static>(dimensions: usize, num_images: usize) {

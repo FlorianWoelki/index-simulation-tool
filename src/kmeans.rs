@@ -50,7 +50,22 @@ pub fn kmeans(
         }
     }
 
-    assignments
+    let closest_node_indices = centers.iter().map(|center| {
+        let mut closest_index = 0;
+        let mut closest_distance = f64::MAX;
+
+        nodes.iter().enumerate().for_each(|(i, node)| {
+            let distance = node.distance(center, metric);
+            if distance < closest_distance {
+                closest_index = i;
+                closest_distance = distance;
+            }
+        });
+
+        closest_index
+    });
+
+    closest_node_indices.collect()
 }
 
 #[cfg(test)]
@@ -89,9 +104,9 @@ mod tests {
             DistanceMetric::Euclidean,
             &mut rand::thread_rng(),
         );
-        assert!(result.len() == nodes.len());
+        assert!(result.len() == 2);
         assert!(result.contains(&0));
-        assert!(result.contains(&1));
+        assert!(result.contains(&2));
     }
 
     #[test]

@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 
-use crate::{data::HighDimVector, index::neighbor::NeighborNode};
+use ordered_float::OrderedFloat;
+
+use crate::index::neighbor::NeighborNode;
 
 use super::SSGIndex;
 
@@ -110,9 +112,9 @@ impl SSGIndex {
                 continue;
             }
 
-            let sn = NeighborNode::new(node_index, current_node.distance.into_inner());
-            let destination_index = current_node.id;
-            let start_index = destination_index * self.index_size;
+            let neighbor_node = NeighborNode::new(node_index, current_node.distance.into_inner());
+            let destination_id = current_node.id;
+            let start_index = destination_id * self.index_size;
 
             let mut neighbors =
                 self.collect_neighbors(pruned_graph, start_index, max_neighbors, node_index);
@@ -120,11 +122,51 @@ impl SSGIndex {
                 continue;
             }
 
-            neighbors.push(sn);
-            neighbors.sort_unstable();
-
-            self.update_pruned_neighbors_list(pruned_graph, start_index, max_neighbors, &neighbors);
+            neighbors.push(neighbor_node.clone());
+            self.update_pruned_neighbors_list(
+                pruned_graph,
+                start_index,
+                max_neighbors,
+                &neighbor_node,
+                &mut neighbors,
+            );
         }
+    }
+
+    fn prune_neighbors(
+        &self,
+        neighbors: &mut Vec<NeighborNode>,
+        range: usize,
+    ) -> Vec<NeighborNode> {
+        let mut result = Vec::new();
+        neighbors.sort_unstable();
+        result.push(neighbors[0].clone());
+
+        let mut start = 1;
+        while result.len() < range && start < neighbors.len() {
+            let p = &neighbors[start];
+            let mut occluded = false;
+
+            for rt in result.iter() {
+                if p.id == rt.id {
+                    occluded = true;
+                    break;
+                }
+
+                if self.is_occluded(&result, p) {
+                    occluded = true;
+                    break;
+                }
+            }
+
+            if !occluded {
+                result.push(p.clone());
+            }
+
+            start += 1;
+        }
+
+        result
     }
 
     /// Collects the neighbors of a node from the pruned graph vector.
@@ -177,54 +219,35 @@ impl SSGIndex {
     /// * `pruned_graph` - A mutable reference to the vector containing the pruned neighbors.
     /// * `start_index` - The starting index in the `pruned_graph` vector.
     /// * `max_neighbors` - The maximum number of neighbors to consider.
+    /// * `neighbor_node` - A reference to the neighbor node to update.
     /// * `neighbors` - A reference to the vector containing the neighbors to update.
     fn update_pruned_neighbors_list(
         &self,
         pruned_graph: &mut Vec<NeighborNode>,
         start_index: usize,
         max_neighbors: usize,
-        neighbors: &Vec<NeighborNode>,
+        neighbor_node: &NeighborNode,
+        neighbors: &mut Vec<NeighborNode>,
     ) {
-        let mut result = Vec::with_capacity(max_neighbors);
+        if neighbors.len() > max_neighbors {
+            let result = self.prune_neighbors(neighbors, max_neighbors);
+            (0..result.len()).for_each(|t| {
+                pruned_graph[t + start_index] = result[t].clone();
+            });
 
-        for neighbor in neighbors.iter() {
-            if result.len() >= max_neighbors {
-                break;
+            if result.len() < max_neighbors {
+                pruned_graph[result.len() + start_index].distance = OrderedFloat(f64::MAX);
             }
-
-            if !self.is_occluded(&result, neighbor) {
-                result.push(neighbor.clone());
+        } else {
+            for i in 0..max_neighbors {
+                if pruned_graph[i + start_index].distance.into_inner() == f64::MAX {
+                    pruned_graph[i + start_index] = neighbor_node.clone();
+                    if (i + 1) < max_neighbors {
+                        pruned_graph[i + start_index].distance = OrderedFloat(f64::MAX);
+                        break;
+                    }
+                }
             }
-        }
-
-        for (i, node) in result.iter().enumerate() {
-            pruned_graph[start_index + i] = node.clone();
-        }
-
-        if result.len() < max_neighbors {
-            self.fill_remaining_slots_with_max_distance(
-                pruned_graph,
-                start_index + result.len(),
-                max_neighbors,
-            );
-        }
-    }
-
-    /// Fills the remaining slots in the pruned graph vector with the maximum distance value.
-    ///
-    /// # Arguments
-    ///
-    /// * `pruned_graph` - A mutable reference to the vector containing the pruned neighbors.
-    /// * `start_index` - The starting index in the `pruned_graph` vector.
-    /// * `max_neighbors` - The maximum number of neighbors to consider.
-    fn fill_remaining_slots_with_max_distance(
-        &self,
-        pruned_graph: &mut Vec<NeighborNode>,
-        start_index: usize,
-        max_neighbors: usize,
-    ) {
-        for i in start_index..(start_index + max_neighbors) {
-            pruned_graph[i] = NeighborNode::new(usize::MAX, f64::MAX.into());
         }
     }
 }
@@ -375,30 +398,6 @@ mod tests {
 
     #[test]
     fn test_update_pruned_neighbors_list() {
-        /*let mut result = Vec::with_capacity(max_neighbors);
-
-        for neighbor in neighbors.iter() {
-            if result.len() >= max_neighbors {
-                break;
-            }
-
-            if !self.is_occluded(&result, neighbor) {
-                result.push(neighbor.clone());
-            }
-        }
-
-        for (i, node) in result.iter().enumerate() {
-            pruned_graph[start_index + i] = node.clone();
-        }
-
-        if result.len() < max_neighbors {
-            self.fill_remaining_slots_with_max_distance(
-                pruned_graph,
-                start_index + result.len(),
-                max_neighbors,
-            );
-        }*/
-
         let mut index = SSGIndex::new(DistanceMetric::Euclidean);
         index.threshold = 0.1;
         index.index_size = 3;
@@ -419,7 +418,14 @@ mod tests {
         let mut neighbors = index.collect_neighbors(&pruned_graph, 0, index.index_size, 0);
         neighbors.sort_unstable();
 
-        index.update_pruned_neighbors_list(&mut pruned_graph, 0, index.index_size, &neighbors);
+        let neighbor_node = NeighborNode::new(0, pruned_graph[0].distance.into_inner());
+        index.update_pruned_neighbors_list(
+            &mut pruned_graph,
+            0,
+            index.index_size,
+            &neighbor_node,
+            &mut neighbors,
+        );
 
         assert_eq!(
             pruned_graph.len(),
@@ -427,50 +433,6 @@ mod tests {
             "Pruned graph should remain the same size"
         );
         assert_eq!(pruned_graph[0].id, 1, "First node should be node 1");
-        assert_eq!(
-            pruned_graph[1].id, 3,
-            "Second node should be node 3 as node 2 is occluded"
-        );
-        assert_eq!(
-            pruned_graph[2].id,
-            usize::MAX,
-            "Third node should be a placeholder"
-        );
-
-        assert_eq!(
-            pruned_graph[0].distance.into_inner(),
-            1.0,
-            "Distance of node 1 should be correct"
-        );
-        assert_eq!(
-            pruned_graph[1].distance.into_inner(),
-            4.0,
-            "Distance of node 3 should be correct"
-        );
-        assert_eq!(
-            pruned_graph[2].distance.into_inner(),
-            f64::MAX,
-            "Distance of placeholder should be MAX"
-        );
-    }
-
-    #[test]
-    fn test_fill_remaining_slots_with_max_distance() {
-        let index = SSGIndex::new(DistanceMetric::Euclidean);
-        let mut pruned_graph = vec![NeighborNode::new(0, 10.0); 3];
-
-        index.fill_remaining_slots_with_max_distance(&mut pruned_graph, 1, 2);
-
-        assert_eq!(pruned_graph[0].id, 0, "First slot should remain unchanged");
-        assert_eq!(
-            pruned_graph[1].distance.into_inner(),
-            f64::MAX,
-            "Second slot should be filled with MAX"
-        );
-        assert_eq!(
-            pruned_graph[2].distance.into_inner(),
-            f64::MAX,
-            "Third slot should be filled with MAX"
-        );
+        assert!(false, "TODO");
     }
 }

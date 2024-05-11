@@ -1,6 +1,9 @@
-use std::collections::{HashSet, VecDeque};
+use std::{
+    collections::{HashSet, VecDeque},
+    f64::consts::PI,
+};
 
-use rand::thread_rng;
+use rand::{rngs::adapter, thread_rng};
 
 use crate::{data::HighDimVector, kmeans::kmeans};
 
@@ -19,6 +22,7 @@ pub struct SSGIndex {
     pub(super) root_size: usize,
     pub(super) root_nodes: Vec<usize>,
     pub(super) neighbor_neighbor_size: usize,
+    pub(super) init_k: usize,
 }
 
 impl Index for SSGIndex {
@@ -29,8 +33,9 @@ impl Index for SSGIndex {
         SSGIndex {
             vectors: Vec::new(),
             metric,
-            threshold: 0.0,
+            threshold: (30.0 / 180.0 * PI).cos(),
             index_size: 100,
+            init_k: 10,
             graph: Vec::new(),
             root_size: 30,
             neighbor_neighbor_size: 100,
@@ -43,7 +48,7 @@ impl Index for SSGIndex {
     }
 
     fn build(&mut self) {
-        self.construct_knn_graph(100);
+        self.construct_knn_graph(self.init_k);
 
         let len = self.vectors.len() * self.index_size;
         let mut pruned_graph: Vec<NeighborNode> = Vec::with_capacity(len);
@@ -65,9 +70,7 @@ impl Index for SSGIndex {
                 .collect();
         }
 
-        self.ensure_graph_connectivity();
-
-        // init root nodes
+        // Initialize the root nodes
         self.root_nodes = kmeans(
             self.root_size,
             256,
@@ -144,55 +147,6 @@ impl SSGIndex {
             self.interconnect_pruned_neighbors(i, self.index_size, pruned_graph);
         }
     }
-
-    /// Expands the connectivity of the graph to ensure all nodes are at least loosely connected.
-    /// This helps in improving the reachability and robustness of the search algorithm.
-    fn ensure_graph_connectivity(&mut self) {
-        self.initialize_root_nodes();
-
-        for &root_id in &self.root_nodes {
-            let mut visited = HashSet::new();
-            let mut queue = VecDeque::new();
-            queue.push_back(root_id);
-            visited.insert(root_id);
-
-            let mut unknown_set: Vec<usize> = Vec::with_capacity(1);
-            while !unknown_set.is_empty() {
-                while !queue.is_empty() {
-                    let current_node = queue.pop_front().unwrap();
-
-                    for j in 0..self.graph[current_node].len() {
-                        let adjacent_node = self.graph[current_node][j];
-                        if visited.contains(&adjacent_node) {
-                            continue;
-                        }
-
-                        visited.insert(adjacent_node);
-                        queue.push_back(adjacent_node);
-                    }
-                }
-
-                unknown_set.clear();
-                for j in 0..self.vectors.len() {
-                    if visited.contains(&j) {
-                        continue;
-                    }
-                    unknown_set.push(j);
-                }
-                if !unknown_set.is_empty() {
-                    for j in 0..self.vectors.len() {
-                        if visited.contains(&j) && self.graph[j].len() < self.index_size {
-                            self.graph[j].push(unknown_set[0]);
-                            break;
-                        }
-                    }
-
-                    queue.push_back(unknown_set[0]);
-                    visited.insert(unknown_set[0]);
-                }
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -202,11 +156,11 @@ mod tests {
     #[test]
     fn test_ensure_all_nodes_connected() {
         let mut index = SSGIndex::new(DistanceMetric::Euclidean);
+        index.root_size = 3;
         index.add_vector(HighDimVector::new(0, vec![1.0]));
         index.add_vector(HighDimVector::new(1, vec![2.0]));
         index.add_vector(HighDimVector::new(2, vec![3.0]));
         index.construct_knn_graph(100);
-        index.ensure_graph_connectivity();
 
         let all_connected = index.graph.iter().all(|neighbors| !neighbors.is_empty());
         assert!(all_connected);
@@ -215,32 +169,18 @@ mod tests {
     #[test]
     fn test_ensure_graph_connectivity_through_root_nodes() {
         let mut index = SSGIndex::new(DistanceMetric::Euclidean);
+        index.root_size = 10;
         for i in 0..10 {
             index.add_vector(HighDimVector::new(i, vec![i as f64]));
         }
         index.construct_knn_graph(100);
         index.root_nodes = vec![0, 5]; // Manually setting root nodes for predictability.
-        index.ensure_graph_connectivity();
 
         let connected_to_root = |node: usize| -> bool {
             index.graph[node].contains(&0) || index.graph[node].contains(&5)
         };
         let all_connected_to_root = (0..index.vectors.len()).all(connected_to_root);
         assert!(all_connected_to_root);
-    }
-
-    #[test]
-    fn test_no_extra_connections_added() {
-        let mut index = SSGIndex::new(DistanceMetric::Euclidean);
-        index.add_vector(HighDimVector::new(0, vec![1.0]));
-        index.add_vector(HighDimVector::new(1, vec![2.0]));
-        // Create a fully connected graph.
-        index.graph = vec![vec![1], vec![0]];
-        index.root_nodes = vec![0];
-
-        index.ensure_graph_connectivity();
-        assert_eq!(index.graph[0], vec![1]);
-        assert_eq!(index.graph[1], vec![0]);
     }
 
     #[test]
@@ -299,6 +239,7 @@ mod tests {
     #[test]
     fn test_build() {
         let mut index = SSGIndex::new(DistanceMetric::Euclidean);
+        index.root_size = 10;
         for i in 0..10 {
             index.add_vector(HighDimVector::new(i, vec![i as f64]));
         }
