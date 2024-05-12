@@ -12,37 +12,39 @@ impl SSGIndex {
     ///
     /// * `k` - The number of nearest neighbors to consider.
     pub(super) fn construct_knn_graph(&mut self, k: usize) {
-        let mut neighbor_graph = vec![Vec::new(); self.vectors.len()];
         // TODO: Consider parallel processing.
-        for (i, current_vector) in self.vectors.iter().enumerate() {
-            let mut neighbor_heap = BinaryHeap::with_capacity(k + 1); // Extra capacity for efficiency.
+        self.graph = self
+            .vectors
+            .iter()
+            .enumerate()
+            .map(|(i, current_vector)| {
+                let mut neighbor_heap = BinaryHeap::with_capacity(k + 1); // Extra capacity for efficiency.
 
-            // Iterates over all the vectors except the current vector to calculate the distance and
-            // store the k-nearest neighbors in a max-heap.
-            self.vectors
-                .iter()
-                .enumerate()
-                .filter(|(j, _)| i != *j)
-                .for_each(|(j, node)| {
-                    let distance = current_vector.distance(node, self.metric);
-                    neighbor_heap.push(NeighborNode::new(j, distance));
+                // Iterates over all the vectors except the current vector to calculate the distance and
+                // store the k-nearest neighbors in a max-heap.
+                self.vectors
+                    .iter()
+                    .enumerate()
+                    .filter(|(j, _)| i != *j)
+                    .for_each(|(j, node)| {
+                        let distance = current_vector.distance(node, self.metric);
+                        neighbor_heap.push(NeighborNode::new(j, distance));
 
-                    // Ensures the heap does not grow beyond k elements.
-                    if neighbor_heap.len() > k {
-                        neighbor_heap.pop();
-                    }
-                });
+                        // Ensures the heap does not grow beyond k elements.
+                        if neighbor_heap.len() > k {
+                            neighbor_heap.pop();
+                        }
+                    });
 
-            // Collects the k-nearest neighbors from the heap.
-            let mut neighbors = Vec::with_capacity(neighbor_heap.len());
-            while let Some(neighbor_node) = neighbor_heap.pop() {
-                neighbors.push(neighbor_node.id);
-            }
+                // Collects the k-nearest neighbors from the heap.
+                let mut neighbors = Vec::with_capacity(neighbor_heap.len());
+                while let Some(neighbor_node) = neighbor_heap.pop() {
+                    neighbors.push(neighbor_node.id);
+                }
 
-            neighbor_graph[i] = neighbors;
-        }
-
-        self.graph = neighbor_graph;
+                neighbors
+            })
+            .collect();
     }
 }
 

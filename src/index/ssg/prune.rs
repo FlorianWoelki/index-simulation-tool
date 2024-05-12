@@ -201,22 +201,21 @@ impl SSGIndex {
         max_neighbors: usize,
         current_node_index: usize,
     ) -> Vec<NeighborNode> {
-        let mut neighbors = Vec::with_capacity(max_neighbors);
         let mut has_duplicate = false;
 
-        for j in 0..max_neighbors {
-            let neighbor = &pruned_graph[start_index + j];
-            if neighbor.distance.into_inner() == f64::MAX {
-                break;
-            }
-
-            if current_node_index == neighbor.id {
-                has_duplicate = true;
-                break;
-            }
-
-            neighbors.push(neighbor.clone());
-        }
+        let neighbors = (0..max_neighbors)
+            .filter(|i| {
+                let neighbor = &pruned_graph[start_index + i];
+                neighbor.distance.into_inner() != f64::MAX
+            })
+            .map(|i| {
+                let neighbor = &pruned_graph[start_index + i];
+                if current_node_index == neighbor.id {
+                    has_duplicate = true;
+                }
+                neighbor.clone()
+            })
+            .collect();
 
         if has_duplicate {
             return Vec::new();
@@ -252,15 +251,16 @@ impl SSGIndex {
                 pruned_graph[result.len() + start_index].distance = OrderedFloat(f64::MAX);
             }
         } else {
-            for i in 0..max_neighbors {
-                if pruned_graph[i + start_index].distance.into_inner() == f64::MAX {
-                    pruned_graph[i + start_index] = neighbor_node.clone();
-                    if (i + 1) < max_neighbors {
-                        pruned_graph[i + start_index].distance = OrderedFloat(f64::MAX);
-                        break;
-                    }
+            (0..max_neighbors).for_each(|i| {
+                if pruned_graph[i + start_index].distance.into_inner() != f64::MAX {
+                    return;
                 }
-            }
+                pruned_graph[i + start_index] = neighbor_node.clone();
+                if (i + 1) < max_neighbors {
+                    pruned_graph[i + start_index].distance = OrderedFloat(f64::MAX);
+                    return;
+                }
+            });
         }
     }
 }
@@ -446,6 +446,21 @@ mod tests {
             "Pruned graph should remain the same size"
         );
         assert_eq!(pruned_graph[0].id, 1, "First node should be node 1");
-        assert!(false, "TODO");
+        assert_eq!(
+            pruned_graph[0].distance.into_inner(),
+            1.0,
+            "First node distance should be 1.0"
+        );
+        assert_eq!(pruned_graph[1].id, 2, "Second node should be node 2");
+        assert_eq!(
+            pruned_graph[1].distance.into_inner(),
+            2.0,
+            "Second node distance should be 2.0"
+        );
+        assert_eq!(
+            pruned_graph.last().unwrap().id,
+            usize::MAX,
+            "Last node should be a placeholder"
+        );
     }
 }
