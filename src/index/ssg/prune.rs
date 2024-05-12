@@ -24,6 +24,7 @@ impl SSGIndex {
             .iter()
             .cloned()
             .collect::<HashSet<usize>>();
+        // Expand the neighbors of the query node.
         expand_neighbors.extend(
             self.graph[query_id]
                 .iter()
@@ -37,6 +38,7 @@ impl SSGIndex {
         expand_neighbors.sort_unstable();
 
         let mut result = Vec::new();
+        // Add the neighbors to the result vector if they are not occluded.
         expand_neighbors
             .iter()
             .filter(|n| n.id != query_id)
@@ -133,17 +135,28 @@ impl SSGIndex {
         }
     }
 
+    /// Collects the neighbors of a node from the pruned graph vector.
+    /// The neighbors are pruned to the specified range.
+    ///
+    /// # Arguments
+    ///
+    /// * `pruned_graph` - A reference to the pruned graph vector.
+    /// * `max_neighbors` - The maximum number of neighbors to collect.
+    ///
+    /// # Returns
+    ///
+    /// A vector containing the pruned neighbors.
     fn prune_neighbors(
         &self,
         neighbors: &mut Vec<NeighborNode>,
-        range: usize,
+        max_neighbors: usize,
     ) -> Vec<NeighborNode> {
         let mut result = Vec::new();
         neighbors.sort_unstable();
         result.push(neighbors[0].clone());
 
         let mut start = 1;
-        while result.len() < range && start < neighbors.len() {
+        while result.len() < max_neighbors && start < neighbors.len() {
             let p = &neighbors[start];
             let mut occluded = false;
 

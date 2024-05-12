@@ -1,9 +1,6 @@
-use std::{
-    collections::{HashSet, VecDeque},
-    f64::consts::PI,
-};
+use std::{collections::HashSet, f64::consts::PI};
 
-use rand::{rngs::adapter, thread_rng};
+use rand::thread_rng;
 
 use crate::{data::HighDimVector, kmeans::kmeans};
 
@@ -51,13 +48,14 @@ impl Index for SSGIndex {
         self.construct_knn_graph(self.init_k);
 
         let len = self.vectors.len() * self.index_size;
-        let mut pruned_graph: Vec<NeighborNode> = Vec::with_capacity(len);
-        for i in 0..len {
-            pruned_graph.push(NeighborNode::new(i, 0.0));
-        }
+        let mut pruned_graph = (0..len)
+            .map(|i| NeighborNode::new(i, 0.0))
+            .collect::<Vec<NeighborNode>>();
         self.link_each_nodes(&mut pruned_graph);
 
-        for i in 0..self.vectors.len() {
+        // Iterates over each vector in the graph and populates the graph with
+        // the pruned neighbors.
+        (0..self.vectors.len()).enumerate().for_each(|(i, _)| {
             let offset = i * self.index_size;
             let pool_size = (0..self.index_size)
                 .take_while(|j| {
@@ -68,9 +66,9 @@ impl Index for SSGIndex {
             self.graph[i] = (0..pool_size)
                 .map(|j| pruned_graph[offset + j].id)
                 .collect();
-        }
+        });
 
-        // Initialize the root nodes
+        // Initialize the root nodes using k-means clustering.
         self.root_nodes = kmeans(
             self.root_size,
             256,
@@ -108,22 +106,22 @@ impl SSGIndex {
                 continue;
             }
 
-            // Iterate over the neighbors of the current neighbors.
-            for second_neighbor_id in self.graph[*neighbor_id].iter() {
-                if *second_neighbor_id == query_point || *neighbor_id == *second_neighbor_id {
-                    continue;
-                }
+            // Iterate over the neighbors of the query point's neighbors to find second-level neighbors.
+            self.graph[*neighbor_id]
+                .iter()
+                // Filter out the query point and the neighbor itself.
+                .filter(|node| **node != query_point && *neighbor_id != **node)
+                .for_each(|second_neighbor_id| {
+                    if visited.insert(*second_neighbor_id) {
+                        let distance = self.vectors[query_point]
+                            .distance(&self.vectors[*second_neighbor_id], self.metric);
+                        expand_neighbors.push(NeighborNode::new(*second_neighbor_id, distance));
 
-                if visited.insert(*second_neighbor_id) {
-                    let distance = self.vectors[query_point]
-                        .distance(&self.vectors[*second_neighbor_id], self.metric);
-                    expand_neighbors.push(NeighborNode::new(*second_neighbor_id, distance));
-
-                    if expand_neighbors.len() >= self.neighbor_neighbor_size {
-                        return;
+                        if expand_neighbors.len() >= self.neighbor_neighbor_size {
+                            return;
+                        }
                     }
-                }
-            }
+                });
         }
     }
 

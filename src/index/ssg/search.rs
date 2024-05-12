@@ -48,6 +48,7 @@ impl SSGIndex {
         query_vector: &HighDimVector,
         k: usize,
     ) {
+        // Sort the root nodes by distance to the query vector.
         let mut initial_nodes = self
             .root_nodes
             .iter()
@@ -58,13 +59,14 @@ impl SSGIndex {
             .collect::<Vec<_>>();
         initial_nodes.sort();
 
-        for node in initial_nodes.into_iter() {
+        // Add the k closest root nodes to the heap to initialize the search.
+        initial_nodes.iter().for_each(|node| {
             if heap.len() < k {
                 heap.push(node.clone());
                 search_queue.push_back(node.id);
             }
             visited.insert(node.id);
-        }
+        });
     }
 }
 
