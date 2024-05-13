@@ -5,6 +5,18 @@ use crate::{data::HighDimVector, index::neighbor::NeighborNode};
 use super::SSGIndex;
 
 impl SSGIndex {
+    /// Perform a breadth-first search to find the k closest vectors to the query vector.
+    /// The search starts from the root nodes of the graph and expands to the neighbors of the nodes
+    /// that are closer to the query vector.
+    ///
+    /// # Arguments
+    ///
+    /// * `query_vector` - The query vector.
+    /// * `k` - The number of closest vectors to return.
+    ///
+    /// # Returns
+    ///
+    /// A vector containing the k closest vectors to the query vector.
     pub(super) fn search_bfs(&self, query_vector: &HighDimVector, k: usize) -> Vec<HighDimVector> {
         let mut visited = HashSet::new();
         let mut heap = BinaryHeap::new();
@@ -14,16 +26,16 @@ impl SSGIndex {
 
         while let Some(id) = search_queue.pop_front() {
             if let Some(node_vec) = self.graph.get(id) {
-                for &neighbor_id in node_vec {
+                node_vec.iter().for_each(|&neighbor_id| {
                     if !visited.insert(neighbor_id) {
-                        continue;
+                        return;
                     }
 
                     let distance = query_vector.distance(&self.vectors[neighbor_id], self.metric);
                     let neighbor_node = NeighborNode::new(neighbor_id, distance);
                     heap.push(neighbor_node);
                     search_queue.push_back(neighbor_id);
-                }
+                });
             }
 
             if heap.len() > k {
@@ -40,6 +52,16 @@ impl SSGIndex {
         result
     }
 
+    /// Process the initial nodes to start the search.
+    /// The initial nodes are always the root nodes of the graph.
+    ///
+    /// # Arguments
+    ///
+    /// * `heap` - The heap to store the k closest nodes.
+    /// * `search_queue` - The queue to store the nodes to be visited.
+    /// * `visited` - The set to store the visited nodes.
+    /// * `query_vector` - The query vector.
+    /// * `k` - The number of closest nodes to return.
     fn process_initial_nodes(
         &self,
         heap: &mut BinaryHeap<NeighborNode>,

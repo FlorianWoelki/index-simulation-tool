@@ -158,19 +158,9 @@ impl SSGIndex {
         let mut start = 1;
         while result.len() < max_neighbors && start < neighbors.len() {
             let p = &neighbors[start];
-            let mut occluded = false;
-
-            for rt in result.iter() {
-                if p.id == rt.id {
-                    occluded = true;
-                    break;
-                }
-
-                if self.is_occluded(&result, p) {
-                    occluded = true;
-                    break;
-                }
-            }
+            let occluded = result.iter().any(|rt| {
+                return p.id == rt.id || self.is_occluded(&result, p);
+            });
 
             if !occluded {
                 result.push(p.clone());
