@@ -76,11 +76,9 @@ impl Index for HNSWIndex {
     }
 
     fn build(&mut self) {
-        (self.n_indexed_vectors..self.n_items)
-            .into_iter()
-            .for_each(|insert_id| {
-                self.index_vector(insert_id);
-            });
+        (self.n_indexed_vectors..self.n_items).for_each(|insert_id| {
+            self.index_vector(insert_id);
+        });
         self.n_indexed_vectors = self.n_items;
     }
 
@@ -222,7 +220,7 @@ impl HNSWIndex {
     /// A vector of neighbors selected based on the heuristic.
     fn get_neighbors_by_heuristic2(
         &self,
-        sorted_list: &Vec<NeighborNode>,
+        sorted_list: &[NeighborNode],
         maximum_size: usize,
     ) -> Vec<NeighborNode> {
         let sorted_list_len = sorted_list.len();

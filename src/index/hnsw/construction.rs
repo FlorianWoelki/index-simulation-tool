@@ -63,7 +63,7 @@ impl HNSWIndex {
 
         loop {
             let top_candidates = self.search_layer_with_candidate(
-                &insert_data,
+                insert_data,
                 &sorted_candidates,
                 &mut visited,
                 level,

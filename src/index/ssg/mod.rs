@@ -58,9 +58,7 @@ impl Index for SSGIndex {
         (0..self.vectors.len()).enumerate().for_each(|(i, _)| {
             let offset = i * self.index_size;
             let pool_size = (0..self.index_size)
-                .take_while(|j| {
-                    return pruned_graph[offset + j].distance.into_inner() == f64::MAX;
-                })
+                .take_while(|j| pruned_graph[offset + j].distance.into_inner() == f64::MAX)
                 .count()
                 .max(1);
             self.graph[i] = (0..pool_size)
@@ -117,9 +115,9 @@ impl SSGIndex {
                             .distance(&self.vectors[*second_neighbor_id], self.metric);
                         expand_neighbors.push(NeighborNode::new(*second_neighbor_id, distance));
 
-                        if expand_neighbors.len() >= self.neighbor_neighbor_size {
-                            return;
-                        }
+                        /*if expand_neighbors.len() >= self.neighbor_neighbor_size {
+                        return;
+                        }*/
                     }
                 });
         }

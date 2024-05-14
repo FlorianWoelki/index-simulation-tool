@@ -130,7 +130,7 @@ impl HNSWIndex {
     pub(super) fn search_layer_with_candidate(
         &self,
         search_data: &HighDimVector,
-        sorted_candidates: &Vec<NeighborNode>,
+        sorted_candidates: &[NeighborNode],
         visited: &mut HashSet<usize>,
         level: usize,
     ) -> BinaryHeap<NeighborNode> {
