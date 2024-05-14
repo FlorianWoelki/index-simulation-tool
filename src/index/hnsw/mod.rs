@@ -53,8 +53,26 @@ impl Index for HNSWIndex {
     }
 
     fn add_vector(&mut self, vector: HighDimVector) {
-        let insert_id = self.init_item(vector);
-        let _insert_level = self.get_level(insert_id);
+        let vid = vector.id;
+        let mut current_level = self.get_random_level();
+        if vid == 0 {
+            current_level = self.max_layer;
+            self.current_level = current_level;
+            self.root_node_id = vid;
+        }
+
+        let base_layer_neighbors = RwLock::new(Vec::with_capacity(self.n_neighbor0));
+        let mut neighbors = Vec::with_capacity(current_level);
+
+        for _ in 0..current_level {
+            neighbors.push(RwLock::new(Vec::with_capacity(self.n_neighbor)));
+        }
+
+        self.vectors.push(vector);
+        self.base_layer_neighbors.push(base_layer_neighbors);
+        self.layer_to_neighbors.push(neighbors);
+        self.id_to_level.push(current_level);
+        self.n_items += 1;
     }
 
     fn build(&mut self) {
@@ -69,25 +87,12 @@ impl Index for HNSWIndex {
     fn search(&self, query_vector: &HighDimVector, k: usize) -> Vec<HighDimVector> {
         let mut knn_results = self.search_knn(query_vector, k);
         let mut results = Vec::with_capacity(k);
-        // TODO: Remove unused code.
-        /*let mut result_id = Vec::with_capacity(k);
-        while !knn_results.is_empty() {
-            let top = knn_results.peek().unwrap();
-            let top_id = top.id;
-            let top_distance = top.distance.into_inner();
-            knn_results.pop();
-            result_id.push((top_id, top_distance));
-        }
-        for i in 0..result_id.len() {
-            let current_id = result_id.len() - i - 1;
-            result.push(self.vectors[result_id[current_id].0].clone());
-            }*/
 
-        for _ in 0..k {
+        (0..k).for_each(|_| {
             if let Some(top) = knn_results.pop() {
                 results.push(self.vectors[top.id].clone());
             }
-        }
+        });
 
         results.reverse();
         results

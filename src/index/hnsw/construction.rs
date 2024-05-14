@@ -1,43 +1,10 @@
-use std::{collections::HashSet, sync::RwLock};
+use std::collections::HashSet;
 
-use crate::{data::HighDimVector, index::neighbor::NeighborNode};
+use crate::index::neighbor::NeighborNode;
 
 use super::HNSWIndex;
 
 impl HNSWIndex {
-    /// Initializes the index with a new item and determines the random level for the item.
-    ///
-    /// # Arguments
-    ///
-    /// * `item` - The high-dimensional vector to add to the index.
-    ///
-    /// # Returns
-    /// The ID of the new item inserted into the index.
-    pub(super) fn init_item(&mut self, item: HighDimVector) -> usize {
-        let item_id = item.id;
-        let mut current_level = self.get_random_level();
-        if item.id == 0 {
-            current_level = self.max_layer;
-            self.current_level = current_level;
-            self.root_node_id = item_id;
-        }
-
-        let base_layer_neighbors = RwLock::new(Vec::with_capacity(self.n_neighbor0));
-        let mut neighbors = Vec::with_capacity(current_level);
-
-        for _ in 0..current_level {
-            neighbors.push(RwLock::new(Vec::with_capacity(self.n_neighbor)));
-        }
-
-        self.vectors.push(item);
-        self.base_layer_neighbors.push(base_layer_neighbors);
-        self.layer_to_neighbors.push(neighbors);
-        self.id_to_level.push(current_level);
-        self.n_items += 1;
-
-        item_id
-    }
-
     /// Constructs the index for a vector that has already been inserted into the index.
     /// This function is called when the index is constructed for a single vector.
     ///
@@ -120,30 +87,12 @@ impl HNSWIndex {
 
 #[cfg(test)]
 mod tests {
-    use crate::index::{DistanceMetric, Index};
+    use crate::{
+        data::HighDimVector,
+        index::{DistanceMetric, Index},
+    };
 
     use super::*;
-
-    #[test]
-    fn test_init_item() {
-        let mut index = HNSWIndex::new(DistanceMetric::Euclidean);
-        let v0 = HighDimVector::new(0, vec![1.0, 2.0, 3.0]);
-        let v1 = HighDimVector::new(1, vec![4.0, 5.0, 6.0]);
-        let v2 = HighDimVector::new(2, vec![7.0, 8.0, 9.0]);
-
-        index.init_item(v0);
-        index.init_item(v1);
-        index.init_item(v2);
-
-        assert_eq!(index.n_items, 3);
-        assert_eq!(index.vectors.len(), 3);
-        assert_eq!(index.vectors[0].id, 0);
-        assert_eq!(index.vectors[1].id, 1);
-        assert_eq!(index.vectors[2].id, 2);
-        assert_eq!(index.base_layer_neighbors.len(), 3);
-        assert_eq!(index.layer_to_neighbors.len(), 3);
-        assert_eq!(index.id_to_level.len(), 3);
-    }
 
     #[test]
     fn test_index_vector() {
@@ -152,9 +101,9 @@ mod tests {
         let v1 = HighDimVector::new(1, vec![4.0, 5.0, 6.0]);
         let v2 = HighDimVector::new(2, vec![7.0, 8.0, 9.0]);
 
-        index.init_item(v0);
-        index.init_item(v1);
-        index.init_item(v2);
+        index.add_vector(v0);
+        index.add_vector(v1);
+        index.add_vector(v2);
 
         index.index_vector(0);
         index.index_vector(1);
