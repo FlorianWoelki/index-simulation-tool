@@ -1,4 +1,4 @@
-name: Integration Test
+name: Unit Test
 
 on:
   push:
@@ -22,7 +22,7 @@ jobs:
           rust-version: stable
 
       - name: cargo test
-        run: cargo test --test integration_test
+        run: cargo test --all-features # Runs unit and integration tests
 
       - name: rustfmt
         run: cargo fmt --all -- --check
