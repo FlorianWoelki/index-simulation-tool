@@ -243,6 +243,11 @@ mod tests {
         }
         index.build();
 
-        assert!(false);
+        assert_eq!(index.graph.len(), 10);
+        for neighbors in &index.graph {
+            assert!(neighbors.len() <= index.root_size);
+        }
+
+        assert_eq!(index.root_nodes.len(), index.root_size);
     }
 }
