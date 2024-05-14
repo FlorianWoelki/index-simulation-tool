@@ -107,19 +107,14 @@ mod tests {
 
     #[test]
     fn test_multiple_nodes_multiple_clusters() {
+        let mut rng = StdRng::seed_from_u64(42);
         let nodes = vec![
             HighDimVector::new(0, vec![1.0, 2.0, 3.0]),
             HighDimVector::new(1, vec![4.0, 5.0, 6.0]),
             HighDimVector::new(2, vec![7.0, 8.0, 9.0]),
             HighDimVector::new(3, vec![10.0, 11.0, 12.0]),
         ];
-        let result = kmeans(
-            2,
-            10,
-            &nodes,
-            DistanceMetric::Euclidean,
-            &mut rand::thread_rng(),
-        );
+        let result = kmeans(2, 10, &nodes, DistanceMetric::Euclidean, &mut rng);
         assert!(result.len() == 2);
         assert!(result.contains(&0));
         assert!(result.contains(&2));
