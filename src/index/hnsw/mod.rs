@@ -118,7 +118,7 @@ impl HNSWIndex {
     fn connect_neighbor(
         &self,
         current_id: usize,
-        sorted_candidates: &Vec<NeighborNode>,
+        sorted_candidates: &[NeighborNode],
         level: usize,
         is_update: bool,
     ) -> usize {

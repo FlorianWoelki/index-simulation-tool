@@ -130,7 +130,7 @@ impl SSGIndex {
     /// # Arguments
     ///
     /// * `pruned_graph_tmp` - The pruned graph.
-    fn link_each_nodes(&mut self, pruned_graph: &mut Vec<NeighborNode>) {
+    fn link_each_nodes(&mut self, pruned_graph: &mut [NeighborNode]) {
         let mut expanded_neighbors = Vec::new();
 
         for i in 0..self.vectors.len() {

@@ -32,7 +32,7 @@ impl BenchmarkLogger {
     }
 
     pub fn add_record(&mut self, result: &BenchmarkResult) {
-        self.records.push(result.clone());
+        self.records.push(*result);
     }
 
     pub fn write_to_csv(&self, file_path: &str) -> Result<(), csv::Error> {

@@ -106,11 +106,10 @@ async fn generate_data(
     num_images: usize,
 ) -> Vec<Vec<f64>> {
     let mut data_generator = DataGenerator::new(dimensions, num_images, config.value_range);
-    let generated_data = data_generator.generate().await;
-    generated_data
+    data_generator.generate().await
 }
 
-fn add_vectors_to_index(data: &Vec<Vec<f64>>) -> Box<dyn Index> {
+fn add_vectors_to_index(data: &[Vec<f64>]) -> Box<dyn Index> {
     let mut index = Box::new(SSGIndex::new(DistanceMetric::Euclidean));
     for (i, d) in data.iter().enumerate() {
         index.add_vector(HighDimVector::new(i, d.clone()));
@@ -119,8 +118,7 @@ fn add_vectors_to_index(data: &Vec<Vec<f64>>) -> Box<dyn Index> {
 }
 
 fn create_query_vector(_config: &BenchmarkConfig, dimensions: usize) -> HighDimVector {
-    let query_vector = HighDimVector::new(999999999, vec![128.0; dimensions]);
-    query_vector
+    HighDimVector::new(999999999, vec![128.0; dimensions])
 }
 
 fn print_benchmark_results(result: &BenchmarkResult) {

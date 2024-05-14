@@ -57,7 +57,7 @@ impl BenchmarkConfig {
         }
     }
 
-    pub fn dataset_configurations<'a>(&'a self) -> impl Iterator<Item = (usize, usize)> + 'a {
+    pub fn dataset_configurations(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
         (self.start_dimensions..=self.end_dimensions)
             .step_by(self.step_dimensions)
             .flat_map(|dimensions| {
@@ -113,14 +113,15 @@ impl Benchmark {
 
         let queries_per_second = metrics::calculate_queries_per_second(query_execution_time);
 
-        let scalability_factor = if let Some(previous_result) = &self.previous_benchmark_result {
-            Some(metrics::calculate_scalability_factor(
-                (queries_per_second, dataset_size, dimensions),
-                &previous_result,
-            ))
-        } else {
-            None
-        };
+        let scalability_factor = self
+            .previous_benchmark_result
+            .as_ref()
+            .map(|previous_result| {
+                metrics::calculate_scalability_factor(
+                    (queries_per_second, dataset_size, dimensions),
+                    previous_result,
+                )
+            });
 
         BenchmarkResult {
             total_execution_time,

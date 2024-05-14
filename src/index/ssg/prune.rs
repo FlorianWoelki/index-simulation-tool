@@ -18,7 +18,7 @@ impl SSGIndex {
         &mut self,
         query_id: usize,
         expand_neighbors: &mut Vec<NeighborNode>,
-        pruned_graph: &mut Vec<NeighborNode>,
+        pruned_graph: &mut [NeighborNode],
     ) {
         let visited = self.graph[query_id]
             .iter()
@@ -42,8 +42,8 @@ impl SSGIndex {
         expand_neighbors
             .iter()
             .filter(|n| n.id != query_id)
-            .cloned()
             .take(self.index_size)
+            .cloned()
             .for_each(|node| {
                 if !self.is_occluded(&result, &node) {
                     result.push(node);
@@ -106,7 +106,7 @@ impl SSGIndex {
         &self,
         node_index: usize,
         max_neighbors: usize,
-        pruned_graph: &mut Vec<NeighborNode>,
+        pruned_graph: &mut [NeighborNode],
     ) {
         for i in 0..max_neighbors {
             let current_node = &pruned_graph[node_index + i];
@@ -229,7 +229,7 @@ impl SSGIndex {
         start_index: usize,
         max_neighbors: usize,
         neighbor_node: &NeighborNode,
-        neighbors: &mut Vec<NeighborNode>,
+        neighbors: &mut [NeighborNode],
     ) {
         if neighbors.len() > max_neighbors {
             let result = self.prune_neighbors(neighbors, max_neighbors);
