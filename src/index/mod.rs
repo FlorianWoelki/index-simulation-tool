@@ -13,6 +13,7 @@ pub enum DistanceMetric {
     Manhattan,
     Cosine,
     DotProduct,
+    Jaccard,
 }
 
 impl Debug for DistanceMetric {
@@ -22,6 +23,7 @@ impl Debug for DistanceMetric {
             DistanceMetric::Manhattan => write!(f, "Manhattan"),
             DistanceMetric::Cosine => write!(f, "Cosine"),
             DistanceMetric::DotProduct => write!(f, "DotProduct"),
+            DistanceMetric::Jaccard => write!(f, "Jaccard"),
         }
     }
 }

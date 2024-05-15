@@ -1,3 +1,7 @@
+use std::collections::HashSet;
+
+use ordered_float::OrderedFloat;
+
 use crate::index::DistanceMetric;
 
 pub mod generator;
@@ -58,6 +62,19 @@ impl HighDimVector {
                 .zip(other.dimensions.iter())
                 .map(|(x, y)| x * y)
                 .sum::<f64>(),
+
+            DistanceMetric::Jaccard => {
+                let set1: HashSet<_> = self.dimensions.iter().cloned().map(OrderedFloat).collect();
+                let set2: HashSet<_> = other.dimensions.iter().cloned().map(OrderedFloat).collect();
+
+                let intersection_len = set1.intersection(&set2).count() as f64;
+                let union_len = set1.union(&set2).count() as f64;
+
+                let similarity = intersection_len / union_len;
+                let distance = 1.0 - similarity;
+
+                distance
+            }
         }
     }
 }
@@ -75,5 +92,13 @@ mod tests {
         assert_eq!(a.distance(&b, DistanceMetric::Manhattan), 9.0);
         assert_eq!(a.distance(&b, DistanceMetric::Cosine), 0.025368153802923787);
         assert_eq!(a.distance(&b, DistanceMetric::DotProduct), 32.0);
+    }
+
+    #[test]
+    fn test_distance_jaccard() {
+        let a = HighDimVector::new(1, vec![0.0, 1.0, 2.0, 5.0, 6.0]);
+        let b = HighDimVector::new(2, vec![0.0, 2.0, 3.0, 4.0, 5.0, 7.0, 9.0]);
+
+        assert_eq!(a.distance(&b, DistanceMetric::Jaccard), 0.6666666666666667);
     }
 }
