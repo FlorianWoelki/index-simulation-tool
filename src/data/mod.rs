@@ -51,6 +51,13 @@ impl HighDimVector {
                     .sqrt();
                 1.0 - dot_product / (norm_a * norm_b)
             }
+
+            DistanceMetric::DotProduct => self
+                .dimensions
+                .iter()
+                .zip(other.dimensions.iter())
+                .map(|(x, y)| x * y)
+                .sum::<f64>(),
         }
     }
 }
@@ -67,5 +74,6 @@ mod tests {
         assert_eq!(a.distance(&b, DistanceMetric::Euclidean), 5.196152422706632);
         assert_eq!(a.distance(&b, DistanceMetric::Manhattan), 9.0);
         assert_eq!(a.distance(&b, DistanceMetric::Cosine), 0.025368153802923787);
+        assert_eq!(a.distance(&b, DistanceMetric::DotProduct), 32.0);
     }
 }

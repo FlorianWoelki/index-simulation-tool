@@ -12,6 +12,7 @@ pub enum DistanceMetric {
     Euclidean,
     Manhattan,
     Cosine,
+    DotProduct,
 }
 
 impl Debug for DistanceMetric {
@@ -20,6 +21,7 @@ impl Debug for DistanceMetric {
             DistanceMetric::Euclidean => write!(f, "Euclidean"),
             DistanceMetric::Manhattan => write!(f, "Manhattan"),
             DistanceMetric::Cosine => write!(f, "Cosine"),
+            DistanceMetric::DotProduct => write!(f, "DotProduct"),
         }
     }
 }
