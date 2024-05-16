@@ -2,7 +2,7 @@ use benchmark::{
     logger::BenchmarkLogger, metrics::DEFAULT_SCALABILITY_FACTOR, Benchmark, BenchmarkConfig,
     BenchmarkResult,
 };
-use data::{generator::DataGenerator, HighDimVector};
+use data::{generator_dense::DataGenerator, HighDimVector};
 use index::{hnsw::HNSWIndex, naive::NaiveIndex, ssg::SSGIndex, DistanceMetric, Index};
 
 use clap::Parser;

@@ -4,7 +4,7 @@ use ordered_float::OrderedFloat;
 
 use crate::index::DistanceMetric;
 
-pub mod generator;
+pub mod generator_dense;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct HighDimVector {
