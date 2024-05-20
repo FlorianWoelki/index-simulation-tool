@@ -32,13 +32,11 @@ training_dataset = dataset['train']
 texts = []
 vectors = []
 
-i = 0 # temporary
-for example in tqdm(training_dataset, desc="Processing"):
+for i, example in enumerate(tqdm(training_dataset, desc="Processing")):
     text = clean_text(example['Overview'])
     texts.append(text)
     vector = create_splade(text)
     vectors.append(vector.tolist())
-    i += 1
     if i == 11: # temporary
         break
 
