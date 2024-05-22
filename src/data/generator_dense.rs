@@ -3,16 +3,16 @@ use rand::{
     thread_rng,
 };
 
-pub struct DataGenerator {
+pub struct DenseDataGenerator {
     dim: usize,
     count: usize,
     range: (f64, f64),
     system: sysinfo::System,
 }
 
-impl DataGenerator {
+impl DenseDataGenerator {
     pub fn new(dim: usize, count: usize, range: (f64, f64)) -> Self {
-        DataGenerator {
+        DenseDataGenerator {
             dim,
             count,
             range,
@@ -66,7 +66,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_data_generation() {
-        let mut generator = DataGenerator::new(5, 10, (0.0, 1.0));
+        let mut generator = DenseDataGenerator::new(5, 10, (0.0, 1.0));
         let data = generator.generate().await;
         assert_eq!(data.len(), 10);
         assert_eq!(data[0].len(), 5);

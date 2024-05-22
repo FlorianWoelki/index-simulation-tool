@@ -5,6 +5,7 @@ use ordered_float::OrderedFloat;
 use crate::index::DistanceMetric;
 
 pub mod generator_dense;
+pub mod generator_sparse;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct HighDimVector {

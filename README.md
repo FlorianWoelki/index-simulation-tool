@@ -1,4 +1,5 @@
 # TO DO
 
-- [ ] Convert dense vectors to sparse vectors - maybe use a dictionary or something like the [sprs module](https://docs.rs/sprs/latest/sprs/)
+- [x] Create sparse data generator
+- [ ] Convert dense vectors to sparse vectors -> use something like Splade to create a sparse vector
 - [ ] Implement more indexing algorithms

@@ -2,7 +2,7 @@ use benchmark::{
     logger::BenchmarkLogger, metrics::DEFAULT_SCALABILITY_FACTOR, Benchmark, BenchmarkConfig,
     BenchmarkResult,
 };
-use data::{generator_dense::DataGenerator, HighDimVector};
+use data::{generator_dense::DenseDataGenerator, HighDimVector};
 use index::{hnsw::HNSWIndex, naive::NaiveIndex, ssg::SSGIndex, DistanceMetric, Index};
 
 use clap::Parser;
@@ -105,7 +105,7 @@ async fn generate_data(
     dimensions: usize,
     num_images: usize,
 ) -> Vec<Vec<f64>> {
-    let mut data_generator = DataGenerator::new(dimensions, num_images, config.value_range);
+    let mut data_generator = DenseDataGenerator::new(dimensions, num_images, config.value_range);
     data_generator.generate().await
 }
 
