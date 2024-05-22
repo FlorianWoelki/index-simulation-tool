@@ -6,26 +6,27 @@ use crate::index::DistanceMetric;
 
 pub mod generator_dense;
 pub mod generator_sparse;
+pub mod sift;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct HighDimVector {
     pub id: usize,
-    pub dimensions: Vec<f64>,
+    pub dimensions: Vec<f32>,
 }
 
 impl HighDimVector {
-    pub fn new(id: usize, dimensions: Vec<f64>) -> Self {
+    pub fn new(id: usize, dimensions: Vec<f32>) -> Self {
         HighDimVector { id, dimensions }
     }
 
-    pub fn distance(&self, other: &HighDimVector, metric: DistanceMetric) -> f64 {
+    pub fn distance(&self, other: &HighDimVector, metric: DistanceMetric) -> f32 {
         match metric {
             DistanceMetric::Euclidean => self
                 .dimensions
                 .iter()
                 .zip(other.dimensions.iter())
                 .map(|(a, b)| (a - b).powi(2))
-                .sum::<f64>()
+                .sum::<f32>()
                 .sqrt(),
 
             DistanceMetric::Manhattan => self
@@ -33,26 +34,26 @@ impl HighDimVector {
                 .iter()
                 .zip(other.dimensions.iter())
                 .map(|(a, b)| (a - b).abs())
-                .sum::<f64>(),
+                .sum::<f32>(),
 
             DistanceMetric::Cosine => {
-                let dot_product: f64 = self
+                let dot_product: f32 = self
                     .dimensions
                     .iter()
                     .zip(other.dimensions.iter())
                     .map(|(x, y)| x * y)
                     .sum();
-                let norm_a: f64 = self
+                let norm_a: f32 = self
                     .dimensions
                     .iter()
                     .map(|x| x.powi(2))
-                    .sum::<f64>()
+                    .sum::<f32>()
                     .sqrt();
-                let norm_b: f64 = other
+                let norm_b: f32 = other
                     .dimensions
                     .iter()
                     .map(|x| x.powi(2))
-                    .sum::<f64>()
+                    .sum::<f32>()
                     .sqrt();
                 1.0 - dot_product / (norm_a * norm_b)
             }
@@ -62,14 +63,14 @@ impl HighDimVector {
                 .iter()
                 .zip(other.dimensions.iter())
                 .map(|(x, y)| x * y)
-                .sum::<f64>(),
+                .sum::<f32>(),
 
             DistanceMetric::Jaccard => {
                 let set1: HashSet<_> = self.dimensions.iter().cloned().map(OrderedFloat).collect();
                 let set2: HashSet<_> = other.dimensions.iter().cloned().map(OrderedFloat).collect();
 
-                let intersection_len = set1.intersection(&set2).count() as f64;
-                let union_len = set1.union(&set2).count() as f64;
+                let intersection_len = set1.intersection(&set2).count() as f32;
+                let union_len = set1.union(&set2).count() as f32;
 
                 let similarity = intersection_len / union_len;
                 let distance = 1.0 - similarity;

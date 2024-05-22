@@ -3,9 +3,12 @@ use benchmark::{
     BenchmarkResult,
 };
 use data::{generator_dense::DenseDataGenerator, HighDimVector};
-use index::{hnsw::HNSWIndex, naive::NaiveIndex, ssg::SSGIndex, DistanceMetric, Index};
+use index::{
+    hnsw::HNSWIndex, lsh::LSHIndex, naive::NaiveIndex, ssg::SSGIndex, DistanceMetric, Index,
+};
 
 use clap::Parser;
+use rand::{thread_rng, Rng};
 use sysinfo::Pid;
 
 mod benchmark;
@@ -23,19 +26,61 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
-    let n = 1000;
+    let (query_vectors, groundtruth, vectors) = data::sift::get_data().unwrap();
+
+    let mut index = LSHIndex::new(DistanceMetric::Euclidean);
+    for (i, vector) in vectors.iter().enumerate() {
+        index.add_vector(HighDimVector::new(i, vector.to_vec()));
+    }
+
+    index.build();
+
+    /*let query_id = 0;
+    let query_vector = HighDimVector::new(query_id, query_vectors[query_id].to_vec());
+    let baseline = &groundtruth[query_id];
+    let k = 5;
+    let result = index.search(&query_vector, k);
+    for res in result {
+        println!("{:?}", res.id);
+    }
+    println!("{:?}", &baseline[0..k]);*/
+
+    let round = 100;
+    let mut hit = 0;
+    let mut rng = thread_rng();
+
+    for _ in 0..round {
+        let query_i = rng.gen_range(0..query_vectors.len());
+        let query = HighDimVector::new(query_i, query_vectors[query_i].to_vec());
+
+        let result = index.search(&query, 5);
+        let top5_groundtruth = &groundtruth[query_i][0..5];
+        for res in result {
+            let id = res.id as i32;
+            if top5_groundtruth.contains(&id) {
+                hit += 1;
+            }
+        }
+    }
+
+    println!("recall: {}", hit as f32 / (round * 5) as f32);
+
+    /*let n = 1000;
     let mut samples = Vec::with_capacity(n);
     for i in 0..n {
-        samples.push(HighDimVector::new(i, vec![128.0 + i as f64; 3]));
+        samples.push(HighDimVector::new(i, vec![128.0 + i as f32; 128]));
     }
-    let mut index = SSGIndex::new(DistanceMetric::Euclidean);
+    let mut index = LSHIndex::new(DistanceMetric::Euclidean);
     for sample in samples {
         index.add_vector(sample);
     }
     index.build();
     let query = HighDimVector::new(999999999, vec![208.0; 3]);
     let result = index.search(&query, 5);
-    println!("{:?}", result);
+
+    for (i, vec) in result.iter().enumerate() {
+        println!("{} {:?}", i, vec.id);
+        }*/
 
     /*let args = Args::parse();
     let dimensions = args.dimensions.unwrap_or(100);
@@ -104,12 +149,12 @@ async fn generate_data(
     config: &BenchmarkConfig,
     dimensions: usize,
     num_images: usize,
-) -> Vec<Vec<f64>> {
+) -> Vec<Vec<f32>> {
     let mut data_generator = DenseDataGenerator::new(dimensions, num_images, config.value_range);
     data_generator.generate().await
 }
 
-fn add_vectors_to_index(data: &[Vec<f64>]) -> Box<dyn Index> {
+fn add_vectors_to_index(data: &[Vec<f32>]) -> Box<dyn Index> {
     let mut index = Box::new(SSGIndex::new(DistanceMetric::Euclidean));
     for (i, d) in data.iter().enumerate() {
         index.add_vector(HighDimVector::new(i, d.clone()));

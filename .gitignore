@@ -1,3 +1,6 @@
 /target
 
 benchmark_results.csv
+
+# Data examples
+src/data/examples
