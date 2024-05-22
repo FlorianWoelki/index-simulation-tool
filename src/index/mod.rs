@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use crate::data::HighDimVector;
 
 pub mod hnsw;
+pub mod lsh;
 pub mod naive;
 pub mod neighbor;
 pub mod ssg;
