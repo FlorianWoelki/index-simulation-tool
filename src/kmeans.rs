@@ -33,7 +33,7 @@ pub fn kmeans(
     for _ in 0..epoch {
         for (i, node) in nodes.iter().enumerate() {
             let mut closest = usize::MAX;
-            let mut closest_distance = f64::MAX;
+            let mut closest_distance = f32::MAX;
 
             for (j, center) in centers.iter().enumerate() {
                 let distance = node.distance(center, metric);
@@ -48,7 +48,7 @@ pub fn kmeans(
         }
 
         // Recalculate the cluster centers based on the new assignments.
-        let mut new_centers: Vec<Vec<f64>> = vec![vec![0.0; centers[0].dimensions.len()]; k];
+        let mut new_centers: Vec<Vec<f32>> = vec![vec![0.0; centers[0].dimensions.len()]; k];
         let mut counts = vec![0; k];
 
         for (node, &cluster) in nodes.iter().zip(assignments.iter()) {
@@ -60,7 +60,7 @@ pub fn kmeans(
 
         for (i, center) in centers.iter_mut().enumerate() {
             for j in 0..center.dimensions.len() {
-                center.dimensions[j] = new_centers[i][j] / counts[i] as f64;
+                center.dimensions[j] = new_centers[i][j] / counts[i] as f32;
             }
         }
     }
@@ -68,7 +68,7 @@ pub fn kmeans(
     // Find the closest node to each cluster center.
     let closest_node_indices = centers.iter().map(|center| {
         let mut closest_index = 0;
-        let mut closest_distance = f64::MAX;
+        let mut closest_distance = f32::MAX;
 
         nodes.iter().enumerate().for_each(|(i, node)| {
             let distance = node.distance(center, metric);

@@ -7,7 +7,7 @@ use ordered_float::OrderedFloat;
 #[derive(Clone, PartialEq, Debug)]
 pub struct NeighborNode {
     pub id: usize,
-    pub distance: OrderedFloat<f64>,
+    pub distance: OrderedFloat<f32>,
 }
 
 impl NeighborNode {
@@ -17,7 +17,7 @@ impl NeighborNode {
     ///
     /// * `id` - A unique identifier for the neighbor node.
     /// * `distance` - The distance from the reference point to this neighbor.
-    pub(super) fn new(id: usize, distance: f64) -> Self {
+    pub(super) fn new(id: usize, distance: f32) -> Self {
         NeighborNode {
             id,
             distance: OrderedFloat(distance),

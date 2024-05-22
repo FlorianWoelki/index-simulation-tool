@@ -145,7 +145,7 @@ impl HNSWIndex {
         }
 
         let mut lower_bound = if top_candidates.is_empty() {
-            OrderedFloat(f64::MAX)
+            OrderedFloat(f32::MAX)
         } else {
             top_candidates.peek().unwrap().distance
         };

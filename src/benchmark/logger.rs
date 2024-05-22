@@ -11,13 +11,13 @@ use super::{metrics::DEFAULT_SCALABILITY_FACTOR, BenchmarkResult};
 /// to CSV. It contains the same fields as `BenchmarkResult`, but the fields are of different types.
 #[derive(Serialize)]
 struct BenchmarkRecord {
-    pub total_execution_time: f64,
-    pub index_execution_time: f64,
-    pub query_execution_time: f64,
-    pub queries_per_second: f64,
+    pub total_execution_time: f32,
+    pub index_execution_time: f32,
+    pub query_execution_time: f32,
+    pub queries_per_second: f32,
     pub dataset_size: usize,
     pub dataset_dimensionality: usize,
-    pub scalability_factor: f64,
+    pub scalability_factor: f32,
 }
 
 pub struct BenchmarkLogger {
@@ -41,9 +41,9 @@ impl BenchmarkLogger {
 
         for record in &self.records {
             writer.serialize(&BenchmarkRecord {
-                total_execution_time: record.total_execution_time.as_secs_f64(),
-                index_execution_time: record.index_execution_time.as_secs_f64(),
-                query_execution_time: record.query_execution_time.as_secs_f64(),
+                total_execution_time: record.total_execution_time.as_secs_f32(),
+                index_execution_time: record.index_execution_time.as_secs_f32(),
+                query_execution_time: record.query_execution_time.as_secs_f32(),
                 queries_per_second: record.queries_per_second,
                 dataset_size: record.dataset_size,
                 dataset_dimensionality: record.dataset_dimensionality,

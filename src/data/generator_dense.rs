@@ -6,12 +6,12 @@ use rand::{
 pub struct DenseDataGenerator {
     dim: usize,
     count: usize,
-    range: (f64, f64),
+    range: (f32, f32),
     system: sysinfo::System,
 }
 
 impl DenseDataGenerator {
-    pub fn new(dim: usize, count: usize, range: (f64, f64)) -> Self {
+    pub fn new(dim: usize, count: usize, range: (f32, f32)) -> Self {
         DenseDataGenerator {
             dim,
             count,
@@ -20,7 +20,7 @@ impl DenseDataGenerator {
         }
     }
 
-    pub async fn generate(&mut self) -> Vec<Vec<f64>> {
+    pub async fn generate(&mut self) -> Vec<Vec<f32>> {
         self.system.refresh_all();
 
         let mut handles = vec![];

@@ -6,8 +6,8 @@ use rand::{
 pub struct SparseDataGenerator {
     dim: usize,
     count: usize,
-    range: (f64, f64),
-    sparsity: f64,
+    range: (f32, f32),
+    sparsity: f32,
     system: sysinfo::System,
 }
 
@@ -24,7 +24,7 @@ impl SparseDataGenerator {
     /// # Returns
     ///
     /// A new instance of `SparseDataGenerator`.
-    pub fn new(dim: usize, count: usize, range: (f64, f64), sparsity: f64) -> Self {
+    pub fn new(dim: usize, count: usize, range: (f32, f32), sparsity: f32) -> Self {
         SparseDataGenerator {
             dim,
             count,
@@ -34,7 +34,7 @@ impl SparseDataGenerator {
         }
     }
 
-    pub async fn generate(&mut self) -> Vec<Vec<f64>> {
+    pub async fn generate(&mut self) -> Vec<Vec<f32>> {
         self.system.refresh_all();
 
         let mut handles = vec![];
@@ -49,7 +49,7 @@ impl SparseDataGenerator {
 
             let handle = tokio::task::spawn_blocking(move || {
                 let uniform_dist = Uniform::from(range.0..range.1);
-                let bernoulli_dist = Bernoulli::new(sparsity).unwrap();
+                let bernoulli_dist = Bernoulli::new(sparsity as f64).unwrap();
                 let mut data_chunk = Vec::with_capacity(dim);
 
                 for _ in 0..per_chunk {

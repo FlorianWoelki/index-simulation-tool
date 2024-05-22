@@ -72,7 +72,7 @@ impl SSGIndex {
         }
         for i in result.len()..self.index_size {
             pruned_graph[base_index + i].id = self.vectors.len();
-            pruned_graph[base_index + i].distance = f64::MAX.into();
+            pruned_graph[base_index + i].distance = f32::MAX.into();
         }
     }
 
@@ -110,7 +110,7 @@ impl SSGIndex {
     ) {
         for i in 0..max_neighbors {
             let current_node = &pruned_graph[node_index + i];
-            if current_node.distance.into_inner() == f64::MAX {
+            if current_node.distance.into_inner() == f32::MAX {
                 continue;
             }
 
@@ -196,7 +196,7 @@ impl SSGIndex {
         let neighbors = (0..max_neighbors)
             .filter(|i| {
                 let neighbor = &pruned_graph[start_index + i];
-                neighbor.distance.into_inner() != f64::MAX
+                neighbor.distance.into_inner() != f32::MAX
             })
             .map(|i| {
                 let neighbor = &pruned_graph[start_index + i];
@@ -238,16 +238,16 @@ impl SSGIndex {
             });
 
             if result.len() < max_neighbors {
-                pruned_graph[result.len() + start_index].distance = OrderedFloat(f64::MAX);
+                pruned_graph[result.len() + start_index].distance = OrderedFloat(f32::MAX);
             }
         } else {
             (0..max_neighbors).for_each(|i| {
-                if pruned_graph[i + start_index].distance.into_inner() != f64::MAX {
+                if pruned_graph[i + start_index].distance.into_inner() != f32::MAX {
                     return;
                 }
                 pruned_graph[i + start_index] = neighbor_node.clone();
                 if (i + 1) < max_neighbors {
-                    pruned_graph[i + start_index].distance = OrderedFloat(f64::MAX);
+                    pruned_graph[i + start_index].distance = OrderedFloat(f32::MAX);
                 }
             });
         }
@@ -298,7 +298,7 @@ mod tests {
         let mut index = SSGIndex::new(DistanceMetric::Euclidean);
         index.index_size = 10;
         let query_id = 0;
-        let mut pruned_graph = vec![NeighborNode::new(usize::MAX, f64::MAX.into()); 10];
+        let mut pruned_graph = vec![NeighborNode::new(usize::MAX, f32::MAX.into()); 10];
         let result = vec![NeighborNode::new(1, 10.0), NeighborNode::new(2, 20.0)];
 
         index.populate_pruned_graph(&mut pruned_graph, &result, query_id);
@@ -322,7 +322,7 @@ mod tests {
         );
         assert_eq!(
             pruned_graph[2].distance.into_inner(),
-            f64::MAX,
+            f32::MAX,
             "Third node distance is incorrect"
         );
     }
@@ -353,20 +353,20 @@ mod tests {
         let mut index = SSGIndex::new(DistanceMetric::Euclidean);
         index.index_size = 3;
         for i in 0..5 {
-            index.add_vector(HighDimVector::new(i, vec![i as f64, i as f64 * 2.0]));
+            index.add_vector(HighDimVector::new(i, vec![i as f32, i as f32 * 2.0]));
         }
         let mut pruned_graph = vec![
             NeighborNode::new(1, 10.0), // Node 0 connects to Node 1
             NeighborNode::new(2, 20.0), // Node 0 connects to Node 2
             NeighborNode::new(3, 30.0), // Node 0 connects to Node 3
             NeighborNode::new(0, 10.0), // Node 1 connects back to Node 0
-            NeighborNode::new(usize::MAX, f64::MAX),
-            NeighborNode::new(usize::MAX, f64::MAX),
+            NeighborNode::new(usize::MAX, f32::MAX),
+            NeighborNode::new(usize::MAX, f32::MAX),
         ];
 
         pruned_graph.resize(
             index.vectors.len() * index.index_size,
-            NeighborNode::new(usize::MAX, f64::MAX),
+            NeighborNode::new(usize::MAX, f32::MAX),
         );
         index.interconnect_pruned_neighbors(0, index.index_size, &mut pruned_graph);
         //assert!(false, "TODO");
@@ -379,7 +379,7 @@ mod tests {
             NeighborNode::new(1, 10.0),
             NeighborNode::new(2, 20.0),
             NeighborNode::new(1, 10.0), // Duplicate node
-            NeighborNode::new(usize::MAX, f64::MAX),
+            NeighborNode::new(usize::MAX, f32::MAX),
         ];
 
         let neighbors = index.collect_neighbors(&pruned_graph, 0, 3, 2);
@@ -413,8 +413,8 @@ mod tests {
             NeighborNode::new(1, 1.0),
             NeighborNode::new(2, 2.0),
             NeighborNode::new(3, 4.0),
-            NeighborNode::new(usize::MAX, f64::MAX),
-            NeighborNode::new(usize::MAX, f64::MAX),
+            NeighborNode::new(usize::MAX, f32::MAX),
+            NeighborNode::new(usize::MAX, f32::MAX),
         ];
 
         let mut neighbors = index.collect_neighbors(&pruned_graph, 0, index.index_size, 0);

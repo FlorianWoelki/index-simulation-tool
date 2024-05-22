@@ -4,7 +4,7 @@ use super::{DistanceMetric, Index};
 
 struct NaiveNode {
     index: usize,
-    distance: f64,
+    distance: f32,
 }
 
 pub struct NaiveIndex {

@@ -7,8 +7,8 @@ macro_rules! measure_resources {
 
             if let Some(process) = system.process(Pid::from(pid)) {
                 println!("Current process: {}", process.name());
-                let memory_mb = process.memory() as f64 / 1_048_576.0;
-                if memory_mb >= 1024f64 {
+                let memory_mb = process.memory() as f32 / 1_048_576.0;
+                if memory_mb >= 1024f32 {
                     println!("Memory usage: {:.2} GB", memory_mb / 1024.0);
                 } else {
                     println!("Memory usage: {:.2} MB", memory_mb);

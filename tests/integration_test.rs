@@ -28,7 +28,7 @@ mod tests {
     fn create_index<I: Index + 'static>(n: usize) -> I {
         let mut samples = Vec::with_capacity(n);
         for i in 0..n {
-            samples.push(HighDimVector::new(i, vec![128.0 + i as f64; 3]));
+            samples.push(HighDimVector::new(i, vec![128.0 + i as f32; 3]));
         }
         let mut index = I::new(DistanceMetric::Euclidean);
         for sample in samples {

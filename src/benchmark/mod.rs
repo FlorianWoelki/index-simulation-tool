@@ -37,14 +37,14 @@ pub struct BenchmarkConfig {
     /// A tuple representing the inclusive minimum and maximum values that
     /// any single element in the data vectors can take. This is crucial for
     /// generating test data with realistic variability.
-    pub value_range: (f64, f64),
+    pub value_range: (f32, f32),
 }
 
 impl BenchmarkConfig {
     pub fn new(
         dimensions_range: (usize, usize, usize),
         num_images_range: (usize, usize, usize),
-        value_range: (f64, f64),
+        value_range: (f32, f32),
     ) -> Self {
         BenchmarkConfig {
             start_dimensions: dimensions_range.0,
@@ -73,10 +73,10 @@ pub struct BenchmarkResult {
     pub total_execution_time: Duration,
     pub index_execution_time: Duration,
     pub query_execution_time: Duration,
-    pub queries_per_second: f64,
+    pub queries_per_second: f32,
     pub dataset_size: usize,
     pub dataset_dimensionality: usize,
-    pub scalability_factor: Option<f64>, // Optional because the first benchmark doesn't have a previous result to compare to.
+    pub scalability_factor: Option<f32>, // Optional because the first benchmark doesn't have a previous result to compare to.
 }
 
 pub struct Benchmark {

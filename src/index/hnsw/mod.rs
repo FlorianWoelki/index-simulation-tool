@@ -296,7 +296,7 @@ mod tests {
         let mut index = HNSWIndex::new(DistanceMetric::Euclidean);
 
         for i in 0..10 {
-            let v = HighDimVector::new(i, vec![i as f64, (i + 1) as f64, (i + 2) as f64]);
+            let v = HighDimVector::new(i, vec![i as f32, (i + 1) as f32, (i + 2) as f32]);
             index.add_vector(v);
         }
 

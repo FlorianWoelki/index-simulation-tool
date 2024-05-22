@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use super::BenchmarkResult;
 
-pub const DEFAULT_SCALABILITY_FACTOR: f64 = 1.0;
+pub const DEFAULT_SCALABILITY_FACTOR: f32 = 1.0;
 
 /// Calculates the number of queries per second from the total time taken to execute
 /// the queries.
@@ -19,9 +19,9 @@ pub const DEFAULT_SCALABILITY_FACTOR: f64 = 1.0;
 /// let queries_per_second = calculate_queries_per_second(total_queries_execution_time);
 /// assert_eq!(queries_per_second, 1.0);
 /// ```
-pub fn calculate_queries_per_second(total_queries_execution_time: Duration) -> f64 {
+pub fn calculate_queries_per_second(total_queries_execution_time: Duration) -> f32 {
     if !total_queries_execution_time.is_zero() {
-        1_000_000_000.0 / total_queries_execution_time.as_nanos() as f64
+        1_000_000_000.0 / total_queries_execution_time.as_nanos() as f32
     } else {
         0.0
     }
@@ -71,12 +71,12 @@ pub fn calculate_queries_per_second(total_queries_execution_time: Duration) -> f
 /// assert_eq!(scalability_factor, 2.0);
 /// ```
 pub fn calculate_scalability_factor(
-    (queries_per_second, dataset_size, dataset_dimensionality): (f64, usize, usize),
+    (queries_per_second, dataset_size, dataset_dimensionality): (f32, usize, usize),
     previous_result: &BenchmarkResult,
-) -> f64 {
-    let dataset_size_ratio = (dataset_size as f64) / (previous_result.dataset_size as f64);
+) -> f32 {
+    let dataset_size_ratio = (dataset_size as f32) / (previous_result.dataset_size as f32);
     let dimensionality_ratio =
-        (dataset_dimensionality as f64) / (previous_result.dataset_dimensionality as f64);
+        (dataset_dimensionality as f32) / (previous_result.dataset_dimensionality as f32);
 
     let qps_scalability_factor = queries_per_second / previous_result.queries_per_second;
 

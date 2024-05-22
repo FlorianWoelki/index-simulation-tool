@@ -103,7 +103,7 @@ mod tests {
         let mut index = SSGIndex::new(DistanceMetric::Euclidean);
         index.root_size = 10;
         for i in 0..10 {
-            let v = HighDimVector::new(i, vec![i as f64, i as f64]);
+            let v = HighDimVector::new(i, vec![i as f32, i as f32]);
             index.add_vector(v);
         }
         index.build();

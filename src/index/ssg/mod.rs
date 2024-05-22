@@ -1,4 +1,4 @@
-use std::{collections::HashSet, f64::consts::PI};
+use std::{collections::HashSet, f32::consts::PI};
 
 use rand::thread_rng;
 
@@ -13,7 +13,7 @@ mod search;
 pub struct SSGIndex {
     pub(super) vectors: Vec<HighDimVector>,
     pub(super) metric: DistanceMetric,
-    pub(super) threshold: f64,
+    pub(super) threshold: f32,
     pub(super) index_size: usize,
     pub(super) graph: Vec<Vec<usize>>,
     pub(super) root_size: usize,
@@ -58,7 +58,7 @@ impl Index for SSGIndex {
         (0..self.vectors.len()).enumerate().for_each(|(i, _)| {
             let offset = i * self.index_size;
             let pool_size = (0..self.index_size)
-                .take_while(|j| pruned_graph[offset + j].distance.into_inner() == f64::MAX)
+                .take_while(|j| pruned_graph[offset + j].distance.into_inner() == f32::MAX)
                 .count()
                 .max(1);
             self.graph[i] = (0..pool_size)
@@ -167,7 +167,7 @@ mod tests {
         let mut index = SSGIndex::new(DistanceMetric::Euclidean);
         index.root_size = 10;
         for i in 0..10 {
-            index.add_vector(HighDimVector::new(i, vec![i as f64]));
+            index.add_vector(HighDimVector::new(i, vec![i as f32]));
         }
         index.construct_knn_graph(100);
         index.root_nodes = vec![0, 5]; // Manually setting root nodes for predictability.
@@ -183,7 +183,7 @@ mod tests {
     fn test_link_each_nodes() {
         let mut index = SSGIndex::new(DistanceMetric::Euclidean);
         for i in 0..10 {
-            index.add_vector(HighDimVector::new(i, vec![i as f64]));
+            index.add_vector(HighDimVector::new(i, vec![i as f32]));
         }
         index.construct_knn_graph(100);
 
@@ -208,7 +208,7 @@ mod tests {
         let mut expanded_neighbors = Vec::new();
         let query_point = 0;
         for i in 0..5 {
-            index.add_vector(HighDimVector::new(i, vec![i as f64 * 10.0]));
+            index.add_vector(HighDimVector::new(i, vec![i as f32 * 10.0]));
         }
         index.graph = vec![vec![1, 2], vec![0, 3], vec![0, 4], vec![1], vec![2]];
 
@@ -237,7 +237,7 @@ mod tests {
         let mut index = SSGIndex::new(DistanceMetric::Euclidean);
         index.root_size = 10;
         for i in 0..10 {
-            index.add_vector(HighDimVector::new(i, vec![i as f64]));
+            index.add_vector(HighDimVector::new(i, vec![i as f32]));
         }
         index.build();
 
