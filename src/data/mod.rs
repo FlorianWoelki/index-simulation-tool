@@ -7,6 +7,7 @@ use crate::index::DistanceMetric;
 pub mod generator_dense;
 pub mod generator_sparse;
 pub mod sift;
+pub mod sparse;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct HighDimVector {
@@ -92,7 +93,7 @@ mod tests {
 
         assert_eq!(a.distance(&b, DistanceMetric::Euclidean), 5.196152422706632);
         assert_eq!(a.distance(&b, DistanceMetric::Manhattan), 9.0);
-        assert_eq!(a.distance(&b, DistanceMetric::Cosine), 0.025368153802923787);
+        assert_eq!(a.distance(&b, DistanceMetric::Cosine), 0.025368214);
         assert_eq!(a.distance(&b, DistanceMetric::DotProduct), 32.0);
     }
 
@@ -101,6 +102,6 @@ mod tests {
         let a = HighDimVector::new(1, vec![0.0, 1.0, 2.0, 5.0, 6.0]);
         let b = HighDimVector::new(2, vec![0.0, 2.0, 3.0, 4.0, 5.0, 7.0, 9.0]);
 
-        assert_eq!(a.distance(&b, DistanceMetric::Jaccard), 0.6666666666666667);
+        assert_eq!(a.distance(&b, DistanceMetric::Jaccard), 0.6666666);
     }
 }
