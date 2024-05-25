@@ -6,8 +6,8 @@ use crate::index::DistanceMetric;
 
 pub mod generator_dense;
 pub mod generator_sparse;
+pub mod ms_marco;
 pub mod sift;
-pub mod sparse;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct HighDimVector {
