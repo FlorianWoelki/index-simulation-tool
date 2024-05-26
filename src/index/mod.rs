@@ -49,10 +49,32 @@ pub trait Index {
     fn search(&self, query_vector: &HighDimVector, k: usize) -> Vec<HighDimVector>;
 }
 
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq)]
+// TODO: Move this
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone)]
 pub struct SparseVector {
     pub indices: Vec<usize>,
     pub values: Vec<OrderedFloat<f32>>,
+}
+
+// TODO: Move this
+#[derive(Debug, PartialEq)]
+pub struct QueryResult {
+    pub vector: SparseVector,
+    pub score: OrderedFloat<f32>,
+}
+
+impl Eq for QueryResult {}
+
+impl PartialOrd for QueryResult {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.score.partial_cmp(&other.score)
+    }
+}
+
+impl Ord for QueryResult {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.score.cmp(&other.score)
+    }
 }
 
 pub trait SparseIndex {
@@ -61,5 +83,5 @@ pub trait SparseIndex {
         Self: Sized;
     fn add_vector(&mut self, vector: &SparseVector);
     fn build(&mut self);
-    fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<SparseVector>;
+    fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult>;
 }
