@@ -1,8 +1,11 @@
 use std::fmt::Debug;
 
+use ordered_float::OrderedFloat;
+
 use crate::data::HighDimVector;
 
 pub mod hnsw;
+pub mod linscan;
 pub mod lsh;
 pub mod naive;
 pub mod neighbor;
@@ -44,4 +47,19 @@ pub trait Index {
     fn add_vector(&mut self, vector: HighDimVector);
     fn build(&mut self);
     fn search(&self, query_vector: &HighDimVector, k: usize) -> Vec<HighDimVector>;
+}
+
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq)]
+pub struct SparseVector {
+    pub indices: Vec<usize>,
+    pub values: Vec<OrderedFloat<f32>>,
+}
+
+pub trait SparseIndex {
+    fn new(metric: DistanceMetric) -> Self
+    where
+        Self: Sized;
+    fn add_vector(&mut self, vector: &SparseVector);
+    fn build(&mut self);
+    fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<SparseVector>;
 }
