@@ -1,11 +1,9 @@
-use std::{
-    cmp::Reverse,
-    collections::{BinaryHeap, HashMap},
-};
+use std::collections::HashMap;
 
 use ordered_float::OrderedFloat;
 
 use super::{DistanceMetric, QueryResult, SparseIndex, SparseVector};
+use crate::data_structures::min_heap::MinHeap;
 
 #[derive(Debug)]
 pub struct LinScanIndex {
@@ -52,22 +50,24 @@ impl SparseIndex for LinScanIndex {
             }
         }
 
-        let mut heap: BinaryHeap<Reverse<QueryResult>> = BinaryHeap::new();
-
+        let mut heap: MinHeap<QueryResult> = MinHeap::new();
         for (index, &score) in scores.iter().enumerate() {
-            if heap.len() < k || score > heap.peek().unwrap().0.score.into_inner() {
-                heap.push(Reverse(QueryResult {
-                    //vector: self.vectors[index].clone(),
-                    index,
-                    score: OrderedFloat(score),
-                }));
+            if heap.len() < k || score > heap.peek().unwrap().score.into_inner() {
+                heap.push(
+                    QueryResult {
+                        //vector: self.vectors[index].clone(),
+                        index,
+                        score: OrderedFloat(score),
+                    },
+                    OrderedFloat(score),
+                );
                 if heap.len() > k {
                     heap.pop();
                 }
             }
         }
 
-        heap.into_sorted_vec().into_iter().map(|r| r.0).collect()
+        heap.into_sorted_vec()
     }
 }
 
