@@ -59,7 +59,8 @@ pub struct SparseVector {
 // TODO: Move this
 #[derive(Debug, PartialEq)]
 pub struct QueryResult {
-    pub vector: SparseVector,
+    //pub vector: SparseVector,
+    pub index: usize,
     pub score: OrderedFloat<f32>,
 }
 

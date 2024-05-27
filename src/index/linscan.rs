@@ -1,4 +1,7 @@
-use std::collections::{BinaryHeap, HashMap};
+use std::{
+    cmp::Reverse,
+    collections::{BinaryHeap, HashMap},
+};
 
 use ordered_float::OrderedFloat;
 
@@ -7,7 +10,7 @@ use super::{DistanceMetric, QueryResult, SparseIndex, SparseVector};
 #[derive(Debug)]
 pub struct LinScanIndex {
     vectors: Vec<SparseVector>,
-    inverted_index: HashMap<usize, Vec<(usize, f32)>>,
+    inverted_index: HashMap<usize, Vec<(usize, OrderedFloat<f32>)>>,
     metric: DistanceMetric,
 }
 
@@ -24,13 +27,11 @@ impl SparseIndex for LinScanIndex {
     }
 
     fn add_vector(&mut self, vector: &SparseVector) {
-        for i in 0..vector.indices.len() {
-            let index = vector.indices[i];
-            let value = vector.values[i];
+        for (index, value) in vector.indices.iter().zip(vector.values.iter()) {
             self.inverted_index
-                .entry(index)
+                .entry(*index)
                 .or_default()
-                .push((self.vectors.len(), value.into_inner()));
+                .push((self.vectors.len(), *value));
         }
 
         self.vectors.push(vector.clone());
@@ -43,38 +44,30 @@ impl SparseIndex for LinScanIndex {
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let mut scores = vec![0.0; self.vectors.len()];
 
-        for i in 0..query_vector.indices.len() {
-            let index = query_vector.indices[i];
-            let value = query_vector.values[i];
-
-            if let Some(vectors) = self.inverted_index.get(&index) {
+        for (index, value) in query_vector.indices.iter().zip(query_vector.values.iter()) {
+            if let Some(vectors) = self.inverted_index.get(index) {
                 for (vec_id, vec_value) in vectors.iter() {
-                    // TODO: Use DistanceMetric to calculate the score
-                    scores[*vec_id] += (value * vec_value).into_inner();
+                    scores[*vec_id] += value.into_inner() * vec_value.into_inner();
                 }
             }
         }
 
-        let mut heap: BinaryHeap<QueryResult> = BinaryHeap::new();
+        let mut heap: BinaryHeap<Reverse<QueryResult>> = BinaryHeap::new();
 
-        for (id, score) in scores.iter().enumerate() {
-            if *score > 0.0 {
-                heap.push(QueryResult {
-                    vector: self.vectors[id].clone(),
-                    score: OrderedFloat(*score),
-                });
+        for (index, &score) in scores.iter().enumerate() {
+            if heap.len() < k || score > heap.peek().unwrap().0.score.into_inner() {
+                heap.push(Reverse(QueryResult {
+                    //vector: self.vectors[index].clone(),
+                    index,
+                    score: OrderedFloat(score),
+                }));
                 if heap.len() > k {
                     heap.pop();
                 }
             }
         }
 
-        let mut results = Vec::with_capacity(k);
-        while let Some(entry) = heap.pop() {
-            results.push(entry);
-        }
-
-        results
+        heap.into_sorted_vec().into_iter().map(|r| r.0).collect()
     }
 }
 

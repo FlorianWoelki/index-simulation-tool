@@ -385,6 +385,7 @@ dependencies = [
  "csv",
  "ordered-float",
  "rand",
+ "rayon",
  "serde",
  "sprs",
  "sysinfo",
