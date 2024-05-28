@@ -63,3 +63,55 @@ impl<T> MinHeap<T> {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_push_and_len() {
+        let mut heap = MinHeap::new();
+        assert_eq!(heap.len(), 0);
+
+        heap.push(1, OrderedFloat(1.0));
+        assert_eq!(heap.len(), 1);
+
+        heap.push(2, OrderedFloat(2.0));
+        assert_eq!(heap.len(), 2);
+    }
+
+    #[test]
+    fn test_pop() {
+        let mut heap = MinHeap::new();
+        heap.push(1, OrderedFloat(1.0));
+        heap.push(2, OrderedFloat(2.0));
+        heap.push(3, OrderedFloat(0.5));
+
+        assert_eq!(heap.pop(), Some(3));
+        assert_eq!(heap.pop(), Some(1));
+        assert_eq!(heap.pop(), Some(2));
+    }
+
+    #[test]
+    fn test_peek() {
+        let mut heap = MinHeap::new();
+        assert_eq!(heap.peek(), None);
+
+        heap.push(1, OrderedFloat(1.0));
+        heap.push(2, OrderedFloat(2.0));
+        assert_eq!(heap.peek(), Some(&1));
+
+        heap.push(3, OrderedFloat(0.0));
+        assert_eq!(heap.peek(), Some(&3));
+    }
+
+    #[test]
+    fn test_into_sorted_vec() {
+        let mut heap = MinHeap::new();
+        heap.push(1, OrderedFloat(1.0));
+        heap.push(2, OrderedFloat(2.0));
+        heap.push(3, OrderedFloat(0.5));
+
+        assert_eq!(heap.into_sorted_vec(), vec![2, 1, 3]);
+    }
+}
