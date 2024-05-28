@@ -106,7 +106,7 @@ mod tests {
         let result = index.search(&query_vector, 4);
 
         assert_eq!(result.len(), 2);
-        assert_eq!(result[0].score.into_inner(), 0.5);
-        assert_eq!(result[1].score.into_inner(), 0.55);
+        assert_eq!(result[0].score.into_inner(), 0.55);
+        assert_eq!(result[1].score.into_inner(), 0.5);
     }
 }
