@@ -9,6 +9,33 @@ pub mod generator_sparse;
 pub mod ms_marco;
 pub mod sift;
 
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone)]
+pub struct SparseVector {
+    pub indices: Vec<usize>,
+    pub values: Vec<OrderedFloat<f32>>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct QueryResult {
+    //pub vector: SparseVector,
+    pub index: usize,
+    pub score: OrderedFloat<f32>,
+}
+
+impl Eq for QueryResult {}
+
+impl PartialOrd for QueryResult {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.score.partial_cmp(&other.score)
+    }
+}
+
+impl Ord for QueryResult {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.score.cmp(&other.score)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct HighDimVector {
     pub id: usize,

@@ -2,9 +2,9 @@
 mod tests {
     use std::collections::HashSet;
 
-    use index_simulation_tool::index::{
-        minhash::{MinHash, MinHashIndex},
-        SparseVector,
+    use index_simulation_tool::{
+        data::SparseVector,
+        index::minhash::{MinHash, MinHashIndex},
     };
     use ordered_float::OrderedFloat;
     use rand::{Rng, SeedableRng};

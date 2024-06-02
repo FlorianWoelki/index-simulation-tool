@@ -4,10 +4,10 @@ use benchmark::{
     logger::BenchmarkLogger, metrics::DEFAULT_SCALABILITY_FACTOR, Benchmark, BenchmarkConfig,
     BenchmarkResult,
 };
-use data::{generator_dense::DenseDataGenerator, HighDimVector};
+use data::{generator_dense::DenseDataGenerator, HighDimVector, SparseVector};
 use index::{
     hnsw::HNSWIndex, linscan::LinScanIndex, minhash::MinHashIndex, naive::NaiveIndex,
-    ssg::SSGIndex, DistanceMetric, Index, SparseIndex, SparseVector,
+    ssg::SSGIndex, DistanceMetric, Index, SparseIndex,
 };
 
 use clap::Parser;
