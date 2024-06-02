@@ -1,18 +1,23 @@
+use std::collections::HashMap;
+
 use benchmark::{
     logger::BenchmarkLogger, metrics::DEFAULT_SCALABILITY_FACTOR, Benchmark, BenchmarkConfig,
     BenchmarkResult,
 };
 use data::{generator_dense::DenseDataGenerator, HighDimVector};
 use index::{
-    hnsw::HNSWIndex, lsh::LSHIndex, naive::NaiveIndex, ssg::SSGIndex, DistanceMetric, Index,
+    hnsw::HNSWIndex, linscan::LinScanIndex, minhash::MinHashIndex, naive::NaiveIndex,
+    ssg::SSGIndex, DistanceMetric, Index, SparseIndex, SparseVector,
 };
 
 use clap::Parser;
-use rand::{thread_rng, Rng};
+use rand::{rngs::StdRng, thread_rng, Rng, SeedableRng};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use sysinfo::Pid;
 
 mod benchmark;
 mod data;
+mod data_structures;
 mod index;
 mod kmeans;
 
@@ -26,14 +31,111 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
-    let (query_vectors, groundtruth, vectors) = data::sift::get_data().unwrap();
+    let (groundtruth, vectors, query_vectors) = data::ms_marco::load_msmarco_dataset().unwrap();
+
+    // let mut index = LinScanIndex::new(DistanceMetric::Euclidean);
+    let seed = thread_rng().gen_range(0..1000);
+    let mut index = MinHashIndex::new_with_rng(200, 20, 100, seed);
+    let mut query_sparse_vectors = vec![];
+    let mut vectors_sparse_vectors = vec![];
+    for query_vector in query_vectors.iter() {
+        let sparse_vector = SparseVector {
+            indices: query_vector.0.clone(),
+            values: query_vector
+                .1
+                .iter()
+                .map(|&v| ordered_float::OrderedFloat(v))
+                .collect(),
+        };
+        query_sparse_vectors.push(sparse_vector);
+    }
+
+    for vector in vectors.iter().take(15000) {
+        let sparse_vector = SparseVector {
+            indices: vector.0.clone(),
+            values: vector
+                .1
+                .iter()
+                .map(|&v| ordered_float::OrderedFloat(v))
+                .collect(),
+        };
+        vectors_sparse_vectors.push(sparse_vector);
+    }
+
+    println!("Start adding vectors...");
+    for (i, vector) in vectors_sparse_vectors.iter().enumerate() {
+        index.add_vector(vector);
+        println!("Vector {}", i)
+    }
+    println!("Done adding vectors...");
+
+    let r = index.search(&query_sparse_vectors[0], 10);
+    println!("{:?}", r);
+    let r = index.search(
+        &vectors_sparse_vectors[thread_rng().gen_range(0..15000)],
+        10,
+    );
+    println!("{:?}", r);
+
+    println!("gt: {:?}", groundtruth.0[0]);
+
+    for (i, res) in r.iter().enumerate() {
+        /*let gt_index = groundtruth.0[0][i];
+        if res.index != gt_index as usize {
+            println!("{}: expected: {}, got: {}", i, gt_index, res.index);
+            }*/
+
+        /*if (res.score - groundtruth.1[0][i]).abs() > 0.01 {
+        println!(
+            "{}: expected: {}, got: {}",
+            i, groundtruth.1[0][i], res.score
+        );
+        }*/
+    }
+
+    /*let start = std::time::Instant::now();
+    let mut hit = 0;
+    for (i, query_vector) in query_sparse_vectors.iter().enumerate() {
+        let result = index.search(query_vector, 10);
+
+        let expected_indices = &groundtruth.0[i];
+        let expected_scores = &groundtruth.1[i];
+
+        for (j, res) in result.iter().enumerate() {
+            let expected_score = expected_scores[j];
+            if (res.score - expected_score).abs() > 0.01 {
+                println!(
+                    "{}({}). expected: {}, got: {}",
+                    i, j, expected_score, res.score
+                );
+            }
+
+            if res.id != expected_indices[j] as usize {
+                println!(
+                    "{}({}). expected: {}, got: {}",
+                    i, j, expected_indices[j], res.id
+                );
+            } else {
+                hit += 1;
+            }
+        }
+    }
+    let elapsed = start.elapsed();
+
+    println!(
+        "recall: {}",
+        hit as f32 / (query_sparse_vectors.len() * 10) as f32
+    );
+    println!("elapsed: {:?}", elapsed);*/
+
+    /*let (query_vectors, groundtruth, vectors) = data::sift::get_data().unwrap();
 
     let mut index = LSHIndex::new(DistanceMetric::Euclidean);
     for (i, vector) in vectors.iter().enumerate() {
         index.add_vector(HighDimVector::new(i, vector.to_vec()));
     }
 
-    index.build();
+    index.build();*/
 
     /*let query_id = 0;
     let query_vector = HighDimVector::new(query_id, query_vectors[query_id].to_vec());
@@ -45,7 +147,7 @@ async fn main() {
     }
     println!("{:?}", &baseline[0..k]);*/
 
-    let round = 100;
+    /*let round = 100;
     let mut hit = 0;
     let mut rng = thread_rng();
 
@@ -63,7 +165,7 @@ async fn main() {
         }
     }
 
-    println!("recall: {}", hit as f32 / (round * 5) as f32);
+    println!("recall: {}", hit as f32 / (round * 5) as f32);*/
 
     /*let n = 1000;
     let mut samples = Vec::with_capacity(n);

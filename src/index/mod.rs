@@ -6,7 +6,7 @@ use crate::data::HighDimVector;
 
 pub mod hnsw;
 pub mod linscan;
-pub mod lsh;
+pub mod minhash;
 pub mod naive;
 pub mod neighbor;
 pub mod ssg;
@@ -54,6 +54,37 @@ pub trait Index {
 pub struct SparseVector {
     pub indices: Vec<usize>,
     pub values: Vec<OrderedFloat<f32>>,
+}
+
+impl SparseVector {
+    pub fn distance(&self, other: &SparseVector, metric: DistanceMetric) -> f32 {
+        match metric {
+            DistanceMetric::Cosine => {
+                // Return the similarity of two sparse vectors as defined by: (u * v) / (||u|| * ||v||)
+                let mut dot_prod = 0f32;
+                let mut u_norm = 0f32;
+                let mut v_norm = 0f32;
+
+                for (i, &index) in self.indices.iter().enumerate() {
+                    let value = self.values[i].into_inner();
+                    let other_value = match other.values.get(i) {
+                        Some(v) => v.into_inner(),
+                        None => 0.0f32,
+                    };
+                    dot_prod = dot_prod + (value * other_value);
+                    u_norm = u_norm + value;
+                }
+
+                for (i, &index) in other.indices.iter().enumerate() {
+                    let value = other.values[i].into_inner();
+                    v_norm = v_norm + value;
+                }
+
+                100.0f32 * dot_prod / (u_norm * v_norm)
+            }
+            _ => unimplemented!(),
+        }
+    }
 }
 
 // TODO: Move this
