@@ -4,10 +4,62 @@ mod tests {
 
     use index_simulation_tool::{
         data::SparseVector,
-        index::minhash::{MinHash, MinHashIndex},
+        index::{minhash::MinHashIndex, simhash::SimHashIndex},
     };
     use ordered_float::OrderedFloat;
     use rand::{Rng, SeedableRng};
+
+    #[test]
+    fn test_sim_hash_index() {
+        let seed = 42;
+        let hash_bits = 64;
+        let num_vectors = 1000;
+        let num_dimensions = 100;
+        let sparsity = 0.1;
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+
+        let mut index = SimHashIndex::new(hash_bits);
+
+        let mut vectors = Vec::new();
+
+        for _ in 0..num_vectors {
+            let mut indices = HashSet::new();
+            while indices.len() < (num_dimensions as f32 * sparsity) as usize {
+                indices.insert(rng.gen_range(0..num_dimensions));
+            }
+
+            let values: Vec<OrderedFloat<f32>> =
+                indices.iter().map(|_| OrderedFloat(rng.gen())).collect();
+
+            let vector = SparseVector {
+                indices: indices.into_iter().collect(),
+                values,
+            };
+
+            vectors.push(vector.clone());
+            index.add_vector(&vector);
+        }
+
+        let query_vector = vectors[500].clone();
+
+        let results = index.search(&query_vector, 10);
+
+        for result in &results {
+            println!("{:?}", result);
+        }
+
+        assert_eq!(results.len(), 10);
+
+        assert_eq!(results[0].index, 500);
+        assert_eq!(results[0].score.into_inner(), 1.0);
+
+        for result in results.iter().skip(1) {
+            assert!(result.score.into_inner() > 0.0);
+            assert!(result.index != 500);
+        }
+
+        assert!(false);
+    }
 
     #[test]
     fn test_min_hash_index() {
@@ -18,7 +70,7 @@ mod tests {
         let num_vectors = 1000;
         let num_dimensions = 100;
         let sparsity = 0.1;
-        let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+        let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
         let mut index =
             MinHashIndex::new_with_rng(num_hashes, num_lsh_functions, num_buckets, seed);

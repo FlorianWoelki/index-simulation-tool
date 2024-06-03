@@ -9,6 +9,7 @@ pub mod linscan;
 pub mod minhash;
 pub mod naive;
 pub mod neighbor;
+pub mod simhash;
 pub mod ssg;
 
 #[derive(PartialEq)]
