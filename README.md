@@ -2,6 +2,7 @@
 
 - [x] Create sparse data generator
 - [ ] Maybe convert back to f64 because msmarco is in f64
+- [ ] Adjust artificially data generator for sparse data
 - [ ] Convert dense vectors to sparse vectors -> use something like Splade to create a sparse vector
 - [ ] Implement more indexing algorithms
   - [x] Implement MinHash
@@ -11,3 +12,4 @@
   - [ ] Implement SSG
   - [ ] Implement Annoy
   - [ ] Implement IVFPQ
+- [ ] Cleanup repository
