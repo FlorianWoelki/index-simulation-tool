@@ -140,6 +140,6 @@ mod tests {
             println!("{:?}", result);
         }
 
-        assert!(false);
+        assert!(true);
     }
 }

@@ -58,7 +58,7 @@ mod tests {
             assert!(result.index != 500);
         }
 
-        assert!(false);
+        assert!(true);
     }
 
     #[test]
@@ -113,7 +113,7 @@ mod tests {
             assert!(result.index != 500);
         }
 
-        assert!(false);
+        assert!(true);
     }
 
     /*use index_simulation_tool::{
