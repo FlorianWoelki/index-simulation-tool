@@ -1,3 +1,5 @@
+use std::collections::BinaryHeap;
+
 use ordered_float::OrderedFloat;
 use rand::{
     distributions::{Bernoulli, Distribution, Uniform},
@@ -37,7 +39,9 @@ impl SparseDataGenerator {
         }
     }
 
-    pub async fn generate(&mut self) -> Vec<SparseVector> {
+    pub async fn generate(
+        &mut self,
+    ) -> (Vec<SparseVector>, Vec<SparseVector>, Vec<Vec<SparseVector>>) {
         self.system.refresh_all();
 
         let mut handles = vec![];
@@ -80,12 +84,94 @@ impl SparseDataGenerator {
             results.append(&mut result);
         }
 
-        results
+        let query_vectors =
+            self.generate_vectors(self.dim, self.count / 10, self.range, self.sparsity);
+
+        let mut groundtruth_vectors = Vec::with_capacity(query_vectors.len());
+        for query_vector in &query_vectors {
+            groundtruth_vectors.push(self.find_nearest_neighbors(&results, &query_vector, 10));
+        }
+
+        (results, query_vectors, groundtruth_vectors)
+    }
+
+    fn generate_vectors(
+        &self,
+        dim: usize,
+        count: usize,
+        range: (f32, f32),
+        sparsity: f32,
+    ) -> Vec<SparseVector> {
+        let uniform_dist = Uniform::from(range.0..range.1);
+        let bernoulli_dist = Bernoulli::new(sparsity as f64).unwrap();
+        let mut vectors = Vec::with_capacity(count);
+
+        for _ in 0..count {
+            let mut indices = Vec::new();
+            let mut values = Vec::new();
+            for i in 0..dim {
+                if !bernoulli_dist.sample(&mut thread_rng()) {
+                    indices.push(i);
+                    values.push(OrderedFloat(uniform_dist.sample(&mut thread_rng())));
+                }
+            }
+
+            vectors.push(SparseVector { indices, values });
+        }
+
+        vectors
+    }
+
+    fn find_nearest_neighbors(
+        &self,
+        data: &[SparseVector],
+        query: &SparseVector,
+        k: usize,
+    ) -> Vec<SparseVector> {
+        let mut heap = BinaryHeap::new();
+
+        for vector in data {
+            let distance = self.euclidean_distance(&query, &vector);
+            if heap.len() < k {
+                heap.push((OrderedFloat(distance), vector.clone()));
+            } else if let Some((OrderedFloat(max_distance), _)) = heap.peek() {
+                if distance < *max_distance {
+                    heap.pop();
+                    heap.push((OrderedFloat(distance), vector.clone()));
+                }
+            }
+        }
+
+        heap.into_sorted_vec()
+            .into_iter()
+            .map(|(_, v)| v)
+            .collect::<Vec<_>>()
+    }
+
+    fn euclidean_distance(&self, a: &SparseVector, b: &SparseVector) -> f32 {
+        let mut distance = 0.0;
+
+        for (i, val) in a.values.iter().enumerate() {
+            let ai = a.indices[i];
+            let bi = b
+                .indices
+                .binary_search(&ai)
+                .ok()
+                .map(|idx| b.values[idx])
+                .unwrap_or(OrderedFloat(0.0));
+            distance += (val.into_inner() - bi.into_inner()).powi(2);
+        }
+
+        distance.sqrt()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use sysinfo::Pid;
+
+    use crate::data::QueryResult;
+
     use super::*;
 
     #[tokio::test]
@@ -95,9 +181,11 @@ mod tests {
         let range = (0.0, 1.0);
         let sparsity = 0.5;
         let mut generator = SparseDataGenerator::new(dim, count, range, sparsity);
-        let vectors = generator.generate().await;
+        let (vectors, query_vectors, groundtruth_vectors) = generator.generate().await;
 
         assert_eq!(vectors.len(), count);
+        assert_eq!(query_vectors.len(), count / 10);
+        assert_eq!(groundtruth_vectors.len(), query_vectors.len());
 
         for vector in vectors {
             assert!(vector.indices.len() <= dim);
@@ -106,6 +194,29 @@ mod tests {
             for value in vector.values {
                 assert!(value.into_inner() >= range.0);
                 assert!(value.into_inner() < range.1);
+            }
+        }
+
+        for vector in query_vectors {
+            assert!(vector.indices.len() <= dim);
+            assert_eq!(vector.indices.len(), vector.values.len());
+
+            for value in vector.values {
+                assert!(value.into_inner() >= range.0);
+                assert!(value.into_inner() < range.1);
+            }
+        }
+
+        for groundtruth_set in groundtruth_vectors {
+            assert!(groundtruth_set.len() <= 10);
+            for vector in groundtruth_set {
+                assert!(vector.indices.len() <= dim);
+                assert_eq!(vector.indices.len(), vector.values.len());
+
+                for value in vector.values {
+                    assert!(value.into_inner() >= range.0);
+                    assert!(value.into_inner() < range.1);
+                }
             }
         }
     }
@@ -117,7 +228,7 @@ mod tests {
         let range = (0.0, 1.0);
         let sparsity = 0.8;
         let mut generator = SparseDataGenerator::new(dim, count, range, sparsity);
-        let vectors = generator.generate().await;
+        let (vectors, _, _) = generator.generate().await;
 
         assert_eq!(vectors.len(), count);
 
@@ -133,5 +244,69 @@ mod tests {
 
         let actual_sparsity = 1.0 - (total_non_zero as f32 / total_elements as f32);
         assert!((actual_sparsity - sparsity).abs() < 0.05);
+    }
+
+    #[tokio::test]
+    async fn test_groundtruth_generation() {
+        let count = 100;
+        let dim = 50;
+        let range = (0.0, 1.0);
+        let sparsity = 0.5;
+        let k = 10;
+        let mut generator = SparseDataGenerator::new(dim, count, range, sparsity);
+        let (vectors, query_vectors, groundtruth_vectors) = generator.generate().await;
+
+        assert_eq!(query_vectors.len(), count / 10);
+        assert_eq!(groundtruth_vectors.len(), query_vectors.len());
+
+        for (query, groundtruth_set) in query_vectors.iter().zip(groundtruth_vectors.iter()) {
+            let calculated_groundtruth = generator.find_nearest_neighbors(&vectors, query, k);
+
+            assert_eq!(groundtruth_set.len(), k);
+            assert_eq!(groundtruth_set, &calculated_groundtruth);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_manual_groundtruth() {
+        let vectors = vec![
+            SparseVector {
+                indices: vec![0, 2, 4],
+                values: vec![OrderedFloat(0.1), OrderedFloat(0.2), OrderedFloat(0.3)],
+            },
+            SparseVector {
+                indices: vec![1, 2, 3],
+                values: vec![OrderedFloat(0.1), OrderedFloat(0.4), OrderedFloat(0.5)],
+            },
+            SparseVector {
+                indices: vec![0, 3, 4],
+                values: vec![OrderedFloat(0.6), OrderedFloat(0.7), OrderedFloat(0.8)],
+            },
+        ];
+
+        let query_vector = SparseVector {
+            indices: vec![0, 2, 4],
+            values: vec![OrderedFloat(0.1), OrderedFloat(0.2), OrderedFloat(0.3)],
+        };
+
+        let expected_groundtruth = vec![
+            SparseVector {
+                indices: vec![0, 2, 4],
+                values: vec![OrderedFloat(0.1), OrderedFloat(0.2), OrderedFloat(0.3)],
+            },
+            SparseVector {
+                indices: vec![1, 2, 3],
+                values: vec![OrderedFloat(0.1), OrderedFloat(0.4), OrderedFloat(0.5)],
+            },
+            SparseVector {
+                indices: vec![0, 3, 4],
+                values: vec![OrderedFloat(0.6), OrderedFloat(0.7), OrderedFloat(0.8)],
+            },
+        ];
+
+        let generator = SparseDataGenerator::new(0, 0, (0.0, 1.0), 0.0);
+        let groundtruth_vectors = generator.find_nearest_neighbors(&vectors, &query_vector, 3);
+
+        assert_eq!(groundtruth_vectors, expected_groundtruth);
     }
 }
