@@ -11,5 +11,6 @@
   - [ ] Implement HNSW
   - [ ] Implement SSG
   - [ ] Implement Annoy
-  - [ ] Implement IVFPQ
+  - [ ] Implement PQ Index
+  - [ ] Implement maybe IVFPQ
 - [ ] Cleanup repository
