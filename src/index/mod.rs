@@ -1,14 +1,14 @@
 use std::fmt::Debug;
 
-use ordered_float::OrderedFloat;
-
 use crate::data::{HighDimVector, QueryResult, SparseVector};
 
+pub mod annoy;
 pub mod hnsw;
 pub mod linscan;
 pub mod minhash;
 pub mod naive;
 pub mod neighbor;
+pub mod pq;
 pub mod simhash;
 pub mod ssg;
 
