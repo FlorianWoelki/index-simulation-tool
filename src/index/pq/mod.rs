@@ -13,6 +13,7 @@ struct PQIndex {
     codewords: Vec<Vec<SparseVector>>,
     encoded_codes: Vec<Vec<usize>>,
     iterations: usize,
+    tolerance: f32,
     random_seed: u64,
 }
 
@@ -21,6 +22,7 @@ impl PQIndex {
         num_subvectors: usize,
         num_clusters: usize,
         iterations: usize,
+        tolerance: f32,
         random_seed: u64,
     ) -> Self {
         PQIndex {
@@ -28,6 +30,7 @@ impl PQIndex {
             num_clusters,
             random_seed,
             iterations,
+            tolerance,
             vectors: Vec::new(),
             codewords: Vec::new(),
             encoded_codes: Vec::new(),
@@ -58,9 +61,12 @@ impl PQIndex {
 
     fn kmeans(&self, vectors: Vec<SparseVector>) -> Vec<SparseVector> {
         let mut centroids = self.init_centroids(vectors.clone());
-        for _ in 0..self.iterations {
+        let mut prev_centroids;
+        let mut iterations = 0;
+
+        loop {
             let mut clusters = vec![Vec::new(); self.num_clusters];
-            for vector in vectors.iter() {
+            for vector in &vectors {
                 let mut min_distance = f32::MAX;
                 let mut cluster_index = 0;
                 for (i, centroid) in centroids.iter().enumerate() {
@@ -72,7 +78,21 @@ impl PQIndex {
                 }
                 clusters[cluster_index].push(vector.clone());
             }
+
+            prev_centroids = centroids.clone();
             centroids = self.update_centroids(clusters);
+
+            let centroid_shift: f32 = centroids
+                .iter()
+                .zip(prev_centroids.iter())
+                .map(|(c1, c2)| self.euclidean_distance(c1, c2))
+                .sum();
+
+            if centroid_shift <= self.tolerance || iterations >= self.iterations {
+                break;
+            }
+
+            iterations += 1;
         }
         centroids
     }
@@ -258,7 +278,7 @@ mod tests {
         let num_subvectors = 2;
         let num_clusters = 3;
         let iterations = 10;
-        let mut pq_index = PQIndex::new(num_subvectors, num_clusters, iterations, 42);
+        let mut pq_index = PQIndex::new(num_subvectors, num_clusters, iterations, 0.01, 42);
 
         let vectors = vec![
             SparseVector {
@@ -297,7 +317,7 @@ mod tests {
         let num_subvectors = 2;
         let num_clusters = 2;
         let iterations = 10;
-        let mut pq_index = PQIndex::new(num_subvectors, num_clusters, iterations, 42);
+        let mut pq_index = PQIndex::new(num_subvectors, num_clusters, iterations, 0.01, 42);
 
         pq_index.codewords = vec![
             vec![
