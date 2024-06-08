@@ -1,10 +1,10 @@
 use crate::{
     data::{QueryResult, SparseVector},
     data_structures::min_heap::MinHeap,
+    kmeans::kmeans,
 };
 use ordered_float::OrderedFloat;
-use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
-use std::{collections::HashMap, vec};
+use std::vec;
 
 struct PQIndex {
     num_subvectors: usize,
@@ -52,99 +52,17 @@ impl PQIndex {
                 sub_vectors_m.push(SparseVector { indices, values });
             }
 
-            let codewords_m = self.kmeans(sub_vectors_m);
+            let codewords_m = kmeans(
+                sub_vectors_m,
+                self.num_clusters,
+                self.iterations,
+                self.tolerance,
+                self.random_seed,
+            );
             self.codewords.push(codewords_m);
         }
 
         self.encoded_codes = self.encode(&self.vectors);
-    }
-
-    fn kmeans(&self, vectors: Vec<SparseVector>) -> Vec<SparseVector> {
-        let mut centroids = self.init_centroids(vectors.clone());
-        let mut prev_centroids;
-        let mut iterations = 0;
-
-        loop {
-            let mut clusters = vec![Vec::new(); self.num_clusters];
-            for vector in &vectors {
-                let mut min_distance = f32::MAX;
-                let mut cluster_index = 0;
-                for (i, centroid) in centroids.iter().enumerate() {
-                    let distance = self.euclidean_distance(vector, centroid);
-                    if distance < min_distance {
-                        min_distance = distance;
-                        cluster_index = i;
-                    }
-                }
-                clusters[cluster_index].push(vector.clone());
-            }
-
-            prev_centroids = centroids.clone();
-            centroids = self.update_centroids(clusters);
-
-            let centroid_shift: f32 = centroids
-                .iter()
-                .zip(prev_centroids.iter())
-                .map(|(c1, c2)| self.euclidean_distance(c1, c2))
-                .sum();
-
-            if centroid_shift <= self.tolerance || iterations >= self.iterations {
-                break;
-            }
-
-            iterations += 1;
-        }
-        centroids
-    }
-
-    fn update_centroids(&self, clusters: Vec<Vec<SparseVector>>) -> Vec<SparseVector> {
-        let mut centroids = Vec::new();
-        for cluster in clusters {
-            if cluster.is_empty() {
-                centroids.push(SparseVector {
-                    indices: vec![],
-                    values: vec![],
-                });
-                continue;
-            }
-
-            let mut sum_indices = HashMap::new();
-            for vector in cluster {
-                for (i, &index) in vector.indices.iter().enumerate() {
-                    let value = vector.values[i].into_inner();
-                    sum_indices.entry(index).or_insert((0.0, 0)).0 += value;
-                    sum_indices.entry(index).or_insert((0.0, 0)).1 += 1;
-                }
-            }
-
-            let mut centroid_indices = Vec::new();
-            let mut centroid_values = Vec::new();
-
-            for (index, (sum, count)) in sum_indices {
-                centroid_indices.push(index);
-                centroid_values.push(OrderedFloat(sum / count as f32));
-            }
-
-            let centroid = SparseVector {
-                indices: centroid_indices,
-                values: centroid_values,
-            };
-            centroids.push(centroid);
-        }
-        centroids
-    }
-
-    fn init_centroids(&self, vectors: Vec<SparseVector>) -> Vec<SparseVector> {
-        let mut rng = StdRng::seed_from_u64(self.random_seed);
-        let mut centroids = Vec::new();
-
-        let mut indices: Vec<usize> = (0..vectors.len()).collect();
-        indices.shuffle(&mut rng);
-
-        for &index in indices.iter().take(self.num_clusters) {
-            centroids.push(vectors[index].clone());
-        }
-        centroids
     }
 
     pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
@@ -164,7 +82,7 @@ impl PQIndex {
                     indices: query_sub_indices,
                     values: query_sub_values,
                 };
-                let sub_distance = self.euclidean_distance(&query_sub, &self.codewords[m][code[m]]);
+                let sub_distance = &query_sub.euclidean_distance(&self.codewords[m][code[m]]);
                 distance += sub_distance;
             }
 
@@ -220,7 +138,7 @@ impl PQIndex {
             let mut min_distance_code_index = 0;
 
             for (k, code) in self.codewords[m].iter().enumerate() {
-                let distance = self.euclidean_distance(&subvector, &code);
+                let distance = subvector.euclidean_distance(&code);
                 if distance < min_distance {
                     min_distance = distance;
                     min_distance_code_index = k;
@@ -231,39 +149,6 @@ impl PQIndex {
         }
 
         codes
-    }
-
-    fn euclidean_distance(&self, vec1: &SparseVector, vec2: &SparseVector) -> f32 {
-        let mut p = 0;
-        let mut q = 0;
-        let mut distance = 0.0;
-
-        while p < vec1.indices.len() && q < vec2.indices.len() {
-            if vec1.indices[p] == vec2.indices[q] {
-                let diff = vec1.values[p].into_inner() - vec2.values[q].into_inner();
-                distance += diff * diff;
-                p += 1;
-                q += 1;
-            } else if vec1.indices[p] < vec2.indices[q] {
-                distance += vec1.values[p].into_inner() * vec1.values[p].into_inner();
-                p += 1;
-            } else {
-                distance += vec2.values[q].into_inner() * vec2.values[q].into_inner();
-                q += 1;
-            }
-        }
-
-        while p < vec1.indices.len() {
-            distance += vec1.values[p].into_inner() * vec1.values[p].into_inner();
-            p += 1;
-        }
-
-        while q < vec2.indices.len() {
-            distance += vec2.values[q].into_inner() * vec2.values[q].into_inner();
-            q += 1;
-        }
-
-        distance.sqrt()
     }
 }
 

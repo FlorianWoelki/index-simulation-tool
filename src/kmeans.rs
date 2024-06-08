@@ -1,144 +1,328 @@
-use rand::seq::SliceRandom;
+use rand::{seq::SliceRandom, Rng};
 
-use crate::{data::HighDimVector, index::DistanceMetric};
+use std::collections::HashMap;
 
-/// Performs k-means clustering on a set of high-dimensional vectors.
-///
-/// # Arguments
-///
-/// * `k` - The number of clusters to create.
-/// * `epoch` - The number of iterations to perform.
-/// * `nodes` - A reference to a vector of high-dimensional vectors to be clustered.
-/// * `metric` - The distance metric to use for calculating distances between vectors.
-/// * `rng` - A mutable reference to a random number generator, used for initializing the cluster vectors.
-///
-/// # Returns
-///
-/// A vector of indices representing the closest node to each cluster center.
+use ordered_float::OrderedFloat;
+use rand::{rngs::StdRng, SeedableRng};
+
+use crate::data::SparseVector;
+
 pub fn kmeans(
-    k: usize,
-    epoch: usize,
-    nodes: &Vec<HighDimVector>,
-    metric: DistanceMetric,
-    rng: &mut impl rand::Rng,
-) -> Vec<usize> {
-    if nodes.is_empty() {
-        return vec![];
-    }
+    vectors: Vec<SparseVector>,
+    num_clusters: usize,
+    iterations: usize,
+    tolerance: f32,
+    random_seed: u64,
+) -> Vec<SparseVector> {
+    let mut rng = StdRng::seed_from_u64(random_seed);
+    let mut centroids = init_centroids(&vectors, num_clusters, &mut rng);
+    let mut prev_centroids;
+    let mut current_iterations = 0;
 
-    // Initializes the cluster centers by randomly selecting `k` nodes from the input vector.
-    let mut centers: Vec<HighDimVector> = nodes.choose_multiple(rng, k).cloned().collect();
-    let mut assignments = vec![0; nodes.len()];
-
-    for _ in 0..epoch {
-        for (i, node) in nodes.iter().enumerate() {
-            let mut closest = usize::MAX;
-            let mut closest_distance = f32::MAX;
-
-            for (j, center) in centers.iter().enumerate() {
-                let distance = node.distance(center, metric);
-
-                if distance < closest_distance {
-                    closest = j;
-                    closest_distance = distance;
+    loop {
+        let mut clusters = vec![Vec::new(); num_clusters];
+        for vector in &vectors {
+            let mut min_distance = f32::MAX;
+            let mut cluster_index = 0;
+            for (i, centroid) in centroids.iter().enumerate() {
+                let distance = vector.euclidean_distance(centroid);
+                if distance < min_distance {
+                    min_distance = distance;
+                    cluster_index = i;
                 }
             }
-
-            assignments[i] = closest;
+            clusters[cluster_index].push(vector.clone());
         }
 
-        // Recalculate the cluster centers based on the new assignments.
-        let mut new_centers: Vec<Vec<f32>> = vec![vec![0.0; centers[0].dimensions.len()]; k];
-        let mut counts = vec![0; k];
+        prev_centroids = centroids.clone();
+        centroids = update_centroids(clusters, &vectors, &mut rng);
 
-        for (node, &cluster) in nodes.iter().zip(assignments.iter()) {
-            for (i, dim) in node.dimensions.iter().enumerate() {
-                new_centers[cluster][i] += dim;
-            }
-            counts[cluster] += 1;
+        let centroid_shift: f32 = centroids
+            .iter()
+            .zip(prev_centroids.iter())
+            .map(|(c1, c2)| c1.euclidean_distance(c2))
+            .sum();
+
+        if centroid_shift <= tolerance || current_iterations >= iterations {
+            break;
         }
 
-        for (i, center) in centers.iter_mut().enumerate() {
-            for j in 0..center.dimensions.len() {
-                center.dimensions[j] = new_centers[i][j] / counts[i] as f32;
-            }
-        }
+        current_iterations += 1;
     }
+    centroids
+}
 
-    // Find the closest node to each cluster center.
-    let closest_node_indices = centers.iter().map(|center| {
-        let mut closest_index = 0;
-        let mut closest_distance = f32::MAX;
+fn update_centroids(
+    clusters: Vec<Vec<SparseVector>>,
+    vectors: &[SparseVector],
+    rng: &mut StdRng,
+) -> Vec<SparseVector> {
+    let mut centroids = Vec::new();
+    for cluster in clusters {
+        if cluster.is_empty() {
+            let random_index = rng.gen_range(0..vectors.len());
+            centroids.push(vectors[random_index].clone());
+            /*centroids.push(SparseVector {
+            indices: vec![],
+            values: vec![],
+            });*/
+            continue;
+        }
 
-        nodes.iter().enumerate().for_each(|(i, node)| {
-            let distance = node.distance(center, metric);
-            if distance < closest_distance {
-                closest_index = i;
-                closest_distance = distance;
+        let mut sum_indices = HashMap::new();
+        for vector in cluster {
+            for (i, &index) in vector.indices.iter().enumerate() {
+                let value = vector.values[i].into_inner();
+                sum_indices.entry(index).or_insert((0.0, 0)).0 += value;
+                sum_indices.entry(index).or_insert((0.0, 0)).1 += 1;
             }
-        });
+        }
 
-        closest_index
-    });
+        let mut centroid_indices = Vec::new();
+        let mut centroid_values = Vec::new();
 
-    closest_node_indices.collect()
+        for (index, (sum, count)) in sum_indices {
+            centroid_indices.push(index);
+            centroid_values.push(OrderedFloat(sum / count as f32));
+        }
+
+        let centroid = SparseVector {
+            indices: centroid_indices,
+            values: centroid_values,
+        };
+        centroids.push(centroid);
+    }
+    centroids
+}
+
+fn init_centroids(
+    vectors: &Vec<SparseVector>,
+    num_clusters: usize,
+    rng: &mut StdRng,
+) -> Vec<SparseVector> {
+    let mut centroids = Vec::new();
+
+    let mut indices: Vec<usize> = (0..vectors.len()).collect();
+    indices.shuffle(rng);
+
+    for &index in indices.iter().take(num_clusters) {
+        centroids.push(vectors[index].clone());
+    }
+    centroids
 }
 
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
 
-    use rand::{rngs::StdRng, SeedableRng};
-
     use super::*;
 
+    use ordered_float::OrderedFloat;
+
+    use crate::data::SparseVector;
+
     #[test]
-    fn test_single_node() {
-        let nodes = vec![HighDimVector::new(0, vec![1.0, 2.0, 3.0])];
-        let result = kmeans(
-            1,
-            10,
-            &nodes,
-            DistanceMetric::Euclidean,
-            &mut rand::thread_rng(),
+    fn test_kmeans_basic() {
+        let vectors = vec![
+            SparseVector {
+                indices: vec![0],
+                values: vec![OrderedFloat(1.0)],
+            },
+            SparseVector {
+                indices: vec![0],
+                values: vec![OrderedFloat(2.0)],
+            },
+            SparseVector {
+                indices: vec![0],
+                values: vec![OrderedFloat(3.0)],
+            },
+            SparseVector {
+                indices: vec![0],
+                values: vec![OrderedFloat(10.0)],
+            },
+            SparseVector {
+                indices: vec![0],
+                values: vec![OrderedFloat(11.0)],
+            },
+            SparseVector {
+                indices: vec![0],
+                values: vec![OrderedFloat(12.0)],
+            },
+        ];
+
+        let num_clusters = 2;
+        let iterations = 10;
+        let tolerance = 0.01;
+        let random_seed = 42;
+
+        let centroids = kmeans(
+            vectors.clone(),
+            num_clusters,
+            iterations,
+            tolerance,
+            random_seed,
         );
-        assert_eq!(result, vec![0]);
+
+        assert_eq!(centroids.len(), num_clusters);
+
+        for centroid in &centroids {
+            assert!(
+                !centroid.indices.is_empty(),
+                "Centroid indices should not be empty"
+            );
+            assert!(
+                !centroid.values.is_empty(),
+                "Centroid values should not be empty"
+            );
+        }
+
+        // Check that centroids are close to some of the data points
+        for centroid in &centroids {
+            let mut min_distance = f32::MAX;
+            for vector in &vectors {
+                let distance = centroid.euclidean_distance(vector);
+                if distance < min_distance {
+                    min_distance = distance;
+                }
+            }
+
+            assert!(
+                min_distance < 1.0,
+                "Centroid is not close to any data point"
+            );
+        }
+
+        // Ensure no centroids are duplicated
+        let unique_centroids: HashSet<_> = centroids.iter().collect();
+        assert_eq!(
+            unique_centroids.len(),
+            centroids.len(),
+            "Duplicate centroids found"
+        );
     }
 
     #[test]
-    fn test_multiple_nodes_multiple_clusters() {
-        let mut rng = StdRng::seed_from_u64(42);
-        let nodes = vec![
-            HighDimVector::new(0, vec![1.0, 2.0, 3.0]),
-            HighDimVector::new(1, vec![4.0, 5.0, 6.0]),
-            HighDimVector::new(2, vec![7.0, 8.0, 9.0]),
-            HighDimVector::new(3, vec![10.0, 11.0, 12.0]),
+    fn test_kmeans_empty_clusters() {
+        let vectors = vec![
+            SparseVector {
+                indices: vec![0],
+                values: vec![OrderedFloat(1.0)],
+            },
+            SparseVector {
+                indices: vec![0],
+                values: vec![OrderedFloat(2.0)],
+            },
+            SparseVector {
+                indices: vec![0],
+                values: vec![OrderedFloat(3.0)],
+            },
         ];
-        let result = kmeans(2, 10, &nodes, DistanceMetric::Euclidean, &mut rng);
-        assert!(result.len() == 2);
-        assert!(result.contains(&0));
-        assert!(result.contains(&2));
+
+        let num_clusters = 5; // More clusters than points
+        let iterations = 100;
+        let tolerance = 0.01;
+        let random_speed = 42;
+
+        let centroids = kmeans(
+            vectors.clone(),
+            num_clusters,
+            iterations,
+            tolerance,
+            random_speed,
+        );
+
+        assert_eq!(centroids.len(), num_clusters);
+
+        for centroid in &centroids {
+            assert!(
+                !centroid.indices.is_empty() || !centroid.values.is_empty(),
+                "Centroid should not be empty"
+            );
+        }
+
+        // Check that each centroid is close to at least one data point
+        for centroid in &centroids {
+            let mut min_distance = f32::MAX;
+            for vector in &vectors {
+                let distance = centroid.euclidean_distance(vector);
+                if distance < min_distance {
+                    min_distance = distance;
+                }
+            }
+            assert!(
+                min_distance < 1.0,
+                "Centroid is not close to any data point"
+            );
+        }
     }
 
     #[test]
-    fn test_convergence() {
-        let nodes = vec![
-            HighDimVector::new(0, vec![1.0, 2.0, 3.0]),
-            HighDimVector::new(1, vec![4.0, 5.0, 6.0]),
-            HighDimVector::new(2, vec![7.0, 8.0, 9.0]),
-            HighDimVector::new(3, vec![10.0, 11.0, 12.0]),
+    fn test_kmeans_clusters() {
+        let vectors = vec![
+            SparseVector {
+                indices: vec![0],
+                values: vec![OrderedFloat(1.0)],
+            },
+            SparseVector {
+                indices: vec![0],
+                values: vec![OrderedFloat(2.0)],
+            },
+            SparseVector {
+                indices: vec![0],
+                values: vec![OrderedFloat(3.0)],
+            },
+            SparseVector {
+                indices: vec![0],
+                values: vec![OrderedFloat(4.0)],
+            },
+            SparseVector {
+                indices: vec![0],
+                values: vec![OrderedFloat(5.0)],
+            },
         ];
-        let mut rng = StdRng::seed_from_u64(42);
-        let result1 = kmeans(2, 10, &nodes, DistanceMetric::Euclidean, &mut rng);
-        let result2 = kmeans(2, 100, &nodes, DistanceMetric::Euclidean, &mut rng);
 
-        let unique_assignments = result1
-            .iter()
-            .zip(result2.iter())
-            .filter(|&(a, b)| a != b)
-            .collect::<HashSet<_>>();
+        let num_clusters = 3;
+        let iterations = 100;
+        let tolerance = 0.01;
+        let random_seed = 42;
 
-        println!("{:?}", unique_assignments.len());
-        assert!(unique_assignments.len() <= 2);
+        let centroids = kmeans(
+            vectors.clone(),
+            num_clusters,
+            iterations,
+            tolerance,
+            random_seed,
+        );
+
+        assert_eq!(centroids.len(), num_clusters);
+
+        let mut clusters = vec![Vec::new(); num_clusters];
+        for vector in &vectors {
+            let mut min_distance = f32::MAX;
+            let mut cluster_index = 0;
+            for (i, centroid) in centroids.iter().enumerate() {
+                let distance = vector.euclidean_distance(centroid);
+                if distance < min_distance {
+                    min_distance = distance;
+                    cluster_index = i;
+                }
+            }
+            clusters[cluster_index].push(vector.clone());
+        }
+
+        for cluster in &clusters {
+            assert!(!cluster.is_empty(), "Cluster should not be empty");
+        }
+
+        // Check that each vector is assigned to exactly one cluster
+        let mut assigned_vectors = 0;
+        for cluster in &clusters {
+            assigned_vectors += cluster.len();
+        }
+        assert_eq!(
+            assigned_vectors,
+            vectors.len(),
+            "All vectors should be assigned to clusters"
+        );
     }
 }

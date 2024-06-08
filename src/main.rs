@@ -6,8 +6,8 @@ use benchmark::{
 };
 use data::{generator_dense::DenseDataGenerator, HighDimVector, SparseVector};
 use index::{
-    hnsw::HNSWIndex, linscan::LinScanIndex, minhash::MinHashIndex, naive::NaiveIndex,
-    ssg::SSGIndex, DistanceMetric, Index, SparseIndex,
+    linscan::LinScanIndex, minhash::MinHashIndex, naive::NaiveIndex, ssg::SSGIndex, DistanceMetric,
+    Index, SparseIndex,
 };
 
 use clap::Parser;
@@ -192,35 +192,35 @@ async fn main() {
     run_benchmark::<SSGIndex>(dimensions, num_images).await;*/
 }
 
-async fn run_benchmark<I: Index + 'static>(dimensions: usize, num_images: usize) {
-    let benchmark_config = BenchmarkConfig::new(
-        (dimensions, 100, dimensions),
-        (num_images, 1_000_000, num_images),
-        (0.0, 255.0),
-    );
-    let mut logger = BenchmarkLogger::new();
+/*async fn run_benchmark<I: Index + 'static>(dimensions: usize, num_images: usize) {
+let benchmark_config = BenchmarkConfig::new(
+    (dimensions, 100, dimensions),
+    (num_images, 1_000_000, num_images),
+    (0.0, 255.0),
+);
+let mut logger = BenchmarkLogger::new();
 
-    let mut previous_benchmark_result = None;
-    for config in benchmark_config.dataset_configurations() {
-        measure_resources!({
-            let result = perform_single_benchmark::<I>(
-                &benchmark_config,
-                &mut logger,
-                previous_benchmark_result,
-                config,
-            )
-            .await;
-            previous_benchmark_result = Some(result);
-        });
-    }
-
-    // TODO: Change file name to be more generic with a date.
-    if let Err(e) = logger.write_to_csv("benchmark_results.csv") {
-        eprintln!("Failed to write benchmark results to CSV: {}", e);
-    }
+let mut previous_benchmark_result = None;
+for config in benchmark_config.dataset_configurations() {
+    measure_resources!({
+        let result = perform_single_benchmark::<I>(
+            &benchmark_config,
+            &mut logger,
+            previous_benchmark_result,
+            config,
+        )
+        .await;
+        previous_benchmark_result = Some(result);
+    });
 }
 
-async fn perform_single_benchmark<I: Index + 'static>(
+// TODO: Change file name to be more generic with a date.
+if let Err(e) = logger.write_to_csv("benchmark_results.csv") {
+    eprintln!("Failed to write benchmark results to CSV: {}", e);
+}
+}*/
+
+/*async fn perform_single_benchmark<I: Index + 'static>(
     config: &BenchmarkConfig,
     logger: &mut BenchmarkLogger,
     previous_benchmark_result: Option<BenchmarkResult>,
@@ -254,15 +254,15 @@ async fn generate_data(
 ) -> Vec<Vec<f32>> {
     let mut data_generator = DenseDataGenerator::new(dimensions, num_images, config.value_range);
     data_generator.generate().await
-}
+    }*/
 
-fn add_vectors_to_index(data: &[Vec<f32>]) -> Box<dyn Index> {
-    let mut index = Box::new(SSGIndex::new(DistanceMetric::Euclidean));
-    for (i, d) in data.iter().enumerate() {
-        index.add_vector(HighDimVector::new(i, d.clone()));
-    }
-    index
+/*fn add_vectors_to_index(data: &[Vec<f32>]) -> Box<dyn Index> {
+let mut index = Box::new(SSGIndex::new(DistanceMetric::Euclidean));
+for (i, d) in data.iter().enumerate() {
+    index.add_vector(HighDimVector::new(i, d.clone()));
 }
+index
+}*/
 
 fn create_query_vector(_config: &BenchmarkConfig, dimensions: usize) -> HighDimVector {
     HighDimVector::new(999999999, vec![128.0; dimensions])

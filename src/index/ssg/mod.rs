@@ -1,47 +1,45 @@
 use std::{collections::HashSet, f32::consts::PI};
 
-use rand::thread_rng;
+use crate::{
+    data::{QueryResult, SparseVector},
+    kmeans::kmeans,
+};
 
-use crate::{data::HighDimVector, kmeans::kmeans};
-
-use super::{neighbor::NeighborNode, DistanceMetric, Index};
+use super::{neighbor::NeighborNode, SparseIndex};
 
 mod construction;
 mod prune;
 mod search;
 
 pub struct SSGIndex {
-    pub(super) vectors: Vec<HighDimVector>,
-    pub(super) metric: DistanceMetric,
+    pub(super) vectors: Vec<SparseVector>,
     pub(super) threshold: f32,
     pub(super) index_size: usize,
     pub(super) graph: Vec<Vec<usize>>,
-    pub(super) root_size: usize,
+    pub(super) num_clusters: usize,
     pub(super) root_nodes: Vec<usize>,
     pub(super) neighbor_neighbor_size: usize,
     pub(super) init_k: usize,
+    pub(super) random_seed: u64,
 }
 
-impl Index for SSGIndex {
-    fn new(metric: super::DistanceMetric) -> Self
-    where
-        Self: Sized,
-    {
+impl SSGIndex {
+    fn new(random_seed: u64, num_clusters: usize) -> Self {
         SSGIndex {
             vectors: Vec::new(),
-            metric,
             threshold: (30.0 / 180.0 * PI).cos(),
             index_size: 100,
             init_k: 10,
             graph: Vec::new(),
-            root_size: 30,
             neighbor_neighbor_size: 100,
             root_nodes: Vec::new(),
+            num_clusters,
+            random_seed,
         }
     }
 
-    fn add_vector(&mut self, vector: HighDimVector) {
-        self.vectors.push(vector);
+    fn add_vector(&mut self, vector: &SparseVector) {
+        self.vectors.push(vector.clone());
     }
 
     fn build(&mut self) {
@@ -53,8 +51,6 @@ impl Index for SSGIndex {
             .collect::<Vec<NeighborNode>>();
         self.link_each_nodes(&mut pruned_graph);
 
-        // Iterates over each vector in the graph and populates the graph with
-        // the pruned neighbors.
         (0..self.vectors.len()).enumerate().for_each(|(i, _)| {
             let offset = i * self.index_size;
             let pool_size = (0..self.index_size)
@@ -66,31 +62,43 @@ impl Index for SSGIndex {
                 .collect();
         });
 
-        // Initialize the root nodes using k-means clustering.
-        self.root_nodes = kmeans(
-            self.root_size,
-            256,
-            &self.vectors,
-            self.metric,
-            &mut thread_rng(),
-        );
+        self.root_nodes = self.kmeans_index(256);
     }
 
-    fn search(&self, query_vector: &HighDimVector, k: usize) -> Vec<HighDimVector> {
+    fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<SparseVector> {
         self.search_bfs(query_vector, k)
     }
 }
 
 impl SSGIndex {
-    /// Populates the `expanded_neighbors` vector with neighbor nodes of the given `query_point`.
-    /// This function explores neighbors of the query_point's immediate neighbors to find
-    /// distinct second-level neighbors, avoiding self-loops and repeated nodes. The process stops
-    /// once the specified number of neighbors (`neighbor_neighbor_size`) has been collected.
-    ///
-    /// # Arguments
-    ///
-    /// * `query_point` - The index of the query point in the graph whose expanded neighbors are to be found.
-    /// * `expand_neighbors` - A mutable reference to a vector where the found neighbors will be stored.
+    fn kmeans_index(&self, epoch: usize) -> Vec<usize> {
+        let centroids = kmeans(
+            self.vectors.clone(),
+            self.num_clusters,
+            epoch,
+            0.01,
+            self.random_seed,
+        );
+
+        // Find the closest node to each cluster center.
+        let closest_node_indices = centroids.iter().map(|center| {
+            let mut closest_index = 0;
+            let mut closest_distance = f32::MAX;
+
+            self.vectors.iter().enumerate().for_each(|(i, node)| {
+                let distance = node.euclidean_distance(center);
+                if distance < closest_distance {
+                    closest_index = i;
+                    closest_distance = distance;
+                }
+            });
+
+            closest_index
+        });
+
+        closest_node_indices.collect()
+    }
+
     fn populate_expanded_neighbors(
         &self,
         query_point: usize,
@@ -104,15 +112,13 @@ impl SSGIndex {
                 continue;
             }
 
-            // Iterate over the neighbors of the query point's neighbors to find second-level neighbors.
             self.graph[*neighbor_id]
                 .iter()
-                // Filter out the query point and the neighbor itself.
                 .filter(|node| **node != query_point && *neighbor_id != **node)
                 .for_each(|second_neighbor_id| {
                     if visited.insert(*second_neighbor_id) {
                         let distance = self.vectors[query_point]
-                            .distance(&self.vectors[*second_neighbor_id], self.metric);
+                            .euclidean_distance(&self.vectors[*second_neighbor_id]);
                         expand_neighbors.push(NeighborNode::new(*second_neighbor_id, distance));
 
                         /*if expand_neighbors.len() >= self.neighbor_neighbor_size {
@@ -123,13 +129,6 @@ impl SSGIndex {
         }
     }
 
-    /// Links each node in the graph with its neighbors after pruning.
-    /// This function consolidates neighbor connections to optimize the graph based
-    /// on the pruning strategy.
-    ///
-    /// # Arguments
-    ///
-    /// * `pruned_graph_tmp` - The pruned graph.
     fn link_each_nodes(&mut self, pruned_graph: &mut [NeighborNode]) {
         let mut expanded_neighbors = Vec::new();
 
@@ -147,105 +146,48 @@ impl SSGIndex {
 
 #[cfg(test)]
 mod tests {
+    use ordered_float::OrderedFloat;
+
     use super::*;
 
     #[test]
-    fn test_ensure_all_nodes_connected() {
-        let mut index = SSGIndex::new(DistanceMetric::Euclidean);
-        index.root_size = 3;
-        index.add_vector(HighDimVector::new(0, vec![1.0]));
-        index.add_vector(HighDimVector::new(1, vec![2.0]));
-        index.add_vector(HighDimVector::new(2, vec![3.0]));
-        index.construct_knn_graph(100);
+    fn test_ssg_index() {
+        let random_seed = 42;
+        let num_clusters = 5;
+        let mut index = SSGIndex::new(random_seed, num_clusters);
 
-        let all_connected = index.graph.iter().all(|neighbors| !neighbors.is_empty());
-        assert!(all_connected);
-    }
+        let vectors = vec![
+            SparseVector {
+                indices: vec![0, 1, 2],
+                values: vec![OrderedFloat(0.1), OrderedFloat(0.2), OrderedFloat(0.3)],
+            },
+            SparseVector {
+                indices: vec![1, 2, 3],
+                values: vec![OrderedFloat(0.4), OrderedFloat(0.5), OrderedFloat(0.6)],
+            },
+            SparseVector {
+                indices: vec![2, 3, 4],
+                values: vec![OrderedFloat(0.7), OrderedFloat(0.8), OrderedFloat(0.9)],
+            },
+            SparseVector {
+                indices: vec![3, 4, 5],
+                values: vec![OrderedFloat(1.0), OrderedFloat(1.1), OrderedFloat(1.2)],
+            },
+            SparseVector {
+                indices: vec![4, 5, 6],
+                values: vec![OrderedFloat(1.3), OrderedFloat(1.4), OrderedFloat(1.5)],
+            },
+        ];
 
-    #[test]
-    fn test_ensure_graph_connectivity_through_root_nodes() {
-        let mut index = SSGIndex::new(DistanceMetric::Euclidean);
-        index.root_size = 10;
-        for i in 0..10 {
-            index.add_vector(HighDimVector::new(i, vec![i as f32]));
+        for vector in &vectors {
+            index.add_vector(vector);
         }
-        index.construct_knn_graph(100);
-        index.root_nodes = vec![0, 5]; // Manually setting root nodes for predictability.
 
-        let connected_to_root = |node: usize| -> bool {
-            index.graph[node].contains(&0) || index.graph[node].contains(&5)
-        };
-        let all_connected_to_root = (0..index.vectors.len()).all(connected_to_root);
-        assert!(all_connected_to_root);
-    }
-
-    #[test]
-    fn test_link_each_nodes() {
-        let mut index = SSGIndex::new(DistanceMetric::Euclidean);
-        for i in 0..10 {
-            index.add_vector(HighDimVector::new(i, vec![i as f32]));
-        }
-        index.construct_knn_graph(100);
-
-        let mut pruned_graph = vec![];
-        let len = index.vectors.len() * index.index_size;
-        (0..len).for_each(|i| {
-            pruned_graph.push(NeighborNode::new(i, 0.0));
-        });
-        index.link_each_nodes(&mut pruned_graph);
-
-        for i in 0..index.vectors.len() {
-            assert!(index.graph[i].len() <= index.index_size);
-            for &neighbor in &index.graph[i] {
-                assert_ne!(i, neighbor);
-            }
-        }
-    }
-
-    #[test]
-    fn test_populate_expanded_neighbors() {
-        let mut index = SSGIndex::new(DistanceMetric::Euclidean);
-        let mut expanded_neighbors = Vec::new();
-        let query_point = 0;
-        for i in 0..5 {
-            index.add_vector(HighDimVector::new(i, vec![i as f32 * 10.0]));
-        }
-        index.graph = vec![vec![1, 2], vec![0, 3], vec![0, 4], vec![1], vec![2]];
-
-        index.populate_expanded_neighbors(query_point, &mut expanded_neighbors);
-
-        let expected_ids: Vec<usize> = vec![3, 4];
-        let result_ids: Vec<usize> = expanded_neighbors.into_iter().map(|n| n.id).collect();
-
-        assert_eq!(
-            result_ids.len(),
-            expected_ids.len(),
-            "Unexpected number of neighbors populated."
-        );
-        assert!(
-            result_ids.contains(&3),
-            "Node 3 should be a second-level neighbor of node 0."
-        );
-        assert!(
-            result_ids.contains(&4),
-            "Node 4 should be a second-level neighbor of node 0."
-        );
-    }
-
-    #[test]
-    fn test_build() {
-        let mut index = SSGIndex::new(DistanceMetric::Euclidean);
-        index.root_size = 10;
-        for i in 0..10 {
-            index.add_vector(HighDimVector::new(i, vec![i as f32]));
-        }
         index.build();
 
-        assert_eq!(index.graph.len(), 10);
-        for neighbors in &index.graph {
-            assert!(neighbors.len() <= index.root_size);
-        }
+        let results = index.search(&vectors[0], 3);
 
-        assert_eq!(index.root_nodes.len(), index.root_size);
+        println!("{:?}", results);
+        assert!(false);
     }
 }

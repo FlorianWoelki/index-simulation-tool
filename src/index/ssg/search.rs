@@ -1,23 +1,11 @@
 use std::collections::{BinaryHeap, HashSet, VecDeque};
 
-use crate::{data::HighDimVector, index::neighbor::NeighborNode};
+use crate::{data::SparseVector, index::neighbor::NeighborNode};
 
 use super::SSGIndex;
 
 impl SSGIndex {
-    /// Perform a breadth-first search to find the k closest vectors to the query vector.
-    /// The search starts from the root nodes of the graph and expands to the neighbors of the nodes
-    /// that are closer to the query vector.
-    ///
-    /// # Arguments
-    ///
-    /// * `query_vector` - The query vector.
-    /// * `k` - The number of closest vectors to return.
-    ///
-    /// # Returns
-    ///
-    /// A vector containing the k closest vectors to the query vector.
-    pub(super) fn search_bfs(&self, query_vector: &HighDimVector, k: usize) -> Vec<HighDimVector> {
+    pub(super) fn search_bfs(&self, query_vector: &SparseVector, k: usize) -> Vec<SparseVector> {
         let mut visited = HashSet::new();
         let mut heap = BinaryHeap::new();
         let mut search_queue = VecDeque::new();
@@ -31,7 +19,7 @@ impl SSGIndex {
                         return;
                     }
 
-                    let distance = query_vector.distance(&self.vectors[neighbor_id], self.metric);
+                    let distance = query_vector.euclidean_distance(&self.vectors[neighbor_id]);
                     let neighbor_node = NeighborNode::new(neighbor_id, distance);
                     heap.push(neighbor_node);
                     search_queue.push_back(neighbor_id);
@@ -52,22 +40,12 @@ impl SSGIndex {
         result
     }
 
-    /// Process the initial nodes to start the search.
-    /// The initial nodes are always the root nodes of the graph.
-    ///
-    /// # Arguments
-    ///
-    /// * `heap` - The heap to store the k closest nodes.
-    /// * `search_queue` - The queue to store the nodes to be visited.
-    /// * `visited` - The set to store the visited nodes.
-    /// * `query_vector` - The query vector.
-    /// * `k` - The number of closest nodes to return.
     fn process_initial_nodes(
         &self,
         heap: &mut BinaryHeap<NeighborNode>,
         search_queue: &mut VecDeque<usize>,
         visited: &mut HashSet<usize>,
-        query_vector: &HighDimVector,
+        query_vector: &SparseVector,
         k: usize,
     ) {
         // Sort the root nodes by distance to the query vector.
@@ -75,7 +53,7 @@ impl SSGIndex {
             .root_nodes
             .iter()
             .map(|&n| {
-                let distance = query_vector.distance(&self.vectors[n], self.metric);
+                let distance = query_vector.euclidean_distance(&self.vectors[n]);
                 NeighborNode::new(n, distance)
             })
             .collect::<Vec<_>>();
@@ -89,45 +67,5 @@ impl SSGIndex {
             }
             visited.insert(node.id);
         });
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::index::{DistanceMetric, Index};
-
-    use super::*;
-
-    #[test]
-    fn test_search() {
-        let mut index = SSGIndex::new(DistanceMetric::Euclidean);
-        index.root_size = 10;
-        for i in 0..10 {
-            let v = HighDimVector::new(i, vec![i as f32, i as f32]);
-            index.add_vector(v);
-        }
-        index.build();
-
-        let query_vector = HighDimVector::new(99, vec![5.0, 5.0]);
-        let results = index.search_bfs(&query_vector, 3);
-
-        assert_eq!(results.len(), 3, "Should return exactly 3 results");
-        let expected_ids = vec![5, 4, 6];
-        let result_ids: Vec<usize> = results.iter().map(|v| v.id).collect();
-        assert!(
-            expected_ids.iter().all(|id| result_ids.contains(id)),
-            "The closest vectors should include the ids 4, 5, and 6"
-        );
-    }
-
-    #[test]
-    fn test_search_empty_graph() {
-        let mut index = SSGIndex::new(DistanceMetric::Euclidean);
-        index.root_size = 0;
-        index.build();
-        let query_vector = HighDimVector::new(99, vec![5.0, 5.0]);
-        let results = index.search_bfs(&query_vector, 3);
-
-        assert!(results.is_empty(), "Should return an empty result");
     }
 }
