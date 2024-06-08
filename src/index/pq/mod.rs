@@ -277,13 +277,14 @@ mod tests {
         index.build();
 
         let query_vector = SparseVector {
-            indices: vec![3, 7],
-            values: vec![OrderedFloat(3.0), OrderedFloat(7.0)],
+            indices: vec![1, 7],
+            values: vec![OrderedFloat(1.5), OrderedFloat(7.0)],
         };
         let results = index.search(&query_vector, 10);
         println!("Results for search on query vector: {:?}", results);
-        println!("{:?}", vectors[73]);
+        println!("Top Search: {:?}", vectors[results[0].index]);
+        println!("Groundtruth: {:?}", query_vector);
 
-        assert!(true);
+        assert!(false);
     }
 }
