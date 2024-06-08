@@ -1,6 +1,6 @@
 use rand::{seq::SliceRandom, Rng};
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use ordered_float::OrderedFloat;
 use rand::{rngs::StdRng, SeedableRng};
@@ -35,7 +35,7 @@ pub fn kmeans(
         }
 
         prev_centroids = centroids.clone();
-        centroids = update_centroids(clusters, &vectors, &mut rng);
+        centroids = update_centroids(&clusters, &vectors, &mut rng);
 
         let centroid_shift: f32 = centroids
             .iter()
@@ -53,7 +53,7 @@ pub fn kmeans(
 }
 
 fn update_centroids(
-    clusters: Vec<Vec<SparseVector>>,
+    clusters: &Vec<Vec<SparseVector>>,
     vectors: &[SparseVector],
     rng: &mut StdRng,
 ) -> Vec<SparseVector> {
@@ -69,7 +69,8 @@ fn update_centroids(
             continue;
         }
 
-        let mut sum_indices = HashMap::new();
+        // Using `BTreeMap` because ordering of the keys is important.
+        let mut sum_indices = BTreeMap::new();
         for vector in cluster {
             for (i, &index) in vector.indices.iter().enumerate() {
                 let value = vector.values[i].into_inner();
@@ -123,31 +124,18 @@ mod tests {
     fn test_kmeans_basic() {
         let vectors = vec![
             SparseVector {
-                indices: vec![0],
-                values: vec![OrderedFloat(1.0)],
+                indices: vec![0, 1],
+                values: vec![OrderedFloat(1.0), OrderedFloat(1.0)],
             },
             SparseVector {
-                indices: vec![1],
-                values: vec![OrderedFloat(2.0)],
+                indices: vec![0, 1],
+                values: vec![OrderedFloat(2.0), OrderedFloat(2.0)],
             },
             SparseVector {
-                indices: vec![2],
-                values: vec![OrderedFloat(3.0)],
-            },
-            SparseVector {
-                indices: vec![3],
-                values: vec![OrderedFloat(10.0)],
-            },
-            SparseVector {
-                indices: vec![4],
-                values: vec![OrderedFloat(11.0)],
-            },
-            SparseVector {
-                indices: vec![5],
-                values: vec![OrderedFloat(12.0)],
+                indices: vec![0, 1],
+                values: vec![OrderedFloat(3.0), OrderedFloat(3.0)],
             },
         ];
-
         let num_clusters = 2;
         let iterations = 10;
         let tolerance = 0.01;
@@ -161,10 +149,114 @@ mod tests {
             random_seed,
         );
 
+        // Check that the number of centroids is equal to num_clusters
         assert_eq!(centroids.len(), num_clusters);
 
-        println!("{:?}", centroids);
+        // Check that each centroid has the same number of indices and values
+        for centroid in &centroids {
+            assert_eq!(centroid.indices.len(), centroid.values.len());
+        }
 
-        assert!(true);
+        // Check that the sum of the squared distances from each vector to its nearest centroid is minimized
+        let mut total_distance = 0.0;
+        for vector in &vectors {
+            let mut min_distance = f32::MAX;
+            for centroid in &centroids {
+                let distance = vector.euclidean_distance(centroid);
+                if distance < min_distance {
+                    min_distance = distance;
+                }
+            }
+            total_distance += min_distance * min_distance;
+        }
+        assert!(total_distance < 1.0);
+
+        // Check that the centroids are not all the same
+        let mut all_same = true;
+        for i in 1..centroids.len() {
+            if centroids[i] != centroids[0] {
+                all_same = false;
+                break;
+            }
+        }
+        assert!(!all_same);
+    }
+
+    #[test]
+    fn test_update_centroids() {
+        let mut rng = StdRng::seed_from_u64(42);
+        let clusters = vec![vec![
+            SparseVector {
+                indices: vec![0, 1],
+                values: vec![OrderedFloat(1.0), OrderedFloat(1.0)],
+            },
+            SparseVector {
+                indices: vec![0, 1],
+                values: vec![OrderedFloat(2.0), OrderedFloat(2.0)],
+            },
+        ]];
+        let vectors = vec![
+            SparseVector {
+                indices: vec![0, 1],
+                values: vec![OrderedFloat(1.0), OrderedFloat(1.0)],
+            },
+            SparseVector {
+                indices: vec![0, 1],
+                values: vec![OrderedFloat(2.0), OrderedFloat(2.0)],
+            },
+        ];
+
+        let centroids = update_centroids(&clusters, &vectors, &mut rng);
+
+        // Check that the number of centroids is equal to the number of clusters
+        assert_eq!(centroids.len(), clusters.len());
+
+        // Check that each centroid has the same number of indices and values
+        for centroid in &centroids {
+            assert_eq!(centroid.indices.len(), centroid.values.len());
+        }
+
+        // Check that the centroid values are the average of the cluster values
+        for (centroid, cluster) in centroids.iter().zip(clusters.iter()) {
+            for (index, value) in centroid.indices.iter().zip(centroid.values.iter()) {
+                let cluster_values: Vec<f32> = cluster
+                    .iter()
+                    .filter_map(|vector| {
+                        Some(
+                            vector.values[vector.indices.iter().position(|&i| i == *index)?]
+                                .into_inner(),
+                        )
+                    })
+                    .collect();
+                let average: f32 = cluster_values.iter().sum::<f32>() / cluster_values.len() as f32;
+                assert_eq!(*value, OrderedFloat(average));
+            }
+        }
+    }
+
+    #[test]
+    fn test_init_centroids() {
+        let mut rng = StdRng::seed_from_u64(42);
+        let vectors = vec![
+            SparseVector {
+                indices: vec![0, 1],
+                values: vec![OrderedFloat(1.0), OrderedFloat(1.0)],
+            },
+            SparseVector {
+                indices: vec![0, 1],
+                values: vec![OrderedFloat(2.0), OrderedFloat(2.0)],
+            },
+        ];
+        let num_clusters = 2;
+
+        let centroids = init_centroids(&vectors, num_clusters, &mut rng);
+
+        // Check that the number of centroids is equal to num_clusters
+        assert_eq!(centroids.len(), num_clusters);
+
+        // Check that each centroid is one of the input vectors
+        for centroid in &centroids {
+            assert!(vectors.contains(centroid));
+        }
     }
 }
