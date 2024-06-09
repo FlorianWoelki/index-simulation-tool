@@ -1,13 +1,8 @@
 use std::collections::HashMap;
 
-use benchmark::{
-    logger::BenchmarkLogger, metrics::DEFAULT_SCALABILITY_FACTOR, Benchmark, BenchmarkConfig,
-    BenchmarkResult,
-};
-use data::{generator_dense::DenseDataGenerator, HighDimVector, SparseVector};
+use data::{generator_dense::DenseDataGenerator, SparseVector};
 use index::{
-    linscan::LinScanIndex, minhash::MinHashIndex, naive::NaiveIndex, ssg::SSGIndex, DistanceMetric,
-    Index, SparseIndex,
+    linscan::LinScanIndex, minhash::MinHashIndex, ssg::SSGIndex, DistanceMetric, SparseIndex,
 };
 
 use clap::Parser;
@@ -264,24 +259,24 @@ for (i, d) in data.iter().enumerate() {
 index
 }*/
 
-fn create_query_vector(_config: &BenchmarkConfig, dimensions: usize) -> HighDimVector {
-    HighDimVector::new(999999999, vec![128.0; dimensions])
-}
+// fn create_query_vector(_config: &BenchmarkConfig, dimensions: usize) -> HighDimVector {
+//     HighDimVector::new(999999999, vec![128.0; dimensions])
+// }
 
-fn print_benchmark_results(result: &BenchmarkResult) {
-    println!("Total Execution time: {:?}", result.total_execution_time);
-    println!("Index Execution time: {:?}", result.index_execution_time);
-    println!("Query Execution time: {:?}", result.query_execution_time);
-    println!("Queries per Second (QPS): {:?}", result.queries_per_second);
-    println!(
-        "Scalability Factor: {:?}",
-        result
-            .scalability_factor
-            .unwrap_or(DEFAULT_SCALABILITY_FACTOR)
-    );
-    println!("Dataset Size: {:?}", result.dataset_size);
-    println!(
-        "Dataset Dimensionality: {:?}",
-        result.dataset_dimensionality
-    );
-}
+// fn print_benchmark_results(result: &BenchmarkResult) {
+//     println!("Total Execution time: {:?}", result.total_execution_time);
+//     println!("Index Execution time: {:?}", result.index_execution_time);
+//     println!("Query Execution time: {:?}", result.query_execution_time);
+//     println!("Queries per Second (QPS): {:?}", result.queries_per_second);
+//     println!(
+//         "Scalability Factor: {:?}",
+//         result
+//             .scalability_factor
+//             .unwrap_or(DEFAULT_SCALABILITY_FACTOR)
+//     );
+//     println!("Dataset Size: {:?}", result.dataset_size);
+//     println!(
+//         "Dataset Dimensionality: {:?}",
+//         result.dataset_dimensionality
+//     );
+// }

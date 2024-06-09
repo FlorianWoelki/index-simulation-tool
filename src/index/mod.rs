@@ -1,12 +1,11 @@
 use std::fmt::Debug;
 
-use crate::data::{HighDimVector, QueryResult, SparseVector};
+use crate::data::{QueryResult, SparseVector};
 
 pub mod annoy;
 pub mod hnsw;
 pub mod linscan;
 pub mod minhash;
-pub mod naive;
 pub mod neighbor;
 pub mod pq;
 pub mod simhash;
@@ -31,23 +30,6 @@ impl Debug for DistanceMetric {
             DistanceMetric::Jaccard => write!(f, "Jaccard"),
         }
     }
-}
-
-impl Copy for DistanceMetric {}
-
-impl Clone for DistanceMetric {
-    fn clone(&self) -> DistanceMetric {
-        *self
-    }
-}
-
-pub trait Index {
-    fn new(metric: DistanceMetric) -> Self
-    where
-        Self: Sized;
-    fn add_vector(&mut self, vector: HighDimVector);
-    fn build(&mut self);
-    fn search(&self, query_vector: &HighDimVector, k: usize) -> Vec<HighDimVector>;
 }
 
 pub trait SparseIndex {

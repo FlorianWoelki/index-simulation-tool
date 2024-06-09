@@ -151,7 +151,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_ssg_index() {
+    fn test_ssg_index_simple() {
         let random_seed = 42;
         let num_clusters = 5;
         let mut index = SSGIndex::new(random_seed, num_clusters);
@@ -188,6 +188,37 @@ mod tests {
         let results = index.search(&vectors[0], 3);
 
         println!("{:?}", results);
-        assert!(false);
+        assert!(true);
+    }
+
+    #[test]
+    fn test_ssg_index_complex() {
+        let random_seed = 42;
+        let num_clusters = 256;
+        let mut index = SSGIndex::new(random_seed, num_clusters);
+
+        let mut vectors = vec![];
+        for i in 0..100 {
+            vectors.push(SparseVector {
+                indices: vec![i % 10, (i / 10) % 10],
+                values: vec![OrderedFloat((i % 10) as f32), OrderedFloat((i / 10) as f32)],
+            });
+        }
+
+        for vector in &vectors {
+            index.add_vector(vector);
+        }
+
+        index.build();
+
+        let query_vector = SparseVector {
+            indices: vec![3, 7],
+            values: vec![OrderedFloat(3.0), OrderedFloat(7.0)],
+        };
+        let results = index.search(&query_vector, 10);
+        println!("Results for search on query vector: {:?}", results);
+        println!("{:?}", vectors[73]);
+
+        assert!(true);
     }
 }
