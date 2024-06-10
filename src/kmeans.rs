@@ -1,4 +1,4 @@
-use rand::{seq::SliceRandom, Rng};
+use rand::seq::SliceRandom;
 
 use std::collections::BTreeMap;
 
@@ -82,6 +82,34 @@ pub fn kmeans(
     return centers;
 }
 
+pub fn kmeans_index(
+    vectors: &Vec<SparseVector>,
+    num_clusters: usize,
+    iterations: usize,
+    tolerance: f32,
+    random_seed: u64,
+) -> Vec<usize> {
+    let centers = kmeans(&vectors, num_clusters, iterations, tolerance, random_seed);
+
+    // Find the closest node to each cluster center.
+    let closest_node_indices = centers.iter().map(|center| {
+        let mut closest_index = 0;
+        let mut closest_distance = f32::MAX;
+
+        vectors.iter().enumerate().for_each(|(i, node)| {
+            let distance = node.euclidean_distance(center);
+            if distance < closest_distance {
+                closest_index = i;
+                closest_distance = distance;
+            }
+        });
+
+        closest_index
+    });
+
+    closest_node_indices.collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -149,21 +177,27 @@ mod tests {
     }
 
     #[test]
-    fn test_kmeans_single_vector() {
-        let vectors = vec![create_sparse_vector(vec![0, 1], vec![1.0, 2.0])];
+    fn test_kmeans_index() {
+        let vectors = vec![
+            create_sparse_vector(vec![0, 1], vec![1.0, 2.0]),
+            create_sparse_vector(vec![0, 1], vec![1.5, 1.8]),
+            create_sparse_vector(vec![0, 1], vec![5.0, 8.0]),
+            create_sparse_vector(vec![0, 1], vec![8.0, 8.0]),
+        ];
 
-        let num_clusters = 1;
+        let num_clusters = 2;
         let iterations = 100;
         let tolerance = 0.1;
         let random_seed = 42;
 
-        let centers = kmeans(&vectors, num_clusters, iterations, tolerance, random_seed);
+        let indices = kmeans_index(&vectors, num_clusters, iterations, tolerance, random_seed);
 
-        assert_eq!(centers.len(), num_clusters);
-        assert_eq!(centers[0].indices, vec![0, 1]);
-        assert_eq!(
-            centers[0].values,
-            vec![OrderedFloat(1.0), OrderedFloat(2.0)]
-        );
+        assert_eq!(indices.len(), num_clusters);
+
+        // Check if the indices are correct
+        let expected_indices = vec![0, 2];
+        for &index in &indices {
+            assert!(expected_indices.contains(&index));
+        }
     }
 }
