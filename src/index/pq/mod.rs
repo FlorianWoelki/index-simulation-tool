@@ -53,7 +53,7 @@ impl PQIndex {
             }
 
             let codewords_m = kmeans(
-                sub_vectors_m,
+                &sub_vectors_m,
                 self.num_clusters,
                 self.iterations,
                 self.tolerance,
