@@ -2,7 +2,7 @@ use rand::{seq::SliceRandom, Rng};
 
 use std::collections::BTreeMap;
 
-use ordered_float::OrderedFloat;
+use ordered_float::{Float, OrderedFloat};
 use rand::{rngs::StdRng, SeedableRng};
 
 use crate::data::SparseVector;
@@ -54,6 +54,8 @@ pub fn kmeans(
             counts[cluster] += 1;
         }
 
+        let mut max_change = 0.0;
+
         for (i, center) in centers.iter_mut().enumerate() {
             let mut new_indices = Vec::new();
             let mut new_values = Vec::new();
@@ -61,10 +63,107 @@ pub fn kmeans(
                 new_indices.push(index);
                 new_values.push(OrderedFloat(sum_value / counts[i] as f32));
             }
+
+            let mut change = 0.0;
+            for (a, b) in center.values.iter().zip(&new_values) {
+                change += (a.0 - b.0).abs();
+            }
+            max_change = max_change.max(change);
+
             center.indices = new_indices;
             center.values = new_values;
+        }
+
+        if max_change < tolerance {
+            break;
         }
     }
 
     return centers;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_sparse_vector(indices: Vec<usize>, values: Vec<f32>) -> SparseVector {
+        SparseVector {
+            indices,
+            values: values.into_iter().map(OrderedFloat).collect(),
+        }
+    }
+
+    #[test]
+    fn test_kmeans_convergence_with_tolerance() {
+        let vectors = vec![
+            create_sparse_vector(vec![0, 1], vec![1.0, 2.0]),
+            create_sparse_vector(vec![0, 1], vec![1.5, 1.8]),
+            create_sparse_vector(vec![0, 1], vec![5.0, 8.0]),
+            create_sparse_vector(vec![0, 1], vec![8.0, 8.0]),
+        ];
+
+        let num_clusters = 2;
+        let iterations = 100;
+        let tolerance = 0.1;
+        let random_seed = 42;
+
+        let centers = kmeans(&vectors, num_clusters, iterations, tolerance, random_seed);
+
+        assert_eq!(centers.len(), num_clusters);
+
+        assert!(centers
+            .iter()
+            .any(|c| c.indices == vec![0, 1]
+                && c.values == vec![OrderedFloat(1.25), OrderedFloat(1.9)]));
+        assert!(centers
+            .iter()
+            .any(|c| c.indices == vec![0, 1]
+                && c.values == vec![OrderedFloat(6.5), OrderedFloat(8.0)]));
+    }
+
+    #[test]
+    fn test_kmeans_no_convergence_with_high_tolerance() {
+        let vectors = vec![
+            create_sparse_vector(vec![0, 1], vec![1.0, 2.0]),
+            create_sparse_vector(vec![0, 1], vec![1.5, 1.8]),
+            create_sparse_vector(vec![0, 1], vec![5.0, 8.0]),
+            create_sparse_vector(vec![0, 1], vec![8.0, 8.0]),
+        ];
+
+        let num_clusters = 2;
+        let iterations = 10;
+        let tolerance = 10.0;
+        let random_seed = 42;
+
+        let centers = kmeans(&vectors, num_clusters, iterations, tolerance, random_seed);
+        assert_eq!(centers.len(), num_clusters);
+
+        assert!(centers
+            .iter()
+            .any(|c| c.indices == vec![0, 1]
+                && c.values != vec![OrderedFloat(1.25), OrderedFloat(1.9)]));
+        assert!(centers
+            .iter()
+            .any(|c| c.indices == vec![0, 1]
+                && c.values != vec![OrderedFloat(6.5), OrderedFloat(8.0)]));
+    }
+
+    #[test]
+    fn test_kmeans_single_vector() {
+        let vectors = vec![create_sparse_vector(vec![0, 1], vec![1.0, 2.0])];
+
+        let num_clusters = 1;
+        let iterations = 100;
+        let tolerance = 0.1;
+        let random_seed = 42;
+
+        let centers = kmeans(&vectors, num_clusters, iterations, tolerance, random_seed);
+
+        assert_eq!(centers.len(), num_clusters);
+        assert_eq!(centers[0].indices, vec![0, 1]);
+        assert_eq!(
+            centers[0].values,
+            vec![OrderedFloat(1.0), OrderedFloat(2.0)]
+        );
+    }
 }
