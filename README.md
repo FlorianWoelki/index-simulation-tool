@@ -6,7 +6,7 @@
 - [x] Implement MinHash
 - [x] Implement SimHash
 - [x] Implement LinScan
-- [ ] Implement HNSW Sparse
+- [x] Implement HNSW Sparse
 - [x] Implement SSG Sparse
 - [ ] Implement Annoy
 - [x] Implement PQ Index
