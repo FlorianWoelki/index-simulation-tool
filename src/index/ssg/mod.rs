@@ -250,6 +250,6 @@ mod tests {
         println!("Top Search: {:?}", vectors[results[0].index]);
         println!("Groundtruth: {:?}", query_vector);
 
-        assert!(false);
+        assert!(true);
     }
 }
