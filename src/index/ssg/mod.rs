@@ -1,15 +1,14 @@
-use std::{collections::HashSet, f32::consts::PI};
+use std::collections::{BinaryHeap, HashSet, VecDeque};
 
 use crate::{
     data::{QueryResult, SparseVector},
-    kmeans::kmeans,
+    kmeans::kmeans_index,
 };
 
 use super::{neighbor::NeighborNode, SparseIndex};
 
 mod construction;
 mod prune;
-mod search;
 
 pub struct SSGIndex {
     pub(super) vectors: Vec<SparseVector>,
@@ -20,19 +19,21 @@ pub struct SSGIndex {
     pub(super) root_nodes: Vec<usize>,
     pub(super) neighbor_neighbor_size: usize,
     pub(super) init_k: usize,
+    pub(super) iterations: usize,
     pub(super) random_seed: u64,
 }
 
 impl SSGIndex {
-    fn new(random_seed: u64, num_clusters: usize) -> Self {
+    fn new(num_clusters: usize, iterations: usize, random_seed: u64) -> Self {
         SSGIndex {
             vectors: Vec::new(),
-            threshold: (30.0 / 180.0 * PI).cos(),
+            threshold: 60.0,
             index_size: 100,
-            init_k: 10,
+            init_k: 100,
             graph: Vec::new(),
             neighbor_neighbor_size: 100,
             root_nodes: Vec::new(),
+            iterations,
             num_clusters,
             random_seed,
         }
@@ -62,43 +63,73 @@ impl SSGIndex {
                 .collect();
         });
 
-        self.root_nodes = self.kmeans_index(256);
+        self.root_nodes = kmeans_index(
+            &self.vectors,
+            self.num_clusters,
+            self.iterations,
+            0.01, // TODO: Change this to an argument
+            self.random_seed,
+        );
     }
 
-    fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<SparseVector> {
-        self.search_bfs(query_vector, k)
+    fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+        let mut visited = HashSet::new();
+        let mut heap = BinaryHeap::new();
+        let mut search_queue = VecDeque::new();
+
+        // Sort the root nodes by distance to the query vector.
+        let mut initial_nodes = self
+            .root_nodes
+            .iter()
+            .map(|&n| {
+                let distance = query_vector.euclidean_distance(&self.vectors[n]);
+                NeighborNode::new(n, distance)
+            })
+            .collect::<Vec<_>>();
+        initial_nodes.sort();
+
+        // Add the k closest root nodes to the heap to initialize the search.
+        initial_nodes.iter().for_each(|node| {
+            if heap.len() < k {
+                heap.push(node.clone());
+                search_queue.push_back(node.id);
+            }
+            visited.insert(node.id);
+        });
+
+        while let Some(id) = search_queue.pop_front() {
+            if let Some(node_vec) = self.graph.get(id) {
+                node_vec.iter().for_each(|&neighbor_id| {
+                    if !visited.insert(neighbor_id) {
+                        return;
+                    }
+
+                    let distance = query_vector.euclidean_distance(&self.vectors[neighbor_id]);
+                    let neighbor_node = NeighborNode::new(neighbor_id, distance);
+                    heap.push(neighbor_node);
+                    search_queue.push_back(neighbor_id);
+                });
+            }
+
+            if heap.len() > k {
+                heap.pop();
+            }
+        }
+
+        let mut result = Vec::with_capacity(heap.len());
+        while let Some(node) = heap.pop() {
+            result.push(QueryResult {
+                index: node.id,
+                score: node.distance,
+            });
+        }
+
+        result.reverse();
+        result
     }
 }
 
 impl SSGIndex {
-    fn kmeans_index(&self, epoch: usize) -> Vec<usize> {
-        let centroids = kmeans(
-            self.vectors.clone(),
-            self.num_clusters,
-            epoch,
-            0.01,
-            self.random_seed,
-        );
-
-        // Find the closest node to each cluster center.
-        let closest_node_indices = centroids.iter().map(|center| {
-            let mut closest_index = 0;
-            let mut closest_distance = f32::MAX;
-
-            self.vectors.iter().enumerate().for_each(|(i, node)| {
-                let distance = node.euclidean_distance(center);
-                if distance < closest_distance {
-                    closest_index = i;
-                    closest_distance = distance;
-                }
-            });
-
-            closest_index
-        });
-
-        closest_node_indices.collect()
-    }
-
     fn populate_expanded_neighbors(
         &self,
         query_point: usize,
@@ -108,10 +139,6 @@ impl SSGIndex {
         visited.insert(query_point);
 
         for neighbor_id in self.graph[query_point].iter() {
-            if *neighbor_id == query_point {
-                continue;
-            }
-
             self.graph[*neighbor_id]
                 .iter()
                 .filter(|node| **node != query_point && *neighbor_id != **node)
@@ -121,9 +148,9 @@ impl SSGIndex {
                             .euclidean_distance(&self.vectors[*second_neighbor_id]);
                         expand_neighbors.push(NeighborNode::new(*second_neighbor_id, distance));
 
-                        /*if expand_neighbors.len() >= self.neighbor_neighbor_size {
-                        return;
-                        }*/
+                        // if expand_neighbors.len() >= self.neighbor_neighbor_size {
+                        //     return;
+                        // }
                     }
                 });
         }
@@ -147,6 +174,7 @@ impl SSGIndex {
 #[cfg(test)]
 mod tests {
     use ordered_float::OrderedFloat;
+    use rand::{thread_rng, Rng};
 
     use super::*;
 
@@ -154,7 +182,8 @@ mod tests {
     fn test_ssg_index_simple() {
         let random_seed = 42;
         let num_clusters = 5;
-        let mut index = SSGIndex::new(random_seed, num_clusters);
+        let iterations = 256;
+        let mut index = SSGIndex::new(num_clusters, iterations, random_seed);
 
         let vectors = vec![
             SparseVector {
@@ -193,9 +222,10 @@ mod tests {
 
     #[test]
     fn test_ssg_index_complex() {
-        let random_seed = 42;
-        let num_clusters = 256;
-        let mut index = SSGIndex::new(random_seed, num_clusters);
+        let random_seed = thread_rng().gen::<u64>();
+        let num_clusters = 40;
+        let iterations = 256;
+        let mut index = SSGIndex::new(num_clusters, iterations, random_seed);
 
         let mut vectors = vec![];
         for i in 0..100 {
@@ -212,13 +242,14 @@ mod tests {
         index.build();
 
         let query_vector = SparseVector {
-            indices: vec![3, 7],
-            values: vec![OrderedFloat(3.0), OrderedFloat(7.0)],
+            indices: vec![5, 9],
+            values: vec![OrderedFloat(5.0), OrderedFloat(9.0)],
         };
         let results = index.search(&query_vector, 10);
         println!("Results for search on query vector: {:?}", results);
-        println!("{:?}", vectors[73]);
+        println!("Top Search: {:?}", vectors[results[0].index]);
+        println!("Groundtruth: {:?}", query_vector);
 
-        assert!(true);
+        assert!(false);
     }
 }
