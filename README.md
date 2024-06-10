@@ -7,7 +7,7 @@
 - [x] Implement SimHash
 - [x] Implement LinScan
 - [ ] Implement HNSW Sparse
-- [ ] Implement SSG Sparse
+- [x] Implement SSG Sparse
 - [ ] Implement Annoy
 - [x] Implement PQ Index
 - [ ] Cleanup repository
