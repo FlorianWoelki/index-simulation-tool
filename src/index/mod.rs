@@ -7,6 +7,7 @@ pub mod hnsw;
 pub mod linscan;
 pub mod minhash;
 pub mod neighbor;
+pub mod nsw;
 pub mod pq;
 pub mod simhash;
 

@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
 use data::{generator_dense::DenseDataGenerator, SparseVector};
-use index::{
-    linscan::LinScanIndex, minhash::MinHashIndex, ssg::SSGIndex, DistanceMetric, SparseIndex,
-};
+use index::{linscan::LinScanIndex, minhash::MinHashIndex, DistanceMetric, SparseIndex};
 
 use clap::Parser;
 use rand::{rngs::StdRng, thread_rng, Rng, SeedableRng};
