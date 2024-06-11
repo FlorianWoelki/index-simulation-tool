@@ -7,7 +7,6 @@
 - [x] Implement SimHash
 - [x] Implement LinScan
 - [x] Implement HNSW Sparse
-- [x] Implement SSG Sparse
 - [ ] Implement Annoy
 - [x] Implement PQ Index
 - [ ] Cleanup repository
@@ -15,4 +14,5 @@
 ## Optional
 
 - [ ] Maybe convert back to f64 because msmarco is in f64
-- [ ] Implement maybe IVFPQ
+- [ ] Implement IVFPQ
+- [ ] Implement SSG Sparse
