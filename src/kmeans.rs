@@ -91,23 +91,22 @@ pub fn kmeans_index(
 ) -> Vec<usize> {
     let centers = kmeans(&vectors, num_clusters, iterations, tolerance, random_seed);
 
-    // Find the closest node to each cluster center.
-    let closest_node_indices = centers.iter().map(|center| {
-        let mut closest_index = 0;
-        let mut closest_distance = f32::MAX;
-
-        vectors.iter().enumerate().for_each(|(i, node)| {
-            let distance = node.euclidean_distance(center);
-            if distance < closest_distance {
-                closest_index = i;
-                closest_distance = distance;
-            }
-        });
-
-        closest_index
-    });
-
-    closest_node_indices.collect()
+    centers
+        .iter()
+        .map(|center| {
+            vectors
+                .iter()
+                .enumerate()
+                .min_by(|(_, node1), (_, node2)| {
+                    node1
+                        .euclidean_distance(center)
+                        .partial_cmp(&node2.euclidean_distance(center))
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|(index, _)| index)
+                .unwrap_or(0)
+        })
+        .collect()
 }
 
 #[cfg(test)]
