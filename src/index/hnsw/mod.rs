@@ -1,255 +1,209 @@
-use std::{collections::BinaryHeap, sync::RwLock};
+use std::collections::{BinaryHeap, HashMap};
 
+use node::Node;
+use ordered_float::OrderedFloat;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use crate::data::{QueryResult, SparseVector};
 
 use super::neighbor::NeighborNode;
 
-mod construction;
-mod search;
+mod node;
 
 pub struct HNSWIndex {
-    pub(super) vectors: Vec<SparseVector>,
-    pub(super) n_neighbor: usize,
-    pub(super) n_neighbor0: usize,
-    pub(super) max_layer: usize,
-    pub(super) ef_construction: usize,
-    pub(super) ef_search: usize,
-    pub(super) layer_to_neighbors: Vec<Vec<RwLock<Vec<usize>>>>,
-    pub(super) base_layer_neighbors: Vec<RwLock<Vec<usize>>>,
-    pub(super) root_node_id: usize,
-    pub(super) n_items: usize,
-    pub(super) current_level: usize,
-    pub(super) id_to_level: Vec<usize>,
-    pub(super) n_indexed_vectors: usize,
-    pub(super) rng: StdRng,
+    vectors: Vec<SparseVector>,
+    nodes: HashMap<usize, Node>,
+    /// Controls the probability distribution for assigning the layer of each node in the graph.
+    level_distribution_factor: f32,
+    /// Determines the maximum layer that a node can have in the graph.
+    max_layers: usize,
+    /// Controls the number of neighbors considered during the construction phase.
+    ef_construction: usize,
+    /// Controls the number of neighbors considered during the search phase.
+    ef_search: usize,
+    random_seed: u64,
 }
 
 impl HNSWIndex {
-    pub fn new(random_seed: u64) -> Self {
+    pub fn new(
+        level_distribution_factor: f32,
+        max_layers: usize,
+        ef_construction: usize,
+        ef_search: usize,
+        random_seed: u64,
+    ) -> Self {
         HNSWIndex {
             vectors: Vec::new(),
-            n_neighbor: 32,
-            n_neighbor0: 64,
-            max_layer: 20,
-            ef_construction: 500,
-            ef_search: 16,
-            layer_to_neighbors: Vec::new(),
-            base_layer_neighbors: Vec::new(),
-            id_to_level: Vec::new(),
-            root_node_id: 0,
-            n_items: 0,
-            current_level: 0,
-            n_indexed_vectors: 0,
-            rng: StdRng::seed_from_u64(random_seed),
+            nodes: HashMap::new(),
+            max_layers,
+            level_distribution_factor,
+            ef_construction,
+            ef_search,
+            random_seed,
         }
     }
 
-    pub fn add_vector(&mut self, vector: &SparseVector) {
-        let mut current_level = self.get_random_level();
-        if self.vectors.len() == 0 {
-            current_level = self.max_layer;
-            self.current_level = current_level;
-            self.root_node_id = 0;
-        }
-
-        let base_layer_neighbors = RwLock::new(Vec::with_capacity(self.n_neighbor0));
-        let mut neighbors = Vec::with_capacity(current_level);
-
-        for _ in 0..current_level {
-            neighbors.push(RwLock::new(Vec::with_capacity(self.n_neighbor)));
-        }
-
-        self.vectors.push(vector.clone());
-        self.base_layer_neighbors.push(base_layer_neighbors);
-        self.layer_to_neighbors.push(neighbors);
-        self.id_to_level.push(current_level);
-        self.n_items += 1;
+    pub fn add_vector(&mut self, item: &SparseVector) {
+        self.vectors.push(item.clone());
     }
 
     pub fn build(&mut self) {
-        (self.n_indexed_vectors..self.n_items).for_each(|insert_id| {
-            self.index_vector(insert_id);
-        });
-        self.n_indexed_vectors = self.n_items;
+        for (i, vector) in self.vectors.iter().enumerate() {
+            let mut rng = StdRng::seed_from_u64(self.random_seed);
+            let mut layer = 0;
+            while rng.gen::<f32>() < self.level_distribution_factor.powi(layer as i32)
+                && layer < self.max_layers
+            {
+                layer += 1;
+            }
+
+            let new_node = Node {
+                id: i,
+                connections: vec![Vec::new(); self.max_layers + 1],
+                vector: vector.clone(),
+                layer,
+            };
+
+            self.nodes.insert(i, new_node);
+        }
+
+        let nodes: Vec<Node> = self.nodes.values().cloned().collect();
+        for node in nodes {
+            for layer in (0..=node.layer).rev() {
+                self.connect_new_node(&node, layer);
+            }
+        }
+    }
+
+    fn connect_new_node(&mut self, new_node: &Node, layer: usize) {
+        let neighbors: BinaryHeap<NeighborNode> = self
+            .nodes
+            .values()
+            .filter(|&node| node.layer >= layer && node.id != new_node.id)
+            .map(|node| {
+                let distance = new_node.vector.euclidean_distance(&node.vector);
+                NeighborNode {
+                    id: node.id,
+                    distance: OrderedFloat(distance),
+                }
+            })
+            .collect();
+
+        let neighbors_to_add: Vec<NeighborNode> = neighbors
+            .into_sorted_vec()
+            .into_iter()
+            .take(self.ef_construction)
+            .collect();
+
+        for neighbor in neighbors_to_add {
+            self.nodes.get_mut(&new_node.id).unwrap().connections[layer].push(neighbor.id);
+            self.nodes.get_mut(&neighbor.id).unwrap().connections[layer].push(new_node.id);
+        }
     }
 
     pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        let mut knn_results = self.search_knn(query_vector, k);
-        let mut results = Vec::with_capacity(k);
+        let entry_point = StdRng::seed_from_u64(self.random_seed).gen_range(0..self.nodes.len());
+        let mut current_node = &self.nodes[&entry_point];
 
-        (0..k).for_each(|_| {
-            if let Some(top) = knn_results.pop() {
-                results.push(QueryResult {
-                    index: top.id,
-                    score: top.distance,
-                })
-            }
-        });
-
-        results.reverse();
-        results
-    }
-}
-
-impl HNSWIndex {
-    pub(super) fn get_neighbor(&self, id: usize, layer: usize) -> &RwLock<Vec<usize>> {
-        if layer == 0 {
-            return &self.base_layer_neighbors[id];
+        for layer in (0..self.max_layers).rev() {
+            current_node = self.find_closest_node(current_node, query_vector, layer);
         }
 
-        &self.layer_to_neighbors[id][layer - 1]
+        self.knn_search(query_vector, current_node, k)
     }
 
-    fn connect_neighbor(
-        &self,
-        current_id: usize,
-        sorted_candidates: &[NeighborNode],
-        level: usize,
-        is_update: bool,
-    ) -> usize {
-        let n_neighbor = if level == 0 {
-            self.n_neighbor0
-        } else {
-            self.n_neighbor
-        };
-        let selected_neighbors = self.get_neighbors_by_heuristic2(sorted_candidates, n_neighbor);
-        if selected_neighbors.len() > n_neighbor {
-            eprintln!(
-                "selected neighbors is too large: {}",
-                selected_neighbors.len()
-            );
-            return 0;
-        }
+    fn find_closest_node<'a>(
+        &'a self,
+        start_node: &'a Node,
+        query_vector: &SparseVector,
+        layer: usize,
+    ) -> &'a Node {
+        let mut current_node = start_node;
+        let mut closest_distance = query_vector.euclidean_distance(&current_node.vector);
 
-        if selected_neighbors.is_empty() {
-            eprintln!("selected neighbors is empty");
-            return 0;
-        }
+        loop {
+            let mut updated = false;
 
-        let next_closest_entry_point = selected_neighbors[0].id;
-
-        {
-            let mut current_neigh = self.get_neighbor(current_id, level).write().unwrap();
-            current_neigh.clear();
-            selected_neighbors.iter().for_each(|neighbor| {
-                current_neigh.push(neighbor.id);
-            });
-        }
-
-        for selected_neighbor in selected_neighbors.iter() {
-            let mut neighbor_of_selected_neighbors = self
-                .get_neighbor(selected_neighbor.id, level)
-                .write()
-                .unwrap();
-            if neighbor_of_selected_neighbors.len() > n_neighbor {
-                eprintln!(
-                    "neighbor of selected neighbors is too large: {}",
-                    neighbor_of_selected_neighbors.len()
-                );
-                return 0;
-            }
-
-            if selected_neighbor.id == current_id {
-                eprintln!("selected neighbor is current id");
-                return 0;
-            }
-
-            let mut is_current_id_present = false;
-
-            if is_update {
-                for iter in neighbor_of_selected_neighbors.iter() {
-                    if *iter == current_id {
-                        is_current_id_present = true;
-                        break;
-                    }
+            for &neighbor_id in &current_node.connections[layer] {
+                let neighbor_node = &self.nodes[&neighbor_id];
+                let distance = query_vector.euclidean_distance(&neighbor_node.vector);
+                if distance < closest_distance {
+                    closest_distance = distance;
+                    current_node = neighbor_node;
+                    updated = true;
                 }
             }
 
-            if !is_current_id_present {
-                if neighbor_of_selected_neighbors.len() < n_neighbor {
-                    neighbor_of_selected_neighbors.push(current_id);
-                } else {
-                    let d_max = self.vectors[current_id]
-                        .euclidean_distance(&self.vectors[selected_neighbor.id]);
-                    let mut candidates = BinaryHeap::new();
-                    candidates.push(NeighborNode::new(current_id, d_max));
-                    for iter in neighbor_of_selected_neighbors.iter() {
-                        let neighbor_id = *iter;
-                        let d_neigh = self.vectors[neighbor_id]
-                            .euclidean_distance(&self.vectors[selected_neighbor.id]);
-                        candidates.push(NeighborNode::new(neighbor_id, d_neigh));
-                    }
-                    let return_list =
-                        self.get_neighbors_by_heuristic2(&candidates.into_sorted_vec(), n_neighbor);
-
-                    neighbor_of_selected_neighbors.clear();
-                    for neighbor_in_list in return_list {
-                        neighbor_of_selected_neighbors.push(neighbor_in_list.id);
-                    }
-                }
-            }
-        }
-
-        next_closest_entry_point
-    }
-
-    fn get_neighbors_by_heuristic2(
-        &self,
-        sorted_list: &[NeighborNode],
-        maximum_size: usize,
-    ) -> Vec<NeighborNode> {
-        let sorted_list_len = sorted_list.len();
-        let mut return_list = Vec::with_capacity(sorted_list_len);
-
-        for iter in sorted_list.iter() {
-            if return_list.len() >= maximum_size {
+            if !updated {
                 break;
             }
+        }
 
-            let id = iter.id;
-            let distance = iter.distance;
-            if sorted_list_len < maximum_size {
-                return_list.push(NeighborNode::new(id, distance.into_inner()));
-                continue;
-            }
+        current_node
+    }
 
-            let mut good = true;
+    fn knn_search(
+        &self,
+        query_vector: &SparseVector,
+        entry_node: &Node,
+        k: usize,
+    ) -> Vec<QueryResult> {
+        let mut top_k: BinaryHeap<NeighborNode> = BinaryHeap::new();
+        let mut visited: HashMap<usize, bool> = HashMap::new();
+        let mut candidates: BinaryHeap<NeighborNode> = BinaryHeap::new();
 
-            for ret_neighbor in return_list.iter() {
-                let cur2ret_distance =
-                    self.vectors[id].euclidean_distance(&self.vectors[ret_neighbor.id]);
-                if cur2ret_distance < distance.into_inner() {
-                    good = false;
+        let entry_distance = query_vector.euclidean_distance(&entry_node.vector);
+        candidates.push(NeighborNode {
+            id: entry_node.id,
+            distance: OrderedFloat(entry_distance),
+        });
+        top_k.push(NeighborNode {
+            id: entry_node.id,
+            distance: OrderedFloat(entry_distance),
+        });
+        visited.insert(entry_node.id, true);
+
+        while let Some(candidate) = candidates.pop() {
+            for layer in (0..=self.max_layers).rev() {
+                for &neighbor_id in &self.nodes[&candidate.id].connections[layer] {
+                    if visited.contains_key(&neighbor_id) {
+                        continue;
+                    }
+
+                    let neighbor_node = &self.nodes[&neighbor_id];
+                    let distance = query_vector.euclidean_distance(&neighbor_node.vector);
+                    if top_k.len() < k || distance < -top_k.peek().unwrap().distance.into_inner() {
+                        candidates.push(NeighborNode {
+                            id: neighbor_id,
+                            distance: OrderedFloat(distance),
+                        });
+                        top_k.push(NeighborNode {
+                            id: neighbor_id,
+                            distance: OrderedFloat(distance),
+                        });
+
+                        if top_k.len() > k {
+                            top_k.pop();
+                        }
+                    }
+
+                    visited.insert(neighbor_id, true);
+                }
+
+                if candidates.len() > self.ef_search {
                     break;
                 }
             }
-
-            if good {
-                return_list.push(NeighborNode::new(id, distance.into_inner()));
-            }
         }
 
-        return_list
-    }
-
-    pub(super) fn get_level(&self, id: usize) -> usize {
-        self.id_to_level[id]
-    }
-
-    pub(super) fn get_random_level(&mut self) -> usize {
-        let mut result = 0;
-
-        while result < self.max_layer {
-            if self.rng.gen_range(0.0..1.0) > 0.5 {
-                result += 1;
-            } else {
-                break;
-            }
-        }
-
-        result
+        top_k
+            .into_sorted_vec()
+            .into_iter()
+            .map(|neighbor| QueryResult {
+                index: neighbor.id,
+                score: neighbor.distance,
+            })
+            .collect()
     }
 }
 
@@ -263,7 +217,7 @@ mod tests {
     #[test]
     fn test_hnsw_index_simple() {
         let random_seed = 42;
-        let mut index = HNSWIndex::new(random_seed);
+        let mut index = HNSWIndex::new(1.0 / 3.0, 16, 200, 200, random_seed);
 
         let vectors = vec![
             SparseVector {
@@ -303,7 +257,7 @@ mod tests {
     #[test]
     fn test_hnsw_index_complex() {
         let random_seed = thread_rng().gen::<u64>();
-        let mut index = HNSWIndex::new(random_seed);
+        let mut index = HNSWIndex::new(1.0 / 3.0, 16, 200, 200, random_seed);
 
         let mut vectors = vec![];
         for i in 0..100 {
