@@ -9,7 +9,6 @@ pub mod minhash;
 pub mod neighbor;
 pub mod pq;
 pub mod simhash;
-pub mod ssg;
 
 #[derive(PartialEq)]
 pub enum DistanceMetric {
