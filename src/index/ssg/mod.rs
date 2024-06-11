@@ -11,14 +11,23 @@ mod construction;
 mod prune;
 
 pub struct SSGIndex {
+    /// The vectors to be indexed.
     pub(super) vectors: Vec<SparseVector>,
-    pub(super) threshold: f32,
-    pub(super) index_size: usize,
+    /// The threshold value used for occlusion checking.
+    pub(super) occlusion_threshold: f32,
+    /// The size of the pool of neighbors to consider for each vector.
+    pub(super) pool_size: usize,
+    /// The graph of k-nearest neighbors for each vector.
     pub(super) graph: Vec<Vec<usize>>,
+    /// The number of clusters to use for k-means clustering.
     pub(super) num_clusters: usize,
+    /// The indices of the root nodes in the graph.
     pub(super) root_nodes: Vec<usize>,
-    pub(super) neighbor_neighbor_size: usize,
-    pub(super) init_k: usize,
+    /// The size of the expanded neighbor set to consider for each vector.
+    pub(super) expanded_neighbor_size: usize,
+    /// The initial value of k to use for constructing the k-nearest neighbors graph.
+    pub(super) initial_k: usize,
+    /// The number of iterations to use for k-means clustering.
     pub(super) iterations: usize,
     pub(super) random_seed: u64,
 }
@@ -27,11 +36,11 @@ impl SSGIndex {
     fn new(num_clusters: usize, iterations: usize, random_seed: u64) -> Self {
         SSGIndex {
             vectors: Vec::new(),
-            threshold: 60.0,
-            index_size: 100,
-            init_k: 100,
+            occlusion_threshold: 60.0,
+            pool_size: 100,
+            initial_k: 100,
             graph: Vec::new(),
-            neighbor_neighbor_size: 100,
+            expanded_neighbor_size: 100,
             root_nodes: Vec::new(),
             iterations,
             num_clusters,
@@ -44,24 +53,8 @@ impl SSGIndex {
     }
 
     fn build(&mut self) {
-        self.construct_knn_graph(self.init_k);
-
-        let len = self.vectors.len() * self.index_size;
-        let mut pruned_graph = (0..len)
-            .map(|i| NeighborNode::new(i, 0.0))
-            .collect::<Vec<NeighborNode>>();
-        self.link_each_nodes(&mut pruned_graph);
-
-        (0..self.vectors.len()).enumerate().for_each(|(i, _)| {
-            let offset = i * self.index_size;
-            let pool_size = (0..self.index_size)
-                .take_while(|j| pruned_graph[offset + j].distance.into_inner() == f32::MAX)
-                .count()
-                .max(1);
-            self.graph[i] = (0..pool_size)
-                .map(|j| pruned_graph[offset + j].id)
-                .collect();
-        });
+        self.construct_knn_graph(self.initial_k);
+        self.prune_and_link_graph();
 
         self.root_nodes = kmeans_index(
             &self.vectors,
@@ -78,37 +71,35 @@ impl SSGIndex {
         let mut search_queue = VecDeque::new();
 
         // Sort the root nodes by distance to the query vector.
-        let mut initial_nodes = self
+        let mut initial_nodes: Vec<_> = self
             .root_nodes
             .iter()
             .map(|&n| {
                 let distance = query_vector.euclidean_distance(&self.vectors[n]);
                 NeighborNode::new(n, distance)
             })
-            .collect::<Vec<_>>();
+            .collect();
         initial_nodes.sort();
 
         // Add the k closest root nodes to the heap to initialize the search.
-        initial_nodes.iter().for_each(|node| {
+        for node in &initial_nodes {
             if heap.len() < k {
                 heap.push(node.clone());
                 search_queue.push_back(node.id);
             }
             visited.insert(node.id);
-        });
+        }
 
         while let Some(id) = search_queue.pop_front() {
             if let Some(node_vec) = self.graph.get(id) {
-                node_vec.iter().for_each(|&neighbor_id| {
-                    if !visited.insert(neighbor_id) {
-                        return;
+                for &neighbor_id in node_vec {
+                    if visited.insert(neighbor_id) {
+                        let distance = query_vector.euclidean_distance(&self.vectors[neighbor_id]);
+                        let neighbor_node = NeighborNode::new(neighbor_id, distance);
+                        heap.push(neighbor_node);
+                        search_queue.push_back(neighbor_id);
                     }
-
-                    let distance = query_vector.euclidean_distance(&self.vectors[neighbor_id]);
-                    let neighbor_node = NeighborNode::new(neighbor_id, distance);
-                    heap.push(neighbor_node);
-                    search_queue.push_back(neighbor_id);
-                });
+                }
             }
 
             if heap.len() > k {
@@ -126,48 +117,6 @@ impl SSGIndex {
 
         result.reverse();
         result
-    }
-}
-
-impl SSGIndex {
-    fn populate_expanded_neighbors(
-        &self,
-        query_point: usize,
-        expand_neighbors: &mut Vec<NeighborNode>,
-    ) {
-        let mut visited = HashSet::with_capacity(self.neighbor_neighbor_size);
-        visited.insert(query_point);
-
-        for neighbor_id in self.graph[query_point].iter() {
-            self.graph[*neighbor_id]
-                .iter()
-                .filter(|node| **node != query_point && *neighbor_id != **node)
-                .for_each(|second_neighbor_id| {
-                    if visited.insert(*second_neighbor_id) {
-                        let distance = self.vectors[query_point]
-                            .euclidean_distance(&self.vectors[*second_neighbor_id]);
-                        expand_neighbors.push(NeighborNode::new(*second_neighbor_id, distance));
-
-                        // if expand_neighbors.len() >= self.neighbor_neighbor_size {
-                        //     return;
-                        // }
-                    }
-                });
-        }
-    }
-
-    fn link_each_nodes(&mut self, pruned_graph: &mut [NeighborNode]) {
-        let mut expanded_neighbors = Vec::new();
-
-        for i in 0..self.vectors.len() {
-            expanded_neighbors.clear();
-            self.populate_expanded_neighbors(i, &mut expanded_neighbors);
-            self.prune_graph(i, &mut expanded_neighbors, pruned_graph);
-        }
-
-        for i in 0..self.vectors.len() {
-            self.interconnect_pruned_neighbors(i, self.index_size, pruned_graph);
-        }
     }
 }
 
@@ -250,6 +199,6 @@ mod tests {
         println!("Top Search: {:?}", vectors[results[0].index]);
         println!("Groundtruth: {:?}", query_vector);
 
-        assert!(true);
+        assert!(false);
     }
 }

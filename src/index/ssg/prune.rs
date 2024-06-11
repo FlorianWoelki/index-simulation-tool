@@ -7,6 +7,55 @@ use crate::index::neighbor::NeighborNode;
 use super::SSGIndex;
 
 impl SSGIndex {
+    pub(super) fn prune_and_link_graph(&mut self) {
+        let len = self.vectors.len() * self.pool_size;
+        let mut pruned_graph = (0..len)
+            .map(|i| NeighborNode::new(i, 0.0))
+            .collect::<Vec<NeighborNode>>();
+
+        self.link_each_node(&mut pruned_graph);
+
+        for i in 0..self.vectors.len() {
+            let offset = i * self.pool_size;
+            let pool_size = (0..self.pool_size)
+                .take_while(|j| pruned_graph[offset + j].distance == OrderedFloat(f32::MAX))
+                .count()
+                .max(1);
+            self.graph[i] = (0..pool_size)
+                .map(|j| pruned_graph[offset + j].id)
+                .collect();
+        }
+    }
+
+    fn expand_neighbors(&self, query_point: usize, expand_neighbors: &mut Vec<NeighborNode>) {
+        let mut visited = HashSet::with_capacity(self.expanded_neighbor_size);
+        visited.insert(query_point);
+
+        for &neighbor_id in self.graph[query_point].iter() {
+            for &second_neighbor_id in &self.graph[neighbor_id] {
+                if second_neighbor_id != query_point && visited.insert(second_neighbor_id) {
+                    let distance = self.vectors[query_point]
+                        .euclidean_distance(&self.vectors[second_neighbor_id]);
+                    expand_neighbors.push(NeighborNode::new(second_neighbor_id, distance));
+                }
+            }
+        }
+    }
+
+    fn link_each_node(&mut self, pruned_graph: &mut [NeighborNode]) {
+        let mut expanded_neighbors = Vec::new();
+
+        for i in 0..self.vectors.len() {
+            expanded_neighbors.clear();
+            self.expand_neighbors(i, &mut expanded_neighbors);
+            self.prune_graph(i, &mut expanded_neighbors, pruned_graph);
+        }
+
+        for i in 0..self.vectors.len() {
+            self.interconnect_pruned_neighbors_list(i, self.pool_size, pruned_graph);
+        }
+    }
+
     pub(super) fn prune_graph(
         &mut self,
         query_id: usize,
@@ -32,33 +81,38 @@ impl SSGIndex {
 
         let mut result = Vec::new();
         // Add the neighbors to the result vector if they are not occluded.
-        expand_neighbors
+        for node in expand_neighbors
             .iter()
             .filter(|n| n.id != query_id)
-            .take(self.index_size)
+            .take(self.pool_size)
             .cloned()
-            .for_each(|node| {
-                if !self.is_occluded(&result, &node) {
-                    result.push(node);
-                }
-            });
-        self.populate_pruned_graph(pruned_graph, &result, query_id);
+        {
+            if !self.is_occluded(&result, &node) {
+                result.push(node);
+            }
+        }
+        self.update_pruned_graph(pruned_graph, &result, query_id);
     }
 
-    fn populate_pruned_graph(
+    fn update_pruned_graph(
         &self,
         pruned_graph: &mut [NeighborNode],
         result: &[NeighborNode],
         query_id: usize,
     ) {
-        let base_index = query_id * self.index_size;
-        for (i, node) in result.iter().enumerate() {
-            pruned_graph[base_index + i].id = node.id;
-            pruned_graph[base_index + i].distance = node.distance;
-        }
-        for i in result.len()..self.index_size {
-            pruned_graph[base_index + i].id = self.vectors.len();
-            pruned_graph[base_index + i].distance = f32::MAX.into();
+        let base_index = query_id * self.pool_size;
+
+        // Populate the pruned graph with result nodes.
+        result.iter().enumerate().for_each(|(i, node)| {
+            pruned_graph[base_index + i] = *node;
+        });
+
+        // Fill the remaining entries with default values.
+        for i in result.len()..self.pool_size {
+            pruned_graph[base_index + i] = NeighborNode {
+                id: self.vectors.len(),
+                distance: OrderedFloat(f32::MAX),
+            }
         }
     }
 
@@ -67,11 +121,11 @@ impl SSGIndex {
             let djk = self.vectors[existing.id].euclidean_distance(&self.vectors[candidate.id]);
             let cos_ij = (candidate.distance.powi(2) + existing.distance.powi(2) - djk.powi(2))
                 / (2.0 * (candidate.distance.into_inner() * existing.distance.into_inner()));
-            cos_ij > self.threshold
+            cos_ij > self.occlusion_threshold
         })
     }
 
-    pub(super) fn interconnect_pruned_neighbors(
+    fn interconnect_pruned_neighbors_list(
         &self,
         node_index: usize,
         max_neighbors: usize,
@@ -85,16 +139,16 @@ impl SSGIndex {
 
             let neighbor_node = NeighborNode::new(node_index, current_node.distance.into_inner());
             let destination_id = current_node.id;
-            let start_index = destination_id * self.index_size;
+            let start_index = destination_id * self.pool_size;
 
             let mut neighbors =
-                self.collect_neighbors(pruned_graph, start_index, max_neighbors, node_index);
+                self.get_neighbors(pruned_graph, start_index, max_neighbors, node_index);
             if neighbors.is_empty() {
                 continue;
             }
 
             neighbors.push(neighbor_node.clone());
-            self.update_pruned_neighbors_list(
+            self.update_neighbors_list(
                 pruned_graph,
                 start_index,
                 max_neighbors,
@@ -104,33 +158,35 @@ impl SSGIndex {
         }
     }
 
-    fn prune_neighbors(
+    fn prune_neighbor_list(
         &self,
         neighbors: &mut [NeighborNode],
         max_neighbors: usize,
     ) -> Vec<NeighborNode> {
-        let mut result = Vec::new();
+        let mut pruned = Vec::with_capacity(max_neighbors);
         neighbors.sort_unstable();
-        result.push(neighbors[0].clone());
 
-        let mut start = 1;
-        while result.len() < max_neighbors && start < neighbors.len() {
-            let p = &neighbors[start];
-            let occluded = result
-                .iter()
-                .any(|rt| p.id == rt.id || self.is_occluded(&result, p));
-
-            if !occluded {
-                result.push(p.clone());
-            }
-
-            start += 1;
+        if let Some(first_neighbor) = neighbors.first() {
+            pruned.push(first_neighbor.clone());
         }
 
-        result
+        for neighbor in neighbors.iter().skip(1) {
+            if pruned.len() >= max_neighbors {
+                break;
+            }
+
+            if !pruned
+                .iter()
+                .any(|existing| neighbor.id == existing.id || self.is_occluded(&pruned, neighbor))
+            {
+                pruned.push(neighbor.clone());
+            }
+        }
+
+        pruned
     }
 
-    fn collect_neighbors(
+    fn get_neighbors(
         &self,
         pruned_graph: &[NeighborNode],
         start_index: usize,
@@ -139,17 +195,17 @@ impl SSGIndex {
     ) -> Vec<NeighborNode> {
         let mut has_duplicate = false;
 
-        let neighbors = (0..max_neighbors)
-            .filter(|i| {
+        let neighbors: Vec<NeighborNode> = (0..max_neighbors)
+            .filter_map(|i| {
                 let neighbor = &pruned_graph[start_index + i];
-                neighbor.distance.into_inner() != f32::MAX
-            })
-            .map(|i| {
-                let neighbor = &pruned_graph[start_index + i];
-                if current_node_index == neighbor.id {
-                    has_duplicate = true;
+                if neighbor.distance == f32::MAX {
+                    None
+                } else {
+                    if current_node_index == neighbor.id {
+                        has_duplicate = true;
+                    }
+                    Some(neighbor.clone())
                 }
-                neighbor.clone()
             })
             .collect();
 
@@ -160,7 +216,7 @@ impl SSGIndex {
         neighbors
     }
 
-    fn update_pruned_neighbors_list(
+    fn update_neighbors_list(
         &self,
         pruned_graph: &mut [NeighborNode],
         start_index: usize,
@@ -169,24 +225,25 @@ impl SSGIndex {
         neighbors: &mut [NeighborNode],
     ) {
         if neighbors.len() > max_neighbors {
-            let result = self.prune_neighbors(neighbors, max_neighbors);
-            (0..result.len()).for_each(|t| {
-                pruned_graph[t + start_index] = result[t].clone();
-            });
+            let result = self.prune_neighbor_list(neighbors, max_neighbors);
+            for (i, node) in result.iter().enumerate() {
+                pruned_graph[start_index + i] = node.clone();
+            }
 
             if result.len() < max_neighbors {
-                pruned_graph[result.len() + start_index].distance = OrderedFloat(f32::MAX);
+                pruned_graph[start_index + result.len()].distance = OrderedFloat(f32::MAX);
             }
         } else {
-            (0..max_neighbors).for_each(|i| {
-                if pruned_graph[i + start_index].distance.into_inner() != f32::MAX {
+            for i in 0..max_neighbors {
+                if pruned_graph[i + start_index].distance != OrderedFloat(f32::MAX) {
                     return;
                 }
-                pruned_graph[i + start_index] = neighbor_node.clone();
+
+                pruned_graph[start_index + i] = neighbor_node.clone();
                 if (i + 1) < max_neighbors {
-                    pruned_graph[i + start_index].distance = OrderedFloat(f32::MAX);
+                    pruned_graph[start_index + i + 1].distance = OrderedFloat(f32::MAX);
                 }
-            });
+            }
         }
     }
 }
