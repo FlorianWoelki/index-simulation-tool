@@ -18,7 +18,39 @@ impl SparseVector {
         match metric {
             DistanceMetric::Euclidean => self.euclidean_distance(other),
             DistanceMetric::Cosine => 1.0 - self.cosine_similarity(other),
+            DistanceMetric::Jaccard => 1.0 - self.jaccard_similarity(other),
         }
+    }
+
+    pub fn jaccard_similarity(&self, other: &SparseVector) -> f32 {
+        let mut p = 0;
+        let mut q = 0;
+        let mut intersection = 0;
+        let mut union = 0;
+
+        while p < self.indices.len() && q < other.indices.len() {
+            if self.indices[p] == other.indices[q] {
+                intersection += 1;
+                union += 1;
+                p += 1;
+                q += 1;
+            } else if self.indices[p] < other.indices[q] {
+                union += 1;
+                p += 1;
+            } else {
+                union += 1;
+                q += 1;
+            }
+        }
+
+        union += self.indices.len() - p;
+        union += other.indices.len() - q;
+
+        if union == 0 {
+            return 1.0;
+        }
+
+        intersection as f32 / union as f32
     }
 
     pub fn euclidean_distance(&self, other: &SparseVector) -> f32 {

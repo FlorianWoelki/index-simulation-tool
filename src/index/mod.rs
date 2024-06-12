@@ -15,6 +15,7 @@ pub mod simhash;
 pub enum DistanceMetric {
     Euclidean,
     Cosine,
+    Jaccard,
 }
 
 impl Debug for DistanceMetric {
@@ -22,6 +23,7 @@ impl Debug for DistanceMetric {
         match self {
             DistanceMetric::Euclidean => write!(f, "Euclidean"),
             DistanceMetric::Cosine => write!(f, "Cosine"),
+            DistanceMetric::Jaccard => write!(f, "Jaccard"),
         }
     }
 }
