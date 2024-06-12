@@ -5,6 +5,8 @@ use rand::{rngs::StdRng, seq::IteratorRandom, SeedableRng};
 
 use crate::data::{QueryResult, SparseVector};
 
+use super::DistanceMetric;
+
 pub struct NSWIndex {
     vectors: Vec<SparseVector>,
     graph: HashMap<usize, HashSet<usize>>,
@@ -12,16 +14,23 @@ pub struct NSWIndex {
     ef_construction: usize,
     /// Controls the number of neighbors considered during the search phase.
     ef_search: usize,
+    metric: DistanceMetric,
     random_seed: u64,
 }
 
 impl NSWIndex {
-    pub fn new(ef_construction: usize, ef_search: usize, random_seed: u64) -> Self {
+    pub fn new(
+        ef_construction: usize,
+        ef_search: usize,
+        metric: DistanceMetric,
+        random_seed: u64,
+    ) -> Self {
         NSWIndex {
             vectors: Vec::new(),
             graph: HashMap::new(),
             ef_construction,
             ef_search,
+            metric,
             random_seed,
         }
     }
@@ -57,8 +66,8 @@ impl NSWIndex {
 
             while let Some(&c) = candidates.iter().min_by(|&&x, &&y| {
                 query
-                    .euclidean_distance(&self.vectors[x])
-                    .partial_cmp(&query.euclidean_distance(&self.vectors[y]))
+                    .distance(&self.vectors[x], &self.metric)
+                    .partial_cmp(&query.distance(&self.vectors[y], &self.metric))
                     .unwrap()
             }) {
                 candidates.remove(&c);
@@ -71,10 +80,10 @@ impl NSWIndex {
                 result.insert(c);
 
                 if result.len() > k {
-                    let d1 = query.euclidean_distance(&self.vectors[c]);
+                    let d1 = query.distance(&self.vectors[c], &self.metric);
                     let d2 = result
                         .iter()
-                        .map(|&x| query.euclidean_distance(&self.vectors[x]))
+                        .map(|&x| query.distance(&self.vectors[x], &self.metric))
                         .max_by(|a, b| a.partial_cmp(b).unwrap())
                         .unwrap();
 
@@ -96,8 +105,8 @@ impl NSWIndex {
         let mut result_vec: Vec<usize> = result.into_iter().collect();
         result_vec.sort_by(|&x, &y| {
             query
-                .euclidean_distance(&self.vectors[x])
-                .partial_cmp(&query.euclidean_distance(&self.vectors[y]))
+                .distance(&self.vectors[x], &self.metric)
+                .partial_cmp(&query.distance(&self.vectors[y], &self.metric))
                 .unwrap()
         });
         result_vec.truncate(k);
@@ -115,7 +124,7 @@ impl NSWIndex {
             .into_iter()
             .map(|idx| QueryResult {
                 index: idx,
-                score: OrderedFloat(query_vector.euclidean_distance(&self.vectors[idx])),
+                score: OrderedFloat(query_vector.distance(&self.vectors[idx], &self.metric)),
             })
             .collect()
     }
@@ -131,7 +140,7 @@ mod tests {
     #[test]
     fn test_nsw_index_simple() {
         let random_seed = 42;
-        let mut index = NSWIndex::new(10, 5, random_seed);
+        let mut index = NSWIndex::new(10, 5, DistanceMetric::Euclidean, random_seed);
 
         let vectors = vec![
             SparseVector {
@@ -171,7 +180,7 @@ mod tests {
     #[test]
     fn test_nsw_index_complex() {
         let random_seed = thread_rng().gen::<u64>();
-        let mut index = NSWIndex::new(200, 200, random_seed);
+        let mut index = NSWIndex::new(200, 200, DistanceMetric::Euclidean, random_seed);
 
         let mut vectors = vec![];
         for i in 0..100 {

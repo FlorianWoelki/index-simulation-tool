@@ -1,5 +1,7 @@
 use ordered_float::OrderedFloat;
 
+use crate::index::DistanceMetric;
+
 pub mod generator_dense;
 pub mod generator_sparse;
 pub mod ms_marco;
@@ -12,6 +14,13 @@ pub struct SparseVector {
 }
 
 impl SparseVector {
+    pub fn distance(&self, other: &SparseVector, metric: &DistanceMetric) -> f32 {
+        match metric {
+            DistanceMetric::Euclidean => self.euclidean_distance(other),
+            DistanceMetric::Cosine => 1.0 - self.cosine_similarity(other),
+        }
+    }
+
     pub fn euclidean_distance(&self, other: &SparseVector) -> f32 {
         let mut p = 0;
         let mut q = 0;
@@ -44,6 +53,47 @@ impl SparseVector {
 
         distance.sqrt()
     }
+
+    pub fn cosine_similarity(&self, other: &SparseVector) -> f32 {
+        let mut dot_product = 0.0f32;
+        let mut magnitude_a = 0.0f32;
+        let mut magnitude_b = 0.0f32;
+
+        let mut ai = 0;
+        let mut bi = 0;
+
+        while ai < self.indices.len() && bi < other.indices.len() {
+            if self.indices[ai] == other.indices[bi] {
+                dot_product += (self.values[ai] * other.values[bi]).into_inner();
+                magnitude_a += (self.values[ai] * self.values[ai]).into_inner();
+                magnitude_b += (other.values[bi] * other.values[bi]).into_inner();
+                ai += 1;
+                bi += 1;
+            } else if self.indices[ai] < other.indices[bi] {
+                magnitude_a += (self.values[ai] * self.values[ai]).into_inner();
+                ai += 1;
+            } else {
+                magnitude_b += (other.values[bi] * other.values[bi]).into_inner();
+                bi += 1;
+            }
+        }
+
+        while ai < self.indices.len() {
+            magnitude_a += (self.values[ai] * self.values[ai]).into_inner();
+            ai += 1;
+        }
+
+        while bi < other.indices.len() {
+            magnitude_b += (other.values[bi] * other.values[bi]).into_inner();
+            bi += 1;
+        }
+
+        if magnitude_a == 0.0 || magnitude_b == 0.0 {
+            return 0.0;
+        }
+
+        dot_product / (magnitude_a.sqrt() * magnitude_b.sqrt())
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -64,5 +114,36 @@ impl PartialOrd for QueryResult {
 impl Ord for QueryResult {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.score.cmp(&other.score)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_euclidean_distance() {
+        let v1 = SparseVector {
+            indices: vec![0, 2, 3],
+            values: vec![OrderedFloat(1.0), OrderedFloat(2.0), OrderedFloat(3.0)],
+        };
+        let v2 = SparseVector {
+            indices: vec![0, 1, 2],
+            values: vec![OrderedFloat(4.0), OrderedFloat(5.0), OrderedFloat(6.0)],
+        };
+        assert_eq!(v1.euclidean_distance(&v2), 7.6811457);
+    }
+
+    #[test]
+    fn test_cosine_similarity() {
+        let v1 = SparseVector {
+            indices: vec![0, 2, 3],
+            values: vec![OrderedFloat(1.0), OrderedFloat(2.0), OrderedFloat(3.0)],
+        };
+        let v2 = SparseVector {
+            indices: vec![0, 1, 2],
+            values: vec![OrderedFloat(4.0), OrderedFloat(5.0), OrderedFloat(6.0)],
+        };
+        assert_eq!(v1.cosine_similarity(&v2), 0.4873159);
     }
 }
