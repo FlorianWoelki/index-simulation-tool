@@ -170,7 +170,8 @@ mod tests {
         let dim = 100;
         let range = (0.0, 1.0);
         let sparsity = 0.5;
-        let mut generator = SparseDataGenerator::new(dim, count, range, sparsity);
+        let mut generator =
+            SparseDataGenerator::new(dim, count, range, sparsity, DistanceMetric::Euclidean);
         let (vectors, query_vectors, groundtruth_vectors) = generator.generate().await;
 
         assert_eq!(vectors.len(), count);
@@ -217,7 +218,8 @@ mod tests {
         let dim = 100;
         let range = (0.0, 1.0);
         let sparsity = 0.8;
-        let mut generator = SparseDataGenerator::new(dim, count, range, sparsity);
+        let mut generator =
+            SparseDataGenerator::new(dim, count, range, sparsity, DistanceMetric::Euclidean);
         let (vectors, _, _) = generator.generate().await;
 
         assert_eq!(vectors.len(), count);
@@ -243,7 +245,8 @@ mod tests {
         let range = (0.0, 1.0);
         let sparsity = 0.5;
         let k = 10;
-        let mut generator = SparseDataGenerator::new(dim, count, range, sparsity);
+        let mut generator =
+            SparseDataGenerator::new(dim, count, range, sparsity, DistanceMetric::Euclidean);
         let (vectors, query_vectors, groundtruth_vectors) = generator.generate().await;
 
         assert_eq!(query_vectors.len(), count / 10);
@@ -294,7 +297,7 @@ mod tests {
             },
         ];
 
-        let generator = SparseDataGenerator::new(0, 0, (0.0, 1.0), 0.0);
+        let generator = SparseDataGenerator::new(0, 0, (0.0, 1.0), 0.0, DistanceMetric::Euclidean);
         let groundtruth_vectors = generator.find_nearest_neighbors(&vectors, &query_vector, 3);
 
         assert_eq!(groundtruth_vectors, expected_groundtruth);
