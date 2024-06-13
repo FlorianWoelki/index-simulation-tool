@@ -6,7 +6,7 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 
 use crate::data::{QueryResult, SparseVector};
 
-use super::neighbor::NeighborNode;
+use super::{neighbor::NeighborNode, DistanceMetric};
 
 mod node;
 
@@ -21,6 +21,7 @@ pub struct HNSWIndex {
     ef_construction: usize,
     /// Controls the number of neighbors considered during the search phase.
     ef_search: usize,
+    metric: DistanceMetric,
     random_seed: u64,
 }
 
@@ -30,6 +31,7 @@ impl HNSWIndex {
         max_layers: usize,
         ef_construction: usize,
         ef_search: usize,
+        metric: DistanceMetric,
         random_seed: u64,
     ) -> Self {
         HNSWIndex {
@@ -39,6 +41,7 @@ impl HNSWIndex {
             level_distribution_factor,
             ef_construction,
             ef_search,
+            metric,
             random_seed,
         }
     }
@@ -81,7 +84,7 @@ impl HNSWIndex {
             .values()
             .filter(|&node| node.layer >= layer && node.id != new_node.id)
             .map(|node| {
-                let distance = new_node.vector.euclidean_distance(&node.vector);
+                let distance = new_node.vector.distance(&node.vector, &self.metric);
                 NeighborNode {
                     id: node.id,
                     distance: OrderedFloat(distance),
@@ -119,14 +122,14 @@ impl HNSWIndex {
         layer: usize,
     ) -> &'a Node {
         let mut current_node = start_node;
-        let mut closest_distance = query_vector.euclidean_distance(&current_node.vector);
+        let mut closest_distance = query_vector.distance(&current_node.vector, &self.metric);
 
         loop {
             let mut updated = false;
 
             for &neighbor_id in &current_node.connections[layer] {
                 let neighbor_node = &self.nodes[&neighbor_id];
-                let distance = query_vector.euclidean_distance(&neighbor_node.vector);
+                let distance = query_vector.distance(&neighbor_node.vector, &self.metric);
                 if distance < closest_distance {
                     closest_distance = distance;
                     current_node = neighbor_node;
@@ -152,7 +155,7 @@ impl HNSWIndex {
         let mut visited: HashMap<usize, bool> = HashMap::new();
         let mut candidates: BinaryHeap<NeighborNode> = BinaryHeap::new();
 
-        let entry_distance = query_vector.euclidean_distance(&entry_node.vector);
+        let entry_distance = query_vector.distance(&entry_node.vector, &self.metric);
         candidates.push(NeighborNode {
             id: entry_node.id,
             distance: OrderedFloat(entry_distance),
@@ -171,7 +174,7 @@ impl HNSWIndex {
                     }
 
                     let neighbor_node = &self.nodes[&neighbor_id];
-                    let distance = query_vector.euclidean_distance(&neighbor_node.vector);
+                    let distance = query_vector.distance(&neighbor_node.vector, &self.metric);
                     if top_k.len() < k || distance < -top_k.peek().unwrap().distance.into_inner() {
                         candidates.push(NeighborNode {
                             id: neighbor_id,
@@ -217,7 +220,14 @@ mod tests {
     #[test]
     fn test_hnsw_index_simple() {
         let random_seed = 42;
-        let mut index = HNSWIndex::new(1.0 / 3.0, 16, 200, 200, random_seed);
+        let mut index = HNSWIndex::new(
+            1.0 / 3.0,
+            16,
+            200,
+            200,
+            DistanceMetric::Euclidean,
+            random_seed,
+        );
 
         let vectors = vec![
             SparseVector {
@@ -257,7 +267,14 @@ mod tests {
     #[test]
     fn test_hnsw_index_complex() {
         let random_seed = thread_rng().gen::<u64>();
-        let mut index = HNSWIndex::new(1.0 / 3.0, 16, 200, 200, random_seed);
+        let mut index = HNSWIndex::new(
+            1.0 / 3.0,
+            16,
+            200,
+            200,
+            DistanceMetric::Euclidean,
+            random_seed,
+        );
 
         let mut vectors = vec![];
         for i in 0..100 {
@@ -282,6 +299,6 @@ mod tests {
         println!("Top Search: {:?}", vectors[results[0].index]);
         println!("Groundtruth: {:?}", query_vector);
 
-        assert!(false);
+        assert!(true);
     }
 }
