@@ -6,7 +6,9 @@ use crate::{
 use ordered_float::OrderedFloat;
 use std::vec;
 
-struct PQIndex {
+use super::DistanceMetric;
+
+pub struct PQIndex {
     num_subvectors: usize,
     num_clusters: usize,
     vectors: Vec<SparseVector>,
@@ -14,6 +16,7 @@ struct PQIndex {
     encoded_codes: Vec<Vec<usize>>,
     iterations: usize,
     tolerance: f32,
+    metric: DistanceMetric,
     random_seed: u64,
 }
 
@@ -23,6 +26,7 @@ impl PQIndex {
         num_clusters: usize,
         iterations: usize,
         tolerance: f32,
+        metric: DistanceMetric,
         random_seed: u64,
     ) -> Self {
         PQIndex {
@@ -31,24 +35,27 @@ impl PQIndex {
             random_seed,
             iterations,
             tolerance,
+            metric,
             vectors: Vec::new(),
             codewords: Vec::new(),
             encoded_codes: Vec::new(),
         }
     }
 
-    pub fn add_vector(&mut self, vector: SparseVector) {
-        self.vectors.push(vector);
+    pub fn add_vector(&mut self, vector: &SparseVector) {
+        self.vectors.push(vector.clone());
     }
 
     pub fn build(&mut self) {
-        let sub_vec_dims = self.vectors[0].indices.len() / self.num_subvectors;
         self.codewords = Vec::new();
         for m in 0..self.num_subvectors {
             let mut sub_vectors_m: Vec<SparseVector> = Vec::new();
             for vec in &self.vectors {
-                let indices = vec.indices[(m * sub_vec_dims)..((m + 1) * sub_vec_dims)].to_vec();
-                let values = vec.values[(m * sub_vec_dims)..((m + 1) * sub_vec_dims)].to_vec();
+                let sub_vec_dims = vec.indices.len() / self.num_subvectors;
+                let start_idx = m * sub_vec_dims;
+                let end_idx = ((m + 1) * sub_vec_dims).min(vec.indices.len());
+                let indices = vec.indices[start_idx..end_idx].to_vec();
+                let values = vec.values[start_idx..end_idx].to_vec();
                 sub_vectors_m.push(SparseVector { indices, values });
             }
 
@@ -67,22 +74,22 @@ impl PQIndex {
 
     pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let mut heap: MinHeap<QueryResult> = MinHeap::new();
-        let sub_vec_dims = self.vectors[0].indices.len() / self.num_subvectors;
+        let sub_vec_dims = query_vector.indices.len() / self.num_subvectors;
 
         let mut scores = vec![0.0; self.encoded_codes.len()];
         for (n, code) in self.encoded_codes.iter().enumerate() {
             let mut distance = 0.0;
             for m in 0..self.num_subvectors {
-                let query_sub_indices =
-                    query_vector.indices[m * sub_vec_dims..((m + 1) * sub_vec_dims)].to_vec();
-                let query_sub_values =
-                    query_vector.values[m * sub_vec_dims..((m + 1) * sub_vec_dims)].to_vec();
+                let start_idx = m * sub_vec_dims;
+                let end_idx = ((m + 1) * sub_vec_dims).min(query_vector.indices.len());
+                let query_sub_indices = query_vector.indices[start_idx..end_idx].to_vec();
+                let query_sub_values = query_vector.values[start_idx..end_idx].to_vec();
 
                 let query_sub = SparseVector {
                     indices: query_sub_indices,
                     values: query_sub_values,
                 };
-                let sub_distance = &query_sub.euclidean_distance(&self.codewords[m][code[m]]);
+                let sub_distance = &query_sub.distance(&self.codewords[m][code[m]], &self.metric);
                 distance += sub_distance;
             }
 
@@ -114,14 +121,15 @@ impl PQIndex {
     }
 
     fn encode(&self, vectors: &Vec<SparseVector>) -> Vec<Vec<usize>> {
-        let sub_vec_dims: usize = vectors[0].indices.len() / self.num_subvectors;
-
         let mut vector_codes: Vec<Vec<usize>> = Vec::new();
         for vec in vectors {
+            let sub_vec_dims: usize = vec.indices.len() / self.num_subvectors;
             let mut subvectors: Vec<SparseVector> = Vec::new();
             for m in 0..self.num_subvectors {
-                let indices = vec.indices[(m * sub_vec_dims)..((m + 1) * sub_vec_dims)].to_vec();
-                let values = vec.values[(m * sub_vec_dims)..((m + 1) * sub_vec_dims)].to_vec();
+                let start_idx = m * sub_vec_dims;
+                let end_idx = ((m + 1) * sub_vec_dims).min(vec.indices.len());
+                let indices = vec.indices[start_idx..end_idx].to_vec();
+                let values = vec.values[start_idx..end_idx].to_vec();
                 subvectors.push(SparseVector { indices, values });
             }
             vector_codes.push(self.vector_quantize(&subvectors));
@@ -138,7 +146,7 @@ impl PQIndex {
             let mut min_distance_code_index = 0;
 
             for (k, code) in self.codewords[m].iter().enumerate() {
-                let distance = subvector.euclidean_distance(&code);
+                let distance = subvector.distance(&code, &self.metric);
                 if distance < min_distance {
                     min_distance = distance;
                     min_distance_code_index = k;
@@ -163,7 +171,14 @@ mod tests {
         let num_subvectors = 2;
         let num_clusters = 3;
         let iterations = 10;
-        let mut pq_index = PQIndex::new(num_subvectors, num_clusters, iterations, 0.01, 42);
+        let mut pq_index = PQIndex::new(
+            num_subvectors,
+            num_clusters,
+            iterations,
+            0.01,
+            DistanceMetric::Euclidean,
+            42,
+        );
 
         let vectors = vec![
             SparseVector {
@@ -180,7 +195,7 @@ mod tests {
             },
         ];
 
-        for vector in vectors {
+        for vector in &vectors {
             pq_index.add_vector(vector);
         }
 
@@ -202,7 +217,14 @@ mod tests {
         let num_subvectors = 2;
         let num_clusters = 2;
         let iterations = 10;
-        let mut pq_index = PQIndex::new(num_subvectors, num_clusters, iterations, 0.01, 42);
+        let mut pq_index = PQIndex::new(
+            num_subvectors,
+            num_clusters,
+            iterations,
+            0.01,
+            DistanceMetric::Euclidean,
+            42,
+        );
 
         pq_index.codewords = vec![
             vec![
@@ -260,7 +282,14 @@ mod tests {
         let num_clusters = 10;
         let iterations = 256;
         let random_seed = 42;
-        let mut index = PQIndex::new(num_subvectors, num_clusters, iterations, 0.01, random_seed);
+        let mut index = PQIndex::new(
+            num_subvectors,
+            num_clusters,
+            iterations,
+            0.01,
+            DistanceMetric::Euclidean,
+            random_seed,
+        );
 
         let mut vectors = vec![];
         for i in 0..100 {
@@ -271,7 +300,7 @@ mod tests {
         }
 
         for vector in &vectors {
-            index.add_vector(vector.clone());
+            index.add_vector(vector);
         }
 
         index.build();
