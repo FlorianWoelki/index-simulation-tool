@@ -9,6 +9,7 @@
 - [x] Implement HNSW Sparse
 - [ ] Implement Annoy
 - [x] Implement PQ Index
+  - [ ] Investigate correctness of PQ index
 - [ ] Cleanup repository
 
 ## Optional
