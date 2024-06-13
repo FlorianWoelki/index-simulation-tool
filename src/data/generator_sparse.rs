@@ -6,6 +6,8 @@ use rand::{
     thread_rng,
 };
 
+use crate::index::DistanceMetric;
+
 use super::SparseVector;
 
 pub struct SparseDataGenerator {
@@ -13,6 +15,7 @@ pub struct SparseDataGenerator {
     count: usize,
     range: (f32, f32),
     sparsity: f32,
+    metric: DistanceMetric,
     system: sysinfo::System,
 }
 
@@ -25,16 +28,24 @@ impl SparseDataGenerator {
     /// * `count` - The number of vectors to generate.
     /// * `range` - The range of values for non-zero elements.
     /// * `sparsity` - The probability of an element being zero (sparsity factor). The higher the value, the sparser the data.
+    /// * `metric` - The DistanceMetric that will be used to fetch the groundtruth vectors.
     ///
     /// # Returns
     ///
     /// A new instance of `SparseDataGenerator`.
-    pub fn new(dim: usize, count: usize, range: (f32, f32), sparsity: f32) -> Self {
+    pub fn new(
+        dim: usize,
+        count: usize,
+        range: (f32, f32),
+        sparsity: f32,
+        metric: DistanceMetric,
+    ) -> Self {
         SparseDataGenerator {
             dim,
             count,
             range,
             sparsity,
+            metric,
             system: sysinfo::System::new(),
         }
     }
@@ -131,7 +142,7 @@ impl SparseDataGenerator {
         let mut heap = BinaryHeap::new();
 
         for vector in data {
-            let distance = self.euclidean_distance(&query, &vector);
+            let distance = query.distance(&vector, &self.metric);
             if heap.len() < k {
                 heap.push((OrderedFloat(distance), vector.clone()));
             } else if let Some((OrderedFloat(max_distance), _)) = heap.peek() {
@@ -147,31 +158,10 @@ impl SparseDataGenerator {
             .map(|(_, v)| v)
             .collect::<Vec<_>>()
     }
-
-    fn euclidean_distance(&self, a: &SparseVector, b: &SparseVector) -> f32 {
-        let mut distance = 0.0;
-
-        for (i, val) in a.values.iter().enumerate() {
-            let ai = a.indices[i];
-            let bi = b
-                .indices
-                .binary_search(&ai)
-                .ok()
-                .map(|idx| b.values[idx])
-                .unwrap_or(OrderedFloat(0.0));
-            distance += (val.into_inner() - bi.into_inner()).powi(2);
-        }
-
-        distance.sqrt()
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use sysinfo::Pid;
-
-    use crate::data::QueryResult;
-
     use super::*;
 
     #[tokio::test]
