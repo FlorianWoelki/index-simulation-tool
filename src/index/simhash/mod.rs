@@ -14,6 +14,10 @@ pub struct SimHashIndex {
 
 impl SimHashIndex {
     pub fn new(hash_bits: usize) -> Self {
+        assert!(
+            hash_bits >= 1 && hash_bits <= 64,
+            "hash_bits must be between 1 and 64"
+        );
         SimHashIndex {
             vectors: Vec::new(),
             hash_bits,
