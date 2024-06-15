@@ -4,6 +4,7 @@ use crate::data::{QueryResult, SparseVector};
 
 pub mod annoy;
 pub mod hnsw;
+pub mod ivfpq;
 pub mod linscan;
 pub mod minhash;
 pub mod neighbor;
