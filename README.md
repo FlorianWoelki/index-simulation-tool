@@ -8,7 +8,7 @@
 - [x] Implement LinScan
 - [x] Implement HNSW Sparse
 - [ ] Implement Annoy
-- [ ] Implement IVFPQ
+- [x] Implement IVFPQ
   - [ ] Investigate correctness of IVFPQ Index
 - [x] Implement PQ Index
   - [ ] Investigate correctness of PQ index
