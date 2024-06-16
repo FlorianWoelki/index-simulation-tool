@@ -12,6 +12,9 @@
   - [ ] Investigate correctness of IVFPQ Index
 - [x] Implement PQ Index
   - [ ] Investigate correctness of PQ index
+- [ ] Implement dimensionality reduction mechanisms
+  - [x] PCA
+  - [ ] t-SNE
 - [ ] Cleanup repository
 
 ## Optional
