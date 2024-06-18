@@ -13,10 +13,10 @@ pub struct IVFPQIndex {
     num_clusters: usize,
     num_coarse_clusters: usize,
     vectors: Vec<SparseVector>,
-    coarse_codewords: Vec<SparseVector>,
-    codewords: Vec<Vec<Vec<SparseVector>>>,
-    coarse_encoded_codes: Vec<usize>,
-    encoded_codes: Vec<Vec<usize>>,
+    coarse_centroids: Vec<SparseVector>,
+    sub_quantizers: Vec<Vec<Vec<SparseVector>>>,
+    coarse_codes: Vec<usize>,
+    pq_codes: Vec<Vec<usize>>,
     iterations: usize,
     tolerance: f32,
     metric: DistanceMetric,
@@ -42,10 +42,10 @@ impl IVFPQIndex {
             tolerance,
             metric,
             vectors: Vec::new(),
-            coarse_codewords: Vec::new(),
-            codewords: Vec::new(),
-            coarse_encoded_codes: Vec::new(),
-            encoded_codes: Vec::new(),
+            coarse_centroids: Vec::new(),
+            sub_quantizers: Vec::new(),
+            coarse_codes: Vec::new(),
+            pq_codes: Vec::new(),
         }
     }
 
@@ -54,20 +54,23 @@ impl IVFPQIndex {
     }
 
     pub fn build(&mut self) {
-        self.coarse_codewords = kmeans(
+        // Perform coarse quantization using k-means clustering while assigning
+        // each vector to the nearest centroid.
+        self.coarse_centroids = kmeans(
             &self.vectors,
             self.num_coarse_clusters,
             self.iterations,
             self.tolerance,
             self.random_seed,
         );
+        self.coarse_codes = self.encode_coarse(&self.vectors);
 
-        self.coarse_encoded_codes = self.encode_coarse(&self.vectors);
-
-        self.codewords = vec![Vec::new(); self.num_coarse_clusters];
+        // Perform product quantization within each Voronoi cell where each sub-vector
+        // is quantized separately.
+        self.sub_quantizers = vec![Vec::new(); self.num_coarse_clusters];
         for c in 0..self.num_coarse_clusters {
             let mut cluster_vectors: Vec<SparseVector> = Vec::new();
-            for (i, &code) in self.coarse_encoded_codes.iter().enumerate() {
+            for (i, &code) in self.coarse_codes.iter().enumerate() {
                 if code == c {
                     cluster_vectors.push(self.vectors[i].clone());
                 }
@@ -98,15 +101,15 @@ impl IVFPQIndex {
                 );
                 cluster_codewords.push(codewords_m);
             }
-            self.codewords[c] = cluster_codewords;
+            self.sub_quantizers[c] = cluster_codewords;
         }
 
-        self.encoded_codes = self.encode(&self.vectors);
+        self.pq_codes = self.encode(&self.vectors);
     }
 
     pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let mut coarse_distances: Vec<(usize, f32)> = Vec::new();
-        for (i, coarse_codeword) in self.coarse_codewords.iter().enumerate() {
+        for (i, coarse_codeword) in self.coarse_centroids.iter().enumerate() {
             let distance = query_vector.distance(&coarse_codeword, &self.metric);
             coarse_distances.push((i, distance));
         }
@@ -116,7 +119,7 @@ impl IVFPQIndex {
         let sub_vec_dims = query_vector.indices.len() / self.num_subvectors;
 
         for &(coarse_index, _) in coarse_distances.iter().take(k) {
-            for (n, &coarse_code) in self.coarse_encoded_codes.iter().enumerate() {
+            for (n, &coarse_code) in self.coarse_codes.iter().enumerate() {
                 if coarse_code != coarse_index {
                     continue;
                 }
@@ -133,7 +136,7 @@ impl IVFPQIndex {
                         values: query_sub_values,
                     };
                     let sub_distance = &query_sub.distance(
-                        &self.codewords[coarse_index][m][self.encoded_codes[n][m]],
+                        &self.sub_quantizers[coarse_index][m][self.pq_codes[n][m]],
                         &self.metric,
                     );
                     distance += sub_distance;
@@ -169,7 +172,7 @@ impl IVFPQIndex {
             let mut min_distance = f32::MAX;
             let mut min_distance_code_index = 0;
 
-            for (i, coarse_codeword) in self.coarse_codewords.iter().enumerate() {
+            for (i, coarse_codeword) in self.coarse_centroids.iter().enumerate() {
                 let distance = vec.distance(&coarse_codeword, &self.metric);
                 if distance < min_distance {
                     min_distance = distance;
@@ -186,7 +189,7 @@ impl IVFPQIndex {
     fn encode(&self, vectors: &Vec<SparseVector>) -> Vec<Vec<usize>> {
         let mut vector_codes: Vec<Vec<usize>> = Vec::new();
         for (i, vec) in vectors.iter().enumerate() {
-            let coarse_code = self.coarse_encoded_codes[i];
+            let coarse_code = self.coarse_codes[i];
             let sub_vec_dims: usize = vec.indices.len() / self.num_subvectors;
             let mut subvectors: Vec<SparseVector> = Vec::new();
             for m in 0..self.num_subvectors {
@@ -209,7 +212,7 @@ impl IVFPQIndex {
             let mut min_distance = f32::MAX;
             let mut min_distance_code_index = 0;
 
-            for (k, code) in self.codewords[coarse_code][m].iter().enumerate() {
+            for (k, code) in self.sub_quantizers[coarse_code][m].iter().enumerate() {
                 let distance = subvector.distance(&code, &self.metric);
                 if distance < min_distance {
                     min_distance = distance;
@@ -288,7 +291,7 @@ mod tests {
         let random_seed = thread_rng().gen::<u64>();
         let num_subvectors = 2;
         let num_clusters = 10;
-        let num_coarse_clusters = 20;
+        let num_coarse_clusters = 40;
         let iterations = 256;
         let mut index = IVFPQIndex::new(
             num_subvectors,
