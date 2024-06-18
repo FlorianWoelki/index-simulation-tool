@@ -9,14 +9,23 @@ use std::vec;
 use super::DistanceMetric;
 
 pub struct PQIndex {
+    /// Number of subvectors to divide each vector into for quantization.
     num_subvectors: usize,
+    /// Number of clusters (codewords) per subvector for quantization.
     num_clusters: usize,
+    /// Collection of sparse vectors to be indexed.
     vectors: Vec<SparseVector>,
+    /// Codewords for each subvector, used for encoding and search.
     codewords: Vec<Vec<SparseVector>>,
+    /// Encoded codes for each vector, representing the closest codeword for each subvector
     encoded_codes: Vec<Vec<usize>>,
+    /// Number of iterations for k-means clustering during codeword generation.
     iterations: usize,
+    /// Tolerance for k-means convergence.
     tolerance: f32,
+    /// Distance metric for similarity measurement between codewords and vectors.
     metric: DistanceMetric,
+    /// Random seed for reproducibility.
     random_seed: u64,
 }
 
@@ -51,9 +60,12 @@ impl PQIndex {
         for m in 0..self.num_subvectors {
             let mut sub_vectors_m: Vec<SparseVector> = Vec::new();
             for vec in &self.vectors {
+                // Divides each vector into subvectors to perform quantization on smaller
+                // subvectors independently.
                 let sub_vec_dims = vec.indices.len() / self.num_subvectors;
-                let start_idx = m * sub_vec_dims;
-                let end_idx = ((m + 1) * sub_vec_dims).min(vec.indices.len());
+                let remaining_dims = vec.indices.len() % self.num_subvectors;
+                let start_idx = m * sub_vec_dims + m.min(remaining_dims);
+                let end_idx = start_idx + sub_vec_dims + (m < remaining_dims) as usize;
                 let indices = vec.indices[start_idx..end_idx].to_vec();
                 let values = vec.values[start_idx..end_idx].to_vec();
                 sub_vectors_m.push(SparseVector { indices, values });
@@ -75,13 +87,16 @@ impl PQIndex {
     pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let mut heap: MinHeap<QueryResult> = MinHeap::new();
         let sub_vec_dims = query_vector.indices.len() / self.num_subvectors;
+        let remaining_dims = query_vector.indices.len() % self.num_subvectors;
 
         let mut scores = vec![0.0; self.encoded_codes.len()];
         for (n, code) in self.encoded_codes.iter().enumerate() {
             let mut distance = 0.0;
             for m in 0..self.num_subvectors {
-                let start_idx = m * sub_vec_dims;
-                let end_idx = ((m + 1) * sub_vec_dims).min(query_vector.indices.len());
+                // Divides the query vector into subvectors to compute distances between query
+                // subvectors and codewords.
+                let start_idx = m * sub_vec_dims + m.min(remaining_dims);
+                let end_idx = start_idx + sub_vec_dims + (m < remaining_dims) as usize;
                 let query_sub_indices = query_vector.indices[start_idx..end_idx].to_vec();
                 let query_sub_values = query_vector.values[start_idx..end_idx].to_vec();
 
@@ -89,6 +104,7 @@ impl PQIndex {
                     indices: query_sub_indices,
                     values: query_sub_values,
                 };
+                // Computes the distance between the query subvector and the corresponding codeword.
                 let sub_distance = &query_sub.distance(&self.codewords[m][code[m]], &self.metric);
                 distance += sub_distance;
             }
@@ -123,11 +139,14 @@ impl PQIndex {
     fn encode(&self, vectors: &Vec<SparseVector>) -> Vec<Vec<usize>> {
         let mut vector_codes: Vec<Vec<usize>> = Vec::new();
         for vec in vectors {
-            let sub_vec_dims: usize = vec.indices.len() / self.num_subvectors;
+            let sub_vec_dims = vec.indices.len() / self.num_subvectors;
+            let remaining_dims = vec.indices.len() % self.num_subvectors;
             let mut subvectors: Vec<SparseVector> = Vec::new();
             for m in 0..self.num_subvectors {
-                let start_idx = m * sub_vec_dims;
-                let end_idx = ((m + 1) * sub_vec_dims).min(vec.indices.len());
+                // Divides each vector into subvectors to perform quantization on smaller
+                // subvectors independently.
+                let start_idx = m * sub_vec_dims + m.min(remaining_dims);
+                let end_idx = start_idx + sub_vec_dims + (m < remaining_dims) as usize;
                 let indices = vec.indices[start_idx..end_idx].to_vec();
                 let values = vec.values[start_idx..end_idx].to_vec();
                 subvectors.push(SparseVector { indices, values });
@@ -146,6 +165,7 @@ impl PQIndex {
             let mut min_distance_code_index = 0;
 
             for (k, code) in self.codewords[m].iter().enumerate() {
+                // Finds the closest codeword to the subvector based on the distance metric.
                 let distance = subvector.distance(&code, &self.metric);
                 if distance < min_distance {
                     min_distance = distance;
@@ -314,6 +334,6 @@ mod tests {
         println!("Top Search: {:?}", vectors[results[0].index]);
         println!("Groundtruth: {:?}", query_vector);
 
-        assert!(true);
+        assert!(false);
     }
 }
