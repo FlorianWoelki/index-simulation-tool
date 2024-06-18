@@ -7,7 +7,7 @@
 - [x] Implement SimHash
 - [x] Implement LinScan
 - [x] Implement HNSW Sparse
-- [ ] Implement Annoy
+- [x] Implement Annoy
 - [x] Implement IVFPQ
   - [ ] Investigate correctness of IVFPQ Index
 - [x] Implement PQ Index
