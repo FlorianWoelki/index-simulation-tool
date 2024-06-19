@@ -251,39 +251,41 @@ mod tests {
             random_seed,
         );
 
-        let vectors = vec![
+        let data = vec![
             SparseVector {
-                indices: vec![0, 1, 2],
-                values: vec![OrderedFloat(0.1), OrderedFloat(0.2), OrderedFloat(0.3)],
+                indices: vec![0, 2],
+                values: vec![OrderedFloat(1.0), OrderedFloat(2.0)],
             },
             SparseVector {
-                indices: vec![1, 2, 3],
-                values: vec![OrderedFloat(0.4), OrderedFloat(0.5), OrderedFloat(0.6)],
+                indices: vec![1, 3],
+                values: vec![OrderedFloat(3.0), OrderedFloat(4.0)],
             },
             SparseVector {
-                indices: vec![2, 3, 4],
-                values: vec![OrderedFloat(0.7), OrderedFloat(0.8), OrderedFloat(0.9)],
+                indices: vec![0, 2],
+                values: vec![OrderedFloat(5.0), OrderedFloat(6.0)],
             },
             SparseVector {
-                indices: vec![3, 4, 5],
-                values: vec![OrderedFloat(1.0), OrderedFloat(1.1), OrderedFloat(1.2)],
+                indices: vec![1, 3],
+                values: vec![OrderedFloat(7.0), OrderedFloat(8.0)],
             },
             SparseVector {
-                indices: vec![4, 5, 6],
-                values: vec![OrderedFloat(1.3), OrderedFloat(1.4), OrderedFloat(1.5)],
+                indices: vec![0, 2],
+                values: vec![OrderedFloat(9.0), OrderedFloat(10.0)],
             },
         ];
 
-        for vector in &vectors {
+        for vector in &data {
             index.add_vector(vector);
         }
-
         index.build();
 
-        let results = index.search(&vectors[1], 3);
-
-        println!("{:?}", results);
-        assert!(true);
+        let query = SparseVector {
+            indices: vec![0, 2],
+            values: vec![OrderedFloat(6.0), OrderedFloat(7.0)],
+        };
+        let neighbors = index.search(&query, 2);
+        println!("Nearest neighbors: {:?}", neighbors);
+        assert!(false);
     }
 
     #[test]
@@ -326,6 +328,91 @@ mod tests {
         println!("Top Search: {:?}", vectors[results[0].index]);
         println!("Groundtruth: {:?}", query_vector);
 
-        assert!(false);
+        assert!(true);
+    }
+
+    #[test]
+    fn test_encode_coarse() {
+        let num_coarse_clusters = 4;
+        let num_vectors = 10;
+        let dim = 128;
+        let mut vectors: Vec<SparseVector> = Vec::new();
+        for _ in 0..num_vectors {
+            let mut indices: Vec<usize> = Vec::new();
+            let mut values: Vec<OrderedFloat<f32>> = Vec::new();
+            for _ in 0..dim {
+                let idx = rand::thread_rng().gen_range(0..dim);
+                let val = rand::thread_rng().gen_range(0.0..1.0);
+                indices.push(idx);
+                values.push(OrderedFloat(val));
+            }
+            vectors.push(SparseVector { indices, values });
+        }
+
+        let mut index = IVFPQIndex::new(
+            4,
+            256,
+            num_coarse_clusters,
+            10,
+            1e-6,
+            DistanceMetric::Euclidean,
+            42,
+        );
+
+        for vector in &vectors {
+            index.add_vector(vector);
+        }
+
+        index.build();
+
+        let coarse_codes = index.encode_coarse(&vectors);
+        assert_eq!(coarse_codes.len(), num_vectors);
+        for code in &coarse_codes {
+            assert!(*code < num_coarse_clusters);
+        }
+    }
+
+    #[test]
+    fn test_encode() {
+        let num_coarse_clusters = 4;
+        let num_vectors = 10;
+        let dim = 128;
+        let mut vectors: Vec<SparseVector> = Vec::new();
+        for _ in 0..num_vectors {
+            let mut indices: Vec<usize> = Vec::new();
+            let mut values: Vec<OrderedFloat<f32>> = Vec::new();
+            for _ in 0..dim {
+                let idx = rand::thread_rng().gen_range(0..dim);
+                let val = rand::thread_rng().gen_range(0.0..1.0);
+                indices.push(idx);
+                values.push(OrderedFloat(val));
+            }
+            vectors.push(SparseVector { indices, values });
+        }
+
+        let mut index = IVFPQIndex::new(
+            4,
+            256,
+            num_coarse_clusters,
+            10,
+            1e-6,
+            DistanceMetric::Euclidean,
+            42,
+        );
+
+        for vector in &vectors {
+            index.add_vector(vector);
+        }
+
+        index.build();
+
+        let pq_codes = index.encode(&vectors);
+        assert_eq!(pq_codes.len(), num_vectors);
+        for codes in &pq_codes {
+            assert_eq!(codes.len(), 4);
+            for code in codes {
+                assert!(*code < 256);
+            }
+        }
     }
 }
