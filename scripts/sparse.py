@@ -39,7 +39,8 @@ top_len = len(gt_indices[0])
 assert top_len == len(gt_scores[0])
 
 print("Ground truth contains %d queries" % gt_len)
-print(gt_indices[0])
+
+print("gt:", gt_indices[0])
 
 # https://storage.googleapis.com/ann-challenge-sparse-vectors/csr/base_small.csr.gz
 data = read_sparse_matrix("base_small.csr")
@@ -48,7 +49,6 @@ vec_count = data.shape[0]
 for i in range(0, vec_count):
     point = data[i]
     indices, values = csr_to_sparse_vector(point)
-    print(values)
     break
 
 # https://storage.googleapis.com/ann-challenge-sparse-vectors/csr/queries.dev.csr.gzip

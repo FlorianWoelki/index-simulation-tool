@@ -1,3 +1,8 @@
+# Hide some downloaded datasets
+base_small.csr
+base_small.dev.gt
+queries.dev.csr
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
