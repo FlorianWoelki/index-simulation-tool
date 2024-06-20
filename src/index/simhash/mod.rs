@@ -7,45 +7,98 @@ use crate::{
     data_structures::min_heap::MinHeap,
 };
 
-pub struct SimHashIndex {
-    vectors: Vec<(SparseVector, usize)>,
-    hash_bits: usize,
+pub struct LSHIndex {
+    num_buckets: usize,
+    num_hash_functions: usize,
+    buckets: Vec<Vec<(usize, SparseVector)>>,
+    vectors: Vec<SparseVector>,
 }
 
-impl SimHashIndex {
-    pub fn new(hash_bits: usize) -> Self {
+impl LSHIndex {
+    pub fn new(num_buckets: usize, num_hash_functions: usize) -> Self {
         assert!(
-            hash_bits >= 1 && hash_bits <= 64,
-            "hash_bits must be between 1 and 64"
+            num_hash_functions >= 2,
+            "num_hash_functions must be at least 2"
         );
-        SimHashIndex {
+        LSHIndex {
+            num_buckets,
+            num_hash_functions,
+            buckets: vec![Vec::new(); num_buckets],
             vectors: Vec::new(),
-            hash_bits,
         }
     }
 
+    /// Based on the MurmurHash3 algorithm.
+    fn hash_bucket(&self, hash: u64) -> usize {
+        let a: u64 = 0x9e3779b97f4a7c15;
+        let b: u64 = 0xbb67ae8584caa73b;
+        let c: u64 = 0x637c835768936735;
+        let d: u64 = 0xf87694f3329e33d1;
+        let hash = hash
+            .wrapping_mul(a)
+            .rotate_left(47)
+            .wrapping_mul(b)
+            .rotate_right(43)
+            .wrapping_mul(c)
+            .wrapping_add(d);
+        (hash as usize) % self.num_buckets
+    }
+
     pub fn add_vector(&mut self, vector: &SparseVector) {
-        let hash = simhash(&vector, self.hash_bits) as usize;
-        self.vectors.push((vector.clone(), hash));
+        for i in 0..self.num_hash_functions {
+            let hash = self.simhash(vector, i);
+            let bucket_index = self.hash_bucket(hash);
+            self.buckets[bucket_index].push((self.vectors.len(), vector.clone()));
+        }
+        self.vectors.push(vector.clone());
     }
 
-    pub fn build(&self) {
-        // No build needed for SimHash.
+    pub fn build(&mut self) {
+        for bucket in &mut self.buckets {
+            bucket.sort_by(|a, b| a.1.values.partial_cmp(&b.1.values).unwrap());
+        }
     }
 
-    pub fn search(&self, vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        let target_hash = simhash(&vector, self.hash_bits) as usize;
+    pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+        let mut results: Vec<(f32, usize, SparseVector, usize)> = Vec::new();
+
+        for i in 0..self.num_hash_functions {
+            let query_hash = self.simhash(query_vector, i);
+            let bucket_index = self.hash_bucket(query_hash);
+            let bucket = &self.buckets[bucket_index];
+
+            for (index, vector) in bucket.iter() {
+                let similarity = query_vector.cosine_similarity(&vector);
+                let mut found = false;
+
+                for (existing_similarity, _, existing_vector, bucket_count) in &mut results {
+                    if *existing_vector == *vector {
+                        *existing_similarity += similarity;
+                        *bucket_count += 1;
+                        found = true;
+                        break;
+                    }
+                }
+
+                if !found {
+                    results.push((similarity, *index, vector.clone(), 1));
+                }
+            }
+        }
+
+        for (similarity, _, _, bucket_count) in &mut results {
+            *similarity /= *bucket_count as f32;
+        }
+
         let mut heap: MinHeap<QueryResult> = MinHeap::new();
-
-        for (index, (_, hash)) in self.vectors.iter().enumerate() {
-            let similarity = hash_similarity(target_hash as u64, *hash as u64);
-            if heap.len() < k || similarity > heap.peek().unwrap().score.into_inner() {
+        for (score, index, _, _) in results.iter() {
+            if heap.len() < k || *score > heap.peek().unwrap().score.into_inner() {
                 heap.push(
                     QueryResult {
-                        index,
-                        score: OrderedFloat(similarity),
+                        index: *index,
+                        score: OrderedFloat(*score),
                     },
-                    OrderedFloat(similarity),
+                    OrderedFloat(*score),
                 );
                 if heap.len() > k {
                     heap.pop();
@@ -54,96 +107,117 @@ impl SimHashIndex {
         }
 
         heap.into_sorted_vec()
+            .iter()
+            .map(|query_result| QueryResult {
+                index: query_result.index,
+                score: OrderedFloat(query_result.score.into_inner()),
+            })
+            .collect()
     }
-}
 
-fn hamming_distance(x: u64, y: u64) -> u32 {
-    (x ^ y).count_ones()
-}
+    fn simhash(&self, vector: &SparseVector, hash_function_index: usize) -> u64 {
+        let mut v = [0i32; 64];
+        let mut simhash: u64 = 0;
 
-fn hash_similarity(hash1: u64, hash2: u64) -> f32 {
-    let distance = hamming_distance(hash1, hash2) as f32;
-    1.0 - (distance / 64.0)
-}
+        // Hashes the currently to-be-hashed sparse vector.
+        let mut hasher = DefaultHasher::new();
+        for (&index, &value) in vector.indices.iter().zip(vector.values.iter()) {
+            index.hash(&mut hasher);
+            value.hash(&mut hasher);
+        }
+        let hash = hasher.finish() ^ (hash_function_index as u64);
 
-fn simhash(vector: &SparseVector, hash_bits: usize) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    let mut v = vec![0f32; hash_bits];
-
-    for (&index, &value) in vector.indices.iter().zip(vector.values.iter()) {
-        index.hash(&mut hasher);
-        let feature_hash = hasher.finish();
-
-        for i in 0..hash_bits {
-            let bit = (feature_hash >> i) & 1;
+        for i in 0..64 {
+            let bit = (hash >> i) & 1;
             if bit == 1 {
-                v[i] += value.into_inner();
+                v[i] = v[i].saturating_add(1);
             } else {
-                v[i] -= value.into_inner();
+                v[i] = v[i].saturating_sub(1);
             }
         }
-    }
 
-    let mut simhash: u64 = 0;
-    for q in 0..hash_bits {
-        if v[q] > 0.0 {
-            simhash |= 1 << q;
+        for q in 0..64 {
+            if v[q] > 0 {
+                simhash |= 1 << q;
+            }
         }
-    }
 
-    simhash
+        simhash
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use ordered_float::OrderedFloat;
-
     use super::*;
 
     #[test]
-    fn test_sim_hash() {
-        let vectors = vec![
+    fn test_sim_hash_simple() {
+        let data = vec![
             SparseVector {
-                indices: vec![1, 2, 3],
-                values: vec![OrderedFloat(0.5), OrderedFloat(1.5), OrderedFloat(-0.5)],
+                indices: vec![0, 2],
+                values: vec![OrderedFloat(1.0), OrderedFloat(2.0)],
             },
             SparseVector {
-                indices: vec![1, 2, 3, 4],
-                values: vec![
-                    OrderedFloat(0.6),
-                    OrderedFloat(1.6),
-                    OrderedFloat(-0.6),
-                    OrderedFloat(2.0),
-                ],
+                indices: vec![1, 3],
+                values: vec![OrderedFloat(3.0), OrderedFloat(4.0)],
             },
             SparseVector {
-                indices: vec![2, 3, 4, 5],
-                values: vec![
-                    OrderedFloat(1.0),
-                    OrderedFloat(-1.0),
-                    OrderedFloat(-0.5),
-                    OrderedFloat(1.5),
-                ],
+                indices: vec![0, 2],
+                values: vec![OrderedFloat(5.0), OrderedFloat(6.0)],
+            },
+            SparseVector {
+                indices: vec![1, 3],
+                values: vec![OrderedFloat(7.0), OrderedFloat(8.0)],
+            },
+            SparseVector {
+                indices: vec![0, 2],
+                values: vec![OrderedFloat(9.0), OrderedFloat(10.0)],
             },
         ];
 
-        let mut index = SimHashIndex::new(64);
-
-        for vector in vectors {
-            index.add_vector(&vector);
+        let mut index = LSHIndex::new(4, 4);
+        for vector in &data {
+            index.add_vector(vector);
         }
+        index.build();
+
+        let query = SparseVector {
+            indices: vec![0, 2],
+            values: vec![OrderedFloat(6.0), OrderedFloat(7.0)],
+        };
+        let neighbors = index.search(&query, 2);
+        println!("Nearest neighbors: {:?}", neighbors);
+
+        assert!(false);
+    }
+
+    #[test]
+    fn test_sim_hash_complex() {
+        let mut index = LSHIndex::new(10, 4);
+
+        let mut vectors = vec![];
+        for i in 0..100 {
+            vectors.push(SparseVector {
+                indices: vec![i % 10, (i / 10) % 10],
+                values: vec![OrderedFloat((i % 10) as f32), OrderedFloat((i / 10) as f32)],
+            });
+        }
+
+        for vector in &vectors {
+            index.add_vector(vector);
+        }
+
+        index.build();
 
         let query_vector = SparseVector {
-            indices: vec![1, 2, 3],
-            values: vec![OrderedFloat(0.5), OrderedFloat(1.5), OrderedFloat(-0.5)],
+            indices: vec![5, 9],
+            values: vec![OrderedFloat(5.0), OrderedFloat(9.0)],
         };
+        let results = index.search(&query_vector, 10);
+        println!("Results for search on query vector: {:?}", results);
+        println!("Top Search: {:?}", vectors[results[0].index]);
+        println!("Groundtruth: {:?}", query_vector);
 
-        let results = index.search(&query_vector, 2);
-
-        for result in results {
-            println!("{:?}", result);
-        }
-
-        assert!(true);
+        assert!(false);
     }
 }
