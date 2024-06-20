@@ -8,13 +8,19 @@
 - [x] Implement HNSW Sparse
 - [x] Implement Annoy
 - [x] Implement IVFPQ
-  - [ ] Investigate correctness of IVFPQ Index
 - [x] Implement PQ Index
-  - [x] Investigate correctness of PQ index
+- [ ] Combine MinHash and SimHash into one LSH module
 - [ ] Implement dimensionality reduction mechanisms
   - [x] PCA
   - [ ] t-SNE
 - [ ] Cleanup repository
+
+- [ ] Develop async functionalities for each algorithm
+  - [ ] HNSW
+  - [ ] ANNOY
+  - [ ] LinScan
+  - [ ] IVFPQ
+  - [ ] PQ
 
 ## Experiments
 
