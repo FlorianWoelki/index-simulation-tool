@@ -1,4 +1,7 @@
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::{
+    collections::HashSet,
+    hash::{DefaultHasher, Hash, Hasher},
+};
 
 use ordered_float::OrderedFloat;
 
@@ -119,11 +122,15 @@ impl LSHIndex {
         let mut v = [0i32; 64];
         let mut simhash: u64 = 0;
 
-        // Hashes the currently to-be-hashed sparse vector.
         let mut hasher = DefaultHasher::new();
         for (&index, &value) in vector.indices.iter().zip(vector.values.iter()) {
-            index.hash(&mut hasher);
-            value.hash(&mut hasher);
+            let mut element_hash = HashSet::new();
+            element_hash.insert(index);
+            element_hash.insert(value.to_bits() as usize);
+
+            for item in element_hash {
+                item.hash(&mut hasher);
+            }
         }
         let hash = hasher.finish() ^ (hash_function_index as u64);
 
@@ -151,7 +158,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_sim_hash_simple() {
+    fn test_lsh_index_with_sim_hash_simple() {
         let data = vec![
             SparseVector {
                 indices: vec![0, 2],
@@ -192,7 +199,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sim_hash_complex() {
+    fn test_lsh_index_with_sim_hash_complex() {
         let mut index = LSHIndex::new(10, 4);
 
         let mut vectors = vec![];
