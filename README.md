@@ -9,7 +9,7 @@
 - [x] Implement Annoy
 - [x] Implement IVFPQ
 - [x] Implement PQ Index
-- [ ] Combine MinHash and SimHash into one LSH module
+- [x] Combine MinHash and SimHash into one LSH module
 - [ ] Implement dimensionality reduction mechanisms
   - [x] PCA
   - [ ] t-SNE
