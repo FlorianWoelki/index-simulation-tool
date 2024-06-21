@@ -7,12 +7,10 @@ pub(super) fn minhash(vector: &SparseVector, hash_function_index: usize) -> u64 
     let mut min_hash: u64 = u64::MAX;
 
     for (&index, &value) in vector.indices.iter().zip(vector.values.iter()) {
-        let mut combined_hash = hash_function_index as u64;
+        hasher.write_u64(hash_function_index as u64);
         index.hash(&mut hasher);
-        combined_hash = combined_hash.wrapping_mul(hasher.finish());
         value.hash(&mut hasher);
-        combined_hash = combined_hash.wrapping_mul(hasher.finish());
-
+        let combined_hash = hasher.finish();
         min_hash = min_hash.min(combined_hash);
         hasher = DefaultHasher::new();
         // let mut element_hash = HashSet::new();
