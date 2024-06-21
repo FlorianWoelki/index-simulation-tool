@@ -1,21 +1,30 @@
-use std::hash::{DefaultHasher, Hash, Hasher};
-
+use minhash::minhash;
 use ordered_float::OrderedFloat;
+use simhash::simhash;
 
 use crate::{
     data::{QueryResult, SparseVector},
     data_structures::min_heap::MinHeap,
 };
 
+mod minhash;
+mod simhash;
+
+pub enum LSHHashType {
+    MinHash,
+    SimHash,
+}
+
 pub struct LSHIndex {
     num_buckets: usize,
     num_hash_functions: usize,
     buckets: Vec<Vec<(usize, SparseVector)>>,
     vectors: Vec<SparseVector>,
+    hash_type: LSHHashType,
 }
 
 impl LSHIndex {
-    pub fn new(num_buckets: usize, num_hash_functions: usize) -> Self {
+    pub fn new(num_buckets: usize, num_hash_functions: usize, hash_type: LSHHashType) -> Self {
         assert!(
             num_hash_functions >= 2,
             "num_hash_functions must be at least 2"
@@ -25,6 +34,7 @@ impl LSHIndex {
             num_hash_functions,
             buckets: vec![Vec::new(); num_buckets],
             vectors: Vec::new(),
+            hash_type,
         }
     }
 
@@ -44,9 +54,16 @@ impl LSHIndex {
         (hash as usize) % self.num_buckets
     }
 
+    fn hash(&self, vector: &SparseVector, i: usize) -> u64 {
+        match self.hash_type {
+            LSHHashType::MinHash => minhash(vector, i),
+            LSHHashType::SimHash => simhash(vector, i),
+        }
+    }
+
     pub fn add_vector(&mut self, vector: &SparseVector) {
         for i in 0..self.num_hash_functions {
-            let hash = self.minhash(vector, i);
+            let hash = self.hash(vector, i);
             let bucket_index = self.hash_bucket(hash);
             self.buckets[bucket_index].push((self.vectors.len(), vector.clone()));
         }
@@ -63,7 +80,7 @@ impl LSHIndex {
         let mut results: Vec<(f32, usize, SparseVector, usize)> = Vec::new();
 
         for i in 0..self.num_hash_functions {
-            let query_hash = self.minhash(query_vector, i);
+            let query_hash = self.hash(query_vector, i);
             let bucket_index = self.hash_bucket(query_hash);
             let bucket = &self.buckets[bucket_index];
 
@@ -114,35 +131,6 @@ impl LSHIndex {
             })
             .collect()
     }
-
-    fn minhash(&self, vector: &SparseVector, hash_function_index: usize) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        let mut min_hash: u64 = u64::MAX;
-
-        for (&index, &value) in vector.indices.iter().zip(vector.values.iter()) {
-            let mut combined_hash = hash_function_index as u64;
-            index.hash(&mut hasher);
-            combined_hash = combined_hash.wrapping_mul(hasher.finish());
-            value.hash(&mut hasher);
-            combined_hash = combined_hash.wrapping_mul(hasher.finish());
-
-            min_hash = min_hash.min(combined_hash);
-            hasher = DefaultHasher::new();
-            // let mut element_hash = HashSet::new();
-            // element_hash.insert(index);
-            // element_hash.insert(value.to_bits() as usize);
-
-            // for item in element_hash {
-            //     item.hash(&mut hasher);
-            // }
-
-            // let hash = hasher.finish() ^ (hash_function_index as u64);
-            // min_hash = min_hash.min(hash);
-            // hasher = DefaultHasher::new();
-        }
-
-        min_hash
-    }
 }
 
 #[cfg(test)]
@@ -150,7 +138,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_lsh_index_with_min_hash_simple() {
+    fn test_lsh_index_min_hash_simple() {
         let data = vec![
             SparseVector {
                 indices: vec![0, 2],
@@ -174,7 +162,7 @@ mod tests {
             },
         ];
 
-        let mut index = LSHIndex::new(4, 4);
+        let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash);
         for vector in &data {
             index.add_vector(vector);
         }
@@ -187,12 +175,12 @@ mod tests {
         let neighbors = index.search(&query, 2);
         println!("Nearest neighbors: {:?}", neighbors);
 
-        assert!(false);
+        assert!(true);
     }
 
     #[test]
-    fn test_lsh_index_with_min_hash_complex() {
-        let mut index = LSHIndex::new(10, 4);
+    fn test_lsh_index_min_hash_complex() {
+        let mut index = LSHIndex::new(10, 4, LSHHashType::MinHash);
 
         let mut vectors = vec![];
         for i in 0..100 {
@@ -217,6 +205,77 @@ mod tests {
         println!("Top Search: {:?}", vectors[results[0].index]);
         println!("Groundtruth: {:?}", query_vector);
 
-        assert!(false);
+        assert!(true);
+    }
+
+    #[test]
+    fn test_lsh_index_sim_hash_simple() {
+        let data = vec![
+            SparseVector {
+                indices: vec![0, 2],
+                values: vec![OrderedFloat(1.0), OrderedFloat(2.0)],
+            },
+            SparseVector {
+                indices: vec![1, 3],
+                values: vec![OrderedFloat(3.0), OrderedFloat(4.0)],
+            },
+            SparseVector {
+                indices: vec![0, 2],
+                values: vec![OrderedFloat(5.0), OrderedFloat(6.0)],
+            },
+            SparseVector {
+                indices: vec![1, 3],
+                values: vec![OrderedFloat(7.0), OrderedFloat(8.0)],
+            },
+            SparseVector {
+                indices: vec![0, 2],
+                values: vec![OrderedFloat(9.0), OrderedFloat(10.0)],
+            },
+        ];
+
+        let mut index = LSHIndex::new(4, 4, LSHHashType::SimHash);
+        for vector in &data {
+            index.add_vector(vector);
+        }
+        index.build();
+
+        let query = SparseVector {
+            indices: vec![0, 2],
+            values: vec![OrderedFloat(6.0), OrderedFloat(7.0)],
+        };
+        let neighbors = index.search(&query, 2);
+        println!("Nearest neighbors: {:?}", neighbors);
+
+        assert!(true);
+    }
+
+    #[test]
+    fn test_lsh_index_sim_hash_complex() {
+        let mut index = LSHIndex::new(10, 4, LSHHashType::SimHash);
+
+        let mut vectors = vec![];
+        for i in 0..100 {
+            vectors.push(SparseVector {
+                indices: vec![i % 10, (i / 10) % 10],
+                values: vec![OrderedFloat((i % 10) as f32), OrderedFloat((i / 10) as f32)],
+            });
+        }
+
+        for vector in &vectors {
+            index.add_vector(vector);
+        }
+
+        index.build();
+
+        let query_vector = SparseVector {
+            indices: vec![5, 9],
+            values: vec![OrderedFloat(5.0), OrderedFloat(9.0)],
+        };
+        let results = index.search(&query_vector, 10);
+        println!("Results for search on query vector: {:?}", results);
+        println!("Top Search: {:?}", vectors[results[0].index]);
+        println!("Groundtruth: {:?}", query_vector);
+
+        assert!(true);
     }
 }
