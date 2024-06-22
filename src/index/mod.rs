@@ -6,11 +6,10 @@ pub mod annoy;
 pub mod hnsw;
 pub mod ivfpq;
 pub mod linscan;
-pub mod minhash;
+pub mod lsh;
 pub mod neighbor;
 pub mod nsw;
 pub mod pq;
-pub mod simhash;
 
 #[derive(PartialEq)]
 pub enum DistanceMetric {
