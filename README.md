@@ -12,6 +12,7 @@
 - [x] Combine MinHash and SimHash into one LSH module
 - [ ] Implement dimensionality reduction mechanisms
   - [x] PCA
+    - [ ] Remove nalgebra and use pure ndarray for PCA
   - [ ] t-SNE
 - [ ] Cleanup repository
 
