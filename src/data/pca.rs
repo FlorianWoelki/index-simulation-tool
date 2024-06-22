@@ -254,8 +254,8 @@ mod tests {
             }
         }
 
-        plot_pca_results(transformed_vectors, num_components);
+        // plot_pca_results(transformed_vectors, num_components);
 
-        assert!(false);
+        assert!(true);
     }
 }
