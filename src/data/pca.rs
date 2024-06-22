@@ -1,5 +1,6 @@
 use nalgebra::{DMatrix, DVector, SymmetricEigen};
 use ordered_float::OrderedFloat;
+use plotly::{common::Mode, Plot, Scatter};
 
 use super::SparseVector;
 
@@ -151,6 +152,47 @@ pub fn reconstruct(
         .collect()
 }
 
+fn plot_pca_results(transformed_data: Vec<SparseVector>, num_components: usize) {
+    let mut plot = Plot::new();
+
+    if num_components >= 2 {
+        let mut x = Vec::new();
+        let mut y = Vec::new();
+
+        for vector in transformed_data {
+            let mut x_value = 0.0;
+            let mut y_value = 0.0;
+
+            for (i, &value) in vector.values.iter().enumerate() {
+                let idx = vector.indices[i];
+                if idx == 0 {
+                    x_value = value.into_inner();
+                } else if idx == 1 {
+                    y_value = value.into_inner();
+                }
+            }
+
+            x.push(x_value);
+            y.push(y_value);
+        }
+
+        let trace = Scatter::new(x, y)
+            .mode(Mode::Markers)
+            .marker(
+                plotly::common::Marker::new()
+                    .size(10)
+                    .symbol(plotly::common::MarkerSymbol::Circle),
+            )
+            .name("PCA Result");
+
+        plot.add_trace(trace);
+    } else {
+        println!("Number of components must be at least 2 for plotting.");
+    }
+
+    plot.show();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -211,6 +253,8 @@ mod tests {
                 println!("Index: {}, Value: {}", index, vector.values[j]);
             }
         }
+
+        plot_pca_results(transformed_vectors, num_components);
 
         assert!(false);
     }
