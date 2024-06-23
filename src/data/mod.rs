@@ -7,6 +7,7 @@ pub mod generator_sparse;
 pub mod ms_marco;
 pub mod pca;
 pub mod sift;
+pub mod tsne;
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone)]
 pub struct SparseVector {
@@ -21,6 +22,62 @@ impl SparseVector {
             DistanceMetric::Cosine => 1.0 - self.cosine_similarity(other),
             DistanceMetric::Jaccard => 1.0 - self.jaccard_similarity(other),
         }
+    }
+
+    pub fn dot(&self, other: &SparseVector) -> f32 {
+        let mut i = 0;
+        let mut j = 0;
+        let mut result = 0.0;
+
+        while i < self.indices.len() && j < other.indices.len() {
+            if self.indices[i] == other.indices[j] {
+                result += (self.values[i] * other.values[j]).into_inner();
+                i += 1;
+                j += 1;
+            } else if self.indices[i] < other.indices[j] {
+                i += 1;
+            } else {
+                j += 1;
+            }
+        }
+
+        result
+    }
+
+    fn squared_distance(&self, other: &SparseVector) -> f32 {
+        let dot_product = self.dot(other);
+        let self_norm = self.dot(self);
+        let other_norm = other.dot(other);
+        self_norm + other_norm - 2.0 * dot_product
+    }
+
+    fn add_scaled(&mut self, other: &SparseVector, scale: f32) {
+        let mut i = 0;
+        let mut j = 0;
+        let mut new_indices = Vec::new();
+        let mut new_values = Vec::new();
+
+        while i < self.indices.len() || j < other.indices.len() {
+            if j == other.indices.len()
+                || (i < self.indices.len() && self.indices[i] < other.indices[j])
+            {
+                new_indices.push(self.indices[i]);
+                new_values.push(self.values[i]);
+                i += 1;
+            } else if i == self.indices.len() || self.indices[i] > other.indices[j] {
+                new_indices.push(other.indices[j]);
+                new_values.push(OrderedFloat(other.values[j].0 * scale));
+                j += 1;
+            } else {
+                new_indices.push(self.indices[i]);
+                new_values.push(OrderedFloat(self.values[i].0 + other.values[j].0 * scale));
+                i += 1;
+                j += 1;
+            }
+        }
+
+        self.indices = new_indices;
+        self.values = new_values;
     }
 
     pub fn jaccard_similarity(&self, other: &SparseVector) -> f32 {
