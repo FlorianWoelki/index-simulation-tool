@@ -19,7 +19,7 @@
 - [ ] Develop async functionalities for each algorithm
   - [ ] HNSW
   - [ ] ANNOY
-  - [ ] LinScan
+  - [x] LinScan
   - [ ] IVFPQ
   - [ ] PQ
 
@@ -35,3 +35,10 @@
 - [ ] Convert dense vectors to sparse vectors -> use something like SPLADE to create a sparse vector
   - Maybe some python to Rust embeddings?
   - Maybe use the python scripts to generate the custom datasets?
+
+## Plan for implement async functionalities
+
+- Use rayon to execute things in parallel
+
+- Add search_parallel function to search in parallel
+- Add build_parallel, if applicable and possible
