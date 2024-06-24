@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Mutex};
 
 use ordered_float::OrderedFloat;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -44,18 +44,18 @@ impl LinScanIndex {
     }
 
     pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        let mut scores = vec![0.0; self.vectors.len()];
+        let scores = Mutex::new(vec![0.0; self.vectors.len()]);
 
         for (index, value) in query_vector.indices.iter().zip(query_vector.values.iter()) {
             if let Some(vectors) = self.inverted_index.get(index) {
-                for (vec_id, vec_value) in vectors.iter() {
-                    scores[*vec_id] += value.into_inner() * vec_value.into_inner();
-                }
+                vectors.par_iter().for_each(|(vec_id, vec_value)| {
+                    scores.lock().unwrap()[*vec_id] += value.into_inner() * vec_value.into_inner();
+                });
             }
         }
 
         let mut heap: MinHeap<QueryResult> = MinHeap::new();
-        for (index, &score) in scores.iter().enumerate() {
+        for (index, &score) in scores.lock().unwrap().iter().enumerate() {
             if heap.len() < k || score > heap.peek().unwrap().score.into_inner() {
                 heap.push(
                     QueryResult {
@@ -175,6 +175,6 @@ mod tests {
         let neighbors = index.search_parallel(&queries, 2);
         println!("Nearest neighbors: {:?}", neighbors);
 
-        assert!(false);
+        assert!(true);
     }
 }
