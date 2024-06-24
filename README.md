@@ -10,10 +10,10 @@
 - [x] Implement IVFPQ
 - [x] Implement PQ Index
 - [x] Combine MinHash and SimHash into one LSH module
-- [ ] Implement dimensionality reduction mechanisms
+- [x] Implement dimensionality reduction mechanisms
   - [x] PCA
-    - [ ] Remove nalgebra and use pure ndarray for PCA
-  - [ ] t-SNE
+  - [x] t-SNE
+    - [x] Remove nalgebra and use pure ndarray for PCA
 - [ ] Cleanup repository
 
 - [ ] Develop async functionalities for each algorithm
