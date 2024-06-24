@@ -1,4 +1,4 @@
-use ndarray::prelude::*;
+use nalgebra::DMatrix;
 use ordered_float::OrderedFloat;
 use plotly::{common::Mode, Plot, Scatter};
 use rand::{rngs::StdRng, Rng};
@@ -81,45 +81,45 @@ fn tsne(
     low_dim_data
 }
 
-fn compute_pairwise_similarities(data: &[SparseVector], perplexity: f64) -> Array2<f64> {
+fn compute_pairwise_similarities(data: &[SparseVector], perplexity: f64) -> DMatrix<f64> {
     let n_samples = data.len();
-    let mut p = Array2::zeros((n_samples, n_samples));
+    let mut p = DMatrix::zeros(n_samples, n_samples);
 
     for i in 0..n_samples {
         for j in 0..n_samples {
             if i != j {
                 let dist = data[i].squared_distance(&data[j]) as f64;
-                p[[i, j]] = (-dist / (2.0 * perplexity.powi(2))).exp();
+                p[(i, j)] = (-dist / (2.0 * perplexity.powi(2))).exp();
             }
         }
         let sum: f64 = p.row(i).sum();
-        p.row_mut(i).mapv_inplace(|x| x / sum);
+        p.row_mut(i).iter_mut().for_each(|x| *x /= sum);
     }
 
     p
 }
 
-fn compute_low_dim_similarities(low_dim_data: &[SparseVector]) -> Array2<f64> {
+fn compute_low_dim_similarities(low_dim_data: &[SparseVector]) -> DMatrix<f64> {
     let n_samples = low_dim_data.len();
-    let mut q = Array2::zeros((n_samples, n_samples));
+    let mut q = DMatrix::zeros(n_samples, n_samples);
 
     for i in 0..n_samples {
         for j in 0..n_samples {
             if i != j {
                 let dist = low_dim_data[i].squared_distance(&low_dim_data[j]) as f64;
-                q[[i, j]] = 1.0 / (1.0 + dist);
+                q[(i, j)] = 1.0 / (1.0 + dist);
             }
         }
         let sum: f64 = q.row(i).sum();
-        q.row_mut(i).mapv_inplace(|x| x / sum);
+        q.row_mut(i).iter_mut().for_each(|x| *x /= sum);
     }
 
     q
 }
 
 fn compute_gradient(
-    p: &Array2<f64>,
-    q: &Array2<f64>,
+    p: &DMatrix<f64>,
+    q: &DMatrix<f64>,
     low_dim_data: &[SparseVector],
 ) -> Vec<SparseVector> {
     let n_samples = low_dim_data.len();
@@ -127,7 +127,7 @@ fn compute_gradient(
     let mut gradient = vec![
         SparseVector {
             indices: vec![],
-            values: vec![]
+            values: vec![],
         };
         n_samples
     ];
@@ -144,8 +144,8 @@ fn compute_gradient(
                     diff.indices.push(k);
                     diff.values.push(OrderedFloat(d));
                 }
-                let pq_diff = (p[[i, j]] - q[[i, j]]) as f32;
-                gradient[i].add_scaled(&diff, 4.0 * pq_diff * q[[i, j]] as f32);
+                let pq_diff = 4.0 * (p[(i, j)] - q[(i, j)]) * q[(i, j)];
+                gradient[i].add_scaled(&diff, pq_diff as f32);
             }
         }
     }
@@ -153,7 +153,7 @@ fn compute_gradient(
     gradient
 }
 
-fn kl_divergence(p: &Array2<f64>, q: &Array2<f64>) -> f64 {
+fn kl_divergence(p: &DMatrix<f64>, q: &DMatrix<f64>) -> f64 {
     p.iter()
         .zip(q.iter())
         .map(|(&p_i, &q_i)| {
@@ -214,7 +214,7 @@ mod tests {
     //     let data = generate_structured_sparse_data(90, 10, &mut rng);
 
     //     // Run t-SNE
-    //     let low_dim_data = tsne(&data, 2, 1.0, 100);
+    //     let low_dim_data = tsne(&data, 2, 2.0, 200);
 
     //     // Print the low-dimensional representation
     //     println!("{:?}", low_dim_data);
@@ -223,23 +223,6 @@ mod tests {
 
     //     assert!(false);
     // }
-
-    #[test]
-    fn test_tsne_simple2() {
-        let mut rng = StdRng::seed_from_u64(42);
-        // Generate some random data
-        let data = generate_structured_sparse_data(150, 30, &mut rng);
-
-        // Run t-SNE
-        let low_dim_data = tsne(&data, 2, 10.0, 200);
-
-        // Print the low-dimensional representation
-        println!("{:?}", low_dim_data);
-
-        plot_tsne_result(&low_dim_data);
-
-        assert!(false);
-    }
 
     // #[test]
     // fn test_tsne_complex() {
