@@ -23,6 +23,13 @@
   - [ ] IVFPQ
   - [ ] PQ
 
+- [ ] Add flexible adding and removing capability
+  - [ ] HNSW
+  - [ ] ANNOY
+  - [ ] LinScan
+  - [ ] IVFPQ
+  - [ ] PQ
+
 ## Experiments
 
 - [ ] Define experiments that are going to be created
