@@ -39,6 +39,36 @@ impl NSWIndex {
         self.vectors.push(item.clone());
     }
 
+    pub fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
+        if id >= self.vectors.len() {
+            return None;
+        }
+
+        let removed_vector = self.vectors.remove(id);
+        self.graph.remove(&id);
+
+        // Updates the graph: remove references to the deleted id and shift ids
+        let mut new_graph = HashMap::new();
+        for (&k, v) in self.graph.iter() {
+            let mut new_set = HashSet::new();
+            for &neighbor in v {
+                if neighbor != id {
+                    if neighbor > id {
+                        new_set.insert(neighbor - 1);
+                    } else {
+                        new_set.insert(neighbor);
+                    }
+                }
+            }
+
+            let new_key = if k > id { k - 1 } else { k };
+            new_graph.insert(new_key, new_set);
+        }
+        self.graph = new_graph;
+
+        Some(removed_vector)
+    }
+
     pub fn build(&mut self) {
         for (i, vector) in self.vectors.iter().enumerate() {
             if i == 0 {
@@ -136,6 +166,102 @@ mod tests {
     use rand::{thread_rng, Rng};
 
     use super::*;
+
+    #[test]
+    fn test_remove_vector() {
+        let mut index = NSWIndex::new(5, 3, DistanceMetric::Cosine, 42);
+
+        for i in 0..5 {
+            let vector = SparseVector {
+                indices: vec![i],
+                values: vec![OrderedFloat(1.0)],
+            };
+            index.add_vector(&vector);
+        }
+
+        index.build();
+
+        assert_eq!(index.vectors.len(), 5);
+        assert_eq!(index.graph.len(), 5);
+
+        let result = index.remove_vector(2);
+        assert_eq!(
+            result,
+            Some(SparseVector {
+                indices: vec![2],
+                values: vec![OrderedFloat(1.0)]
+            })
+        );
+        assert_eq!(index.vectors.len(), 4);
+        assert_eq!(index.graph.len(), 4);
+
+        assert!(index.graph.contains_key(&0));
+        assert!(index.graph.contains_key(&1));
+        assert!(index.graph.contains_key(&2)); // This was previously 3
+        assert!(index.graph.contains_key(&3)); // This was previously 4
+        assert!(!index.graph.contains_key(&4));
+
+        for neighbors in index.graph.values() {
+            assert!(!neighbors.contains(&4)); // Shifted out of bounds
+        }
+
+        let result = index.remove_vector(10);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_remove_vector_out_of_bounds() {
+        let mut index = NSWIndex::new(5, 3, DistanceMetric::Cosine, 42);
+
+        for i in 0..5 {
+            let vector = SparseVector {
+                indices: vec![i],
+                values: vec![OrderedFloat(1.0)],
+            };
+            index.add_vector(&vector);
+        }
+
+        index.build();
+
+        let result = index.remove_vector(10);
+        assert!(result.is_none());
+        assert_eq!(index.vectors.len(), 5);
+        assert_eq!(index.graph.len(), 5);
+    }
+
+    #[test]
+    fn test_remove_vector_last() {
+        let mut index = NSWIndex::new(5, 3, DistanceMetric::Cosine, 42);
+
+        for i in 0..5 {
+            let vector = SparseVector {
+                indices: vec![i],
+                values: vec![OrderedFloat(1.0)],
+            };
+            index.add_vector(&vector);
+        }
+
+        index.build();
+
+        assert_eq!(index.vectors.len(), 5);
+        assert_eq!(index.graph.len(), 5);
+
+        let result = index.remove_vector(3);
+        assert_eq!(
+            result,
+            Some(SparseVector {
+                indices: vec![3],
+                values: vec![OrderedFloat(1.0)]
+            })
+        );
+        assert_eq!(index.vectors.len(), 4);
+        assert_eq!(index.graph.len(), 4);
+
+        // Verify that no neighbors reference the removed index
+        for neighbors in index.graph.values() {
+            assert!(!neighbors.contains(&4));
+        }
+    }
 
     #[test]
     fn test_nsw_index_simple() {
