@@ -18,6 +18,7 @@
 
 - [ ] Develop async functionalities for each algorithm
   - [ ] HNSW
+  - [ ] NSW
   - [ ] ANNOY
   - [x] LinScan
   - [ ] IVFPQ
@@ -25,6 +26,7 @@
 
 - [ ] Add flexible adding and removing capability
   - [ ] HNSW
+  - [x] NSW
   - [ ] ANNOY
   - [x] LinScan
   - [ ] IVFPQ
