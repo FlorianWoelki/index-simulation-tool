@@ -39,6 +39,33 @@ impl LinScanIndex {
         self.vectors.push(vector.clone());
     }
 
+    pub fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
+        if id >= self.vectors.len() {
+            return None;
+        }
+
+        let removed_vector = self.vectors.remove(id);
+
+        for index in &removed_vector.indices {
+            if let Some(vectors) = self.inverted_index.get_mut(index) {
+                vectors.retain(|(vec_id, _)| *vec_id != id);
+
+                // Update vector IDs that are greater than the removed index
+                for (vec_id, _) in vectors.iter_mut() {
+                    if *vec_id > id {
+                        *vec_id -= 1;
+                    }
+                }
+
+                if vectors.is_empty() {
+                    self.inverted_index.remove(index);
+                }
+            }
+        }
+
+        Some(removed_vector)
+    }
+
     pub fn build(&mut self) {
         // LinScan does not need to build an index
     }
