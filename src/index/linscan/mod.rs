@@ -46,11 +46,11 @@ impl LinScanIndex {
 
         let removed_vector = self.vectors.remove(id);
 
+        // Update the inverted index.
         for index in &removed_vector.indices {
             if let Some(vectors) = self.inverted_index.get_mut(index) {
                 vectors.retain(|(vec_id, _)| *vec_id != id);
 
-                // Update vector IDs that are greater than the removed index
                 for (vec_id, _) in vectors.iter_mut() {
                     if *vec_id > id {
                         *vec_id -= 1;
@@ -59,6 +59,18 @@ impl LinScanIndex {
 
                 if vectors.is_empty() {
                     self.inverted_index.remove(index);
+                }
+            }
+        }
+
+        // Update the inverted index for all vectors after the removed one.
+        for index in id..self.vectors.len() {
+            let vector = &self.vectors[index];
+            for feature_index in &vector.indices {
+                if let Some(vectors) = self.inverted_index.get_mut(feature_index) {
+                    if let Some(pos) = vectors.iter().position(|(vec_id, _)| *vec_id == index + 1) {
+                        vectors[pos].0 = index;
+                    }
                 }
             }
         }
@@ -116,6 +128,111 @@ impl LinScanIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_add_vector() {
+        let mut index = LinScanIndex::new(DistanceMetric::Cosine);
+
+        // Create test vectors
+        let v1 = SparseVector {
+            indices: vec![0, 2, 4],
+            values: vec![OrderedFloat(1.0), OrderedFloat(2.0), OrderedFloat(3.0)],
+        };
+        let v2 = SparseVector {
+            indices: vec![1, 2, 3],
+            values: vec![OrderedFloat(4.0), OrderedFloat(5.0), OrderedFloat(6.0)],
+        };
+        let v3 = SparseVector {
+            indices: vec![0, 3, 4],
+            values: vec![OrderedFloat(7.0), OrderedFloat(8.0), OrderedFloat(9.0)],
+        };
+
+        index.add_vector(&v1);
+        index.add_vector(&v2);
+        index.add_vector(&v3);
+
+        assert_eq!(index.vectors.len(), 3);
+        assert_eq!(index.vectors[0], v1);
+        assert_eq!(index.vectors[1], v2);
+        assert_eq!(index.vectors[2], v3);
+
+        assert_eq!(index.inverted_index.len(), 5); // Should have entries for indices 0, 1, 2, 3, 4
+
+        assert_eq!(
+            index.inverted_index.get(&0).unwrap(),
+            &vec![(0, OrderedFloat(1.0)), (2, OrderedFloat(7.0))]
+        );
+        assert_eq!(
+            index.inverted_index.get(&1).unwrap(),
+            &vec![(1, OrderedFloat(4.0))]
+        );
+        assert_eq!(
+            index.inverted_index.get(&2).unwrap(),
+            &vec![(0, OrderedFloat(2.0)), (1, OrderedFloat(5.0))]
+        );
+        assert_eq!(
+            index.inverted_index.get(&3).unwrap(),
+            &vec![(1, OrderedFloat(6.0)), (2, OrderedFloat(8.0))]
+        );
+        assert_eq!(
+            index.inverted_index.get(&4).unwrap(),
+            &vec![(0, OrderedFloat(3.0)), (2, OrderedFloat(9.0))]
+        );
+    }
+
+    #[test]
+    fn test_remove_vector() {
+        let mut index = LinScanIndex::new(DistanceMetric::Cosine);
+
+        // Add some test vectors
+        let v1 = SparseVector {
+            indices: vec![0, 2, 4],
+            values: vec![OrderedFloat(1.0), OrderedFloat(2.0), OrderedFloat(3.0)],
+        };
+        let v2 = SparseVector {
+            indices: vec![1, 2, 3],
+            values: vec![OrderedFloat(4.0), OrderedFloat(5.0), OrderedFloat(6.0)],
+        };
+        let v3 = SparseVector {
+            indices: vec![0, 3, 4],
+            values: vec![OrderedFloat(7.0), OrderedFloat(8.0), OrderedFloat(9.0)],
+        };
+
+        index.add_vector(&v1);
+        index.add_vector(&v2);
+        index.add_vector(&v3);
+
+        let removed = index.remove_vector(1);
+        assert_eq!(removed, Some(v2.clone()));
+
+        assert_eq!(index.vectors.len(), 2);
+        assert_eq!(index.vectors[0], v1);
+        assert_eq!(index.vectors[1], v3);
+
+        assert_eq!(index.inverted_index.len(), 4); // Should have entries for indices 0, 2, 3, 4
+
+        assert_eq!(
+            index.inverted_index.get(&0).unwrap(),
+            &vec![(0, OrderedFloat(1.0)), (1, OrderedFloat(7.0))]
+        );
+        assert_eq!(
+            index.inverted_index.get(&2).unwrap(),
+            &vec![(0, OrderedFloat(2.0))]
+        );
+        assert_eq!(
+            index.inverted_index.get(&3).unwrap(),
+            &vec![(1, OrderedFloat(8.0))]
+        );
+        assert_eq!(
+            index.inverted_index.get(&4).unwrap(),
+            &vec![(0, OrderedFloat(3.0)), (1, OrderedFloat(9.0))]
+        );
+
+        assert!(index.inverted_index.get(&1).is_none());
+
+        let non_existent = index.remove_vector(5);
+        assert_eq!(non_existent, None);
+    }
 
     #[test]
     fn test_linscan_simple() {
