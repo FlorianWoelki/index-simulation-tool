@@ -26,7 +26,7 @@
 - [ ] Add flexible adding and removing capability
   - [ ] HNSW
   - [ ] ANNOY
-  - [ ] LinScan
+  - [x] LinScan
   - [ ] IVFPQ
   - [ ] PQ
 
