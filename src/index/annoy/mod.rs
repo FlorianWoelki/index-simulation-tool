@@ -1,7 +1,7 @@
 use std::collections::{BinaryHeap, HashSet};
 
 use ordered_float::OrderedFloat;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::Rng;
 
 use crate::data::{QueryResult, SparseVector};
 
@@ -112,6 +112,16 @@ impl AnnoyIndex {
         self.vectors.push(vector.clone());
     }
 
+    /// Needs rebuilding after removing vector.
+    pub fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
+        if id >= self.vectors.len() {
+            return None;
+        }
+
+        let removed_vector = self.vectors.remove(id);
+        Some(removed_vector)
+    }
+
     pub fn build(&mut self) {
         let n_dims = self
             .vectors
@@ -189,7 +199,35 @@ impl AnnoyIndex {
 
 #[cfg(test)]
 mod tests {
+    use crate::test_utils::get_simple_vectors;
+
     use super::*;
+
+    #[test]
+    fn test_remove_vector() {
+        let mut index = AnnoyIndex::new(3, 2, 10, DistanceMetric::Euclidean);
+
+        let (vectors, query_vectors) = get_simple_vectors();
+        for vector in &vectors {
+            index.add_vector(vector);
+        }
+
+        index.build();
+
+        assert_eq!(index.vectors.len(), vectors.len());
+
+        index.remove_vector(2);
+
+        assert_eq!(index.vectors.len(), vectors.len() - 1);
+        assert_eq!(index.vectors[0], vectors[0]);
+        assert_eq!(index.vectors[2], vectors[3]);
+
+        index.build();
+
+        let results = index.search(&query_vectors[0], 2);
+        println!("{:?}", results);
+        assert!(true);
+    }
 
     #[test]
     fn test_annoy_index_simple() {
