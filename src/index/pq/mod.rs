@@ -55,6 +55,24 @@ impl PQIndex {
         self.vectors.push(vector.clone());
     }
 
+    pub fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
+        if id >= self.vectors.len() {
+            return None;
+        }
+
+        let removed_vector = self.vectors.remove(id);
+        self.encoded_codes.remove(id);
+
+        if self.vectors.is_empty() {
+            self.codewords.clear();
+        } else {
+            // Optionally: rebuild the index here (`self.build()`).
+            // Can be computationally expensive, depending on the dataset.
+        }
+
+        Some(removed_vector)
+    }
+
     pub fn build(&mut self) {
         self.codewords = Vec::new();
         for m in 0..self.num_subvectors {
@@ -184,7 +202,49 @@ impl PQIndex {
 mod tests {
     use ordered_float::OrderedFloat;
 
+    use crate::test_utils::get_simple_vectors;
+
     use super::*;
+
+    #[test]
+    fn test_remove_vector() {
+        let mut index = PQIndex::new(2, 4, 10, 0.001, DistanceMetric::Cosine, 42);
+
+        let (vectors, _) = get_simple_vectors();
+
+        for vector in &vectors {
+            index.add_vector(vector);
+        }
+
+        index.build();
+
+        assert_eq!(index.vectors.len(), 5);
+        assert_eq!(index.encoded_codes.len(), 5);
+
+        let result = index.remove_vector(1);
+        assert_eq!(result, Some(vectors[1].clone()));
+        assert_eq!(index.vectors.len(), 4);
+        assert_eq!(index.encoded_codes.len(), 4);
+
+        // Verify the remaining vectors.
+        assert_eq!(index.vectors[0].values, vectors[0].values);
+        assert_eq!(index.vectors[1].values, vectors[2].values); // Because vector with id 1 was removed.
+    }
+
+    #[test]
+    fn test_remove_vector_out_of_bounds() {
+        let mut index = PQIndex::new(2, 4, 10, 0.001, DistanceMetric::Cosine, 42);
+
+        let (vectors, _) = get_simple_vectors();
+
+        for vector in &vectors {
+            index.add_vector(vector);
+        }
+
+        index.build();
+        let result = index.remove_vector(10);
+        assert!(result.is_none());
+    }
 
     #[test]
     fn test_pq_index_simple() {
