@@ -24,14 +24,6 @@
   - [ ] IVFPQ
   - [ ] PQ
 
-- [ ] Add flexible adding and removing capability
-  - [ ] HNSW
-  - [x] NSW
-  - [ ] ANNOY
-  - [x] LinScan
-  - [x] IVFPQ
-  - [x] PQ
-
 ## Experiments
 
 - [ ] Define experiments that are going to be created
