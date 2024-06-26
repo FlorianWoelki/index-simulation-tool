@@ -127,6 +127,8 @@ impl LinScanIndex {
 
 #[cfg(test)]
 mod tests {
+    use crate::test_utils::get_simple_vectors;
+
     use super::*;
 
     #[test]
@@ -236,28 +238,7 @@ mod tests {
 
     #[test]
     fn test_linscan_simple() {
-        let data = vec![
-            SparseVector {
-                indices: vec![0, 2],
-                values: vec![OrderedFloat(1.0), OrderedFloat(2.0)],
-            },
-            SparseVector {
-                indices: vec![1, 3],
-                values: vec![OrderedFloat(3.0), OrderedFloat(4.0)],
-            },
-            SparseVector {
-                indices: vec![0, 2],
-                values: vec![OrderedFloat(5.0), OrderedFloat(6.0)],
-            },
-            SparseVector {
-                indices: vec![1, 3],
-                values: vec![OrderedFloat(7.0), OrderedFloat(8.0)],
-            },
-            SparseVector {
-                indices: vec![0, 2],
-                values: vec![OrderedFloat(9.0), OrderedFloat(10.0)],
-            },
-        ];
+        let (data, query_vectors) = get_simple_vectors();
 
         let mut index = LinScanIndex::new(DistanceMetric::Cosine);
         for vector in &data {
@@ -265,11 +246,7 @@ mod tests {
         }
         index.build();
 
-        let query = SparseVector {
-            indices: vec![0, 2],
-            values: vec![OrderedFloat(6.0), OrderedFloat(7.0)],
-        };
-        let neighbors = index.search(&query, 2);
+        let neighbors = index.search(&query_vectors[0], 2);
         println!("Nearest neighbors: {:?}", neighbors);
 
         assert!(true);
@@ -277,28 +254,7 @@ mod tests {
 
     #[test]
     fn test_linscan_parallel() {
-        let data = vec![
-            SparseVector {
-                indices: vec![0, 2],
-                values: vec![OrderedFloat(1.0), OrderedFloat(2.0)],
-            },
-            SparseVector {
-                indices: vec![1, 3],
-                values: vec![OrderedFloat(3.0), OrderedFloat(4.0)],
-            },
-            SparseVector {
-                indices: vec![0, 2],
-                values: vec![OrderedFloat(5.0), OrderedFloat(6.0)],
-            },
-            SparseVector {
-                indices: vec![1, 3],
-                values: vec![OrderedFloat(7.0), OrderedFloat(8.0)],
-            },
-            SparseVector {
-                indices: vec![0, 2],
-                values: vec![OrderedFloat(9.0), OrderedFloat(10.0)],
-            },
-        ];
+        let (data, query_vectors) = get_simple_vectors();
 
         let mut index = LinScanIndex::new(DistanceMetric::Cosine);
         for vector in &data {
@@ -306,17 +262,7 @@ mod tests {
         }
         index.build();
 
-        let queries = vec![
-            SparseVector {
-                indices: vec![0, 2],
-                values: vec![OrderedFloat(6.0), OrderedFloat(7.0)],
-            },
-            SparseVector {
-                indices: vec![0, 2],
-                values: vec![OrderedFloat(2.0), OrderedFloat(3.0)],
-            },
-        ];
-        let neighbors = index.search_parallel(&queries, 2);
+        let neighbors = index.search_parallel(&query_vectors, 2);
         println!("Nearest neighbors: {:?}", neighbors);
 
         assert!(true);
