@@ -29,8 +29,8 @@
   - [x] NSW
   - [ ] ANNOY
   - [x] LinScan
-  - [ ] IVFPQ
-  - [ ] PQ
+  - [x] IVFPQ
+  - [x] PQ
 
 ## Experiments
 
