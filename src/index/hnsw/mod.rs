@@ -1,4 +1,4 @@
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use node::Node;
 use ordered_float::OrderedFloat;
@@ -48,6 +48,60 @@ impl HNSWIndex {
 
     pub fn add_vector(&mut self, item: &SparseVector) {
         self.vectors.push(item.clone());
+    }
+
+    pub fn remove_vector(&mut self, index: usize) -> Option<SparseVector> {
+        if index >= self.vectors.len() {
+            return None;
+        }
+
+        let removed_vector = self.vectors.swap_remove(index);
+
+        if let Some(removed_node) = self.nodes.remove(&index) {
+            let last_index = self.vectors.len();
+            let mut connections_to_update: Vec<(usize, usize, HashSet<usize>)> = Vec::new();
+
+            for layer in 0..=removed_node.layer {
+                let mut layer_connections = HashSet::new();
+                layer_connections.extend(removed_node.connections[layer].iter().cloned());
+
+                if index != last_index {
+                    if let Some(last_node) = self.nodes.get(&last_index) {
+                        for neighbor_id in &last_node.connections[layer] {
+                            layer_connections.insert(*neighbor_id);
+                        }
+                    }
+                }
+
+                connections_to_update.push((layer, index, layer_connections));
+            }
+
+            for (layer, removed_index, connections) in connections_to_update {
+                for &neighbor_id in &connections {
+                    if let Some(neighbor_node) = self.nodes.get_mut(&neighbor_id) {
+                        neighbor_node.connections[layer]
+                            .retain(|&id| id != removed_index && id != last_index);
+                        if index != last_index && neighbor_id != last_index {
+                            neighbor_node.connections[layer].push(removed_index);
+                        }
+                    }
+                }
+            }
+
+            if index != last_index {
+                if let Some(swapped_node) = self.nodes.get_mut(&last_index) {
+                    swapped_node.id = index;
+                }
+
+                if let Some(swapped_node) = self.nodes.remove(&last_index) {
+                    self.nodes.insert(index, swapped_node);
+                }
+            }
+
+            Some(removed_vector)
+        } else {
+            None
+        }
     }
 
     pub fn build(&mut self) {
@@ -216,6 +270,47 @@ mod tests {
     use rand::thread_rng;
 
     use super::*;
+
+    #[test]
+    fn test_remove_vector() {
+        let mut index = HNSWIndex::new(0.5, 3, 10, 10, DistanceMetric::Cosine, 42);
+
+        let mut vectors = vec![];
+        for i in 0..5 {
+            let vector = SparseVector {
+                indices: vec![i],
+                values: vec![OrderedFloat(1.0)],
+            };
+            vectors.push(vector);
+        }
+
+        for vector in &vectors {
+            index.add_vector(vector);
+        }
+
+        index.build();
+
+        let removed = index.remove_vector(2);
+
+        assert_eq!(removed, Some(vectors[2].clone()));
+        assert_eq!(index.vectors.len(), 4);
+        assert_eq!(index.nodes.len(), 4);
+
+        assert_eq!(index.vectors[0], vectors[0].clone());
+        assert_eq!(index.vectors[1], vectors[1].clone());
+        assert_eq!(index.vectors[2], vectors[4].clone());
+        assert_eq!(index.vectors[3], vectors[3].clone());
+
+        // Check if connections are updated correctly.
+        for (_, node) in &index.nodes {
+            for layer in 0..=node.layer {
+                for &neighbor_id in &node.connections[layer] {
+                    assert!(neighbor_id < 4);
+                    assert!(index.nodes.contains_key(&neighbor_id));
+                }
+            }
+        }
+    }
 
     #[test]
     fn test_hnsw_index_simple() {
