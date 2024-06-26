@@ -53,6 +53,26 @@ impl IVFPQIndex {
         self.vectors.push(vector.clone());
     }
 
+    pub fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
+        if id >= self.vectors.len() {
+            return None;
+        }
+
+        let removed_vector = self.vectors.remove(id);
+        self.coarse_codes.remove(id);
+        self.pq_codes.remove(id);
+
+        if self.vectors.is_empty() {
+            self.coarse_centroids.clear();
+            self.sub_quantizers.clear();
+        } else {
+            // Optionally: rebuild the index here (`self.build()`).
+            // Can be computationally expensive, depending on the dataset.
+        }
+
+        Some(removed_vector)
+    }
+
     pub fn build(&mut self) {
         // Perform coarse quantization using k-means clustering while assigning
         // each vector to the nearest centroid.
@@ -232,7 +252,49 @@ mod tests {
     use ordered_float::OrderedFloat;
     use rand::{thread_rng, Rng};
 
+    use crate::test_utils::get_simple_vectors;
+
     use super::*;
+
+    #[test]
+    fn test_remove_vector() {
+        let mut index = IVFPQIndex::new(2, 4, 2, 10, 0.001, DistanceMetric::Cosine, 42);
+
+        let (vectors, _) = get_simple_vectors();
+        for vector in &vectors {
+            index.add_vector(vector);
+        }
+
+        index.build();
+
+        assert_eq!(index.vectors.len(), 5);
+        assert_eq!(index.coarse_codes.len(), 5);
+        assert_eq!(index.pq_codes.len(), 5);
+
+        let result = index.remove_vector(1);
+        assert_eq!(result, Some(vectors[1].clone()));
+        assert_eq!(index.vectors.len(), 4);
+        assert_eq!(index.coarse_codes.len(), 4);
+        assert_eq!(index.pq_codes.len(), 4);
+
+        assert_eq!(index.vectors[0], vectors[0]);
+        assert_eq!(index.vectors[1], vectors[2]);
+    }
+
+    #[test]
+    fn test_remove_vector_out_of_bounds() {
+        let mut index = IVFPQIndex::new(2, 4, 2, 10, 0.001, DistanceMetric::Cosine, 42);
+
+        let (vectors, _) = get_simple_vectors();
+        for vector in &vectors {
+            index.add_vector(vector);
+        }
+
+        index.build();
+
+        let result = index.remove_vector(10);
+        assert!(result.is_none());
+    }
 
     #[test]
     fn test_ivfpq_index_simple() {

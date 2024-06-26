@@ -227,8 +227,8 @@ mod tests {
         assert_eq!(index.encoded_codes.len(), 4);
 
         // Verify the remaining vectors.
-        assert_eq!(index.vectors[0].values, vectors[0].values);
-        assert_eq!(index.vectors[1].values, vectors[2].values); // Because vector with id 1 was removed.
+        assert_eq!(index.vectors[0], vectors[0]);
+        assert_eq!(index.vectors[1], vectors[2]); // Because vector with id 1 was removed.
     }
 
     #[test]
