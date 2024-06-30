@@ -1,5 +1,12 @@
+use std::{
+    cmp::Reverse,
+    collections::{BinaryHeap, HashSet},
+    sync::Mutex,
+};
+
 use minhash::minhash;
 use ordered_float::OrderedFloat;
+use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 use simhash::simhash;
 
 use crate::{
@@ -62,18 +69,52 @@ impl LSHIndex {
     }
 
     pub fn add_vector(&mut self, vector: &SparseVector) {
-        for i in 0..self.num_hash_functions {
-            let hash = self.hash(vector, i);
-            let bucket_index = self.hash_bucket(hash);
-            self.buckets[bucket_index].push((self.vectors.len(), vector.clone()));
-        }
         self.vectors.push(vector.clone());
     }
 
     pub fn build(&mut self) {
+        for (id, vector) in self.vectors.iter().enumerate() {
+            for i in 0..self.num_hash_functions {
+                let hash = self.hash(vector, i);
+                let bucket_index = self.hash_bucket(hash);
+                self.buckets[bucket_index].push((id, vector.clone()));
+            }
+        }
+
         for bucket in &mut self.buckets {
             bucket.sort_by(|a, b| a.1.values.partial_cmp(&b.1.values).unwrap());
         }
+    }
+
+    pub fn build_parallel(&mut self) {
+        let mutex_buckets: Vec<Mutex<Vec<(usize, SparseVector)>>> = self
+            .buckets
+            .iter()
+            .map(|bucket| Mutex::new(bucket.clone()))
+            .collect();
+
+        (0..self.vectors.len())
+            .into_par_iter()
+            .for_each(|vector_index| {
+                let vector = &self.vectors[vector_index];
+
+                for i in 0..self.num_hash_functions {
+                    let hash = self.hash(vector, i);
+                    let bucket_index = self.hash_bucket(hash);
+
+                    let mut bucket = mutex_buckets[bucket_index].lock().unwrap();
+                    bucket.push((vector_index, vector.clone()));
+                }
+            });
+
+        self.buckets = mutex_buckets
+            .into_iter()
+            .map(|mutex| mutex.into_inner().unwrap())
+            .collect();
+
+        self.buckets
+            .par_iter_mut()
+            .for_each(|bucket| bucket.sort_by(|a, b| a.1.values.partial_cmp(&b.1.values).unwrap()));
     }
 
     pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
@@ -131,36 +172,61 @@ impl LSHIndex {
             })
             .collect()
     }
+
+    pub fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+        let candidate_set = Mutex::new(HashSet::new());
+
+        (0..self.num_hash_functions).into_par_iter().for_each(|i| {
+            let query_hash = self.hash(query_vector, i);
+            let bucket_index = self.hash_bucket(query_hash);
+            let bucket = &self.buckets[bucket_index];
+
+            let mut local_candidates = HashSet::new();
+            for (index, _) in bucket {
+                local_candidates.insert(*index);
+            }
+
+            let mut global_candidates = candidate_set.lock().unwrap();
+            global_candidates.extend(local_candidates);
+        });
+
+        let candidates = candidate_set.into_inner().unwrap();
+
+        let results: Vec<_> = candidates
+            .into_par_iter()
+            .map(|index| {
+                let vector = &self.vectors[index];
+                let similarity = query_vector.cosine_similarity(vector);
+                (similarity, index)
+            })
+            .collect();
+
+        let mut heap = BinaryHeap::with_capacity(k);
+        for (similarity, index) in results {
+            if heap.len() < k {
+                heap.push(Reverse((OrderedFloat(similarity), index)));
+            } else if similarity > heap.peek().unwrap().0 .0.into_inner() {
+                heap.pop();
+                heap.push(Reverse((OrderedFloat(similarity), index)));
+            }
+        }
+
+        heap.into_sorted_vec()
+            .into_iter()
+            .map(|Reverse((score, index))| QueryResult { index, score })
+            .collect()
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::test_utils::get_simple_vectors;
+
     use super::*;
 
     #[test]
-    fn test_lsh_index_min_hash_simple() {
-        let data = vec![
-            SparseVector {
-                indices: vec![0, 2],
-                values: vec![OrderedFloat(1.0), OrderedFloat(2.0)],
-            },
-            SparseVector {
-                indices: vec![1, 3],
-                values: vec![OrderedFloat(3.0), OrderedFloat(4.0)],
-            },
-            SparseVector {
-                indices: vec![0, 2],
-                values: vec![OrderedFloat(5.0), OrderedFloat(6.0)],
-            },
-            SparseVector {
-                indices: vec![1, 3],
-                values: vec![OrderedFloat(7.0), OrderedFloat(8.0)],
-            },
-            SparseVector {
-                indices: vec![0, 2],
-                values: vec![OrderedFloat(9.0), OrderedFloat(10.0)],
-            },
-        ];
+    fn test_search_parallel() {
+        let (data, query_vectors) = get_simple_vectors();
 
         let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash);
         for vector in &data {
@@ -168,11 +234,39 @@ mod tests {
         }
         index.build();
 
-        let query = SparseVector {
-            indices: vec![0, 2],
-            values: vec![OrderedFloat(6.0), OrderedFloat(7.0)],
-        };
-        let neighbors = index.search(&query, 2);
+        let neighbors = index.search_parallel(&query_vectors[0], 2);
+        println!("Nearest neighbors: {:?}", neighbors);
+
+        assert!(true);
+    }
+
+    #[test]
+    fn test_build_parallel() {
+        let (data, query_vectors) = get_simple_vectors();
+
+        let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash);
+        for vector in &data {
+            index.add_vector(vector);
+        }
+        index.build_parallel();
+
+        let neighbors = index.search(&query_vectors[0], 2);
+        println!("Nearest neighbors: {:?}", neighbors);
+
+        assert!(true);
+    }
+
+    #[test]
+    fn test_lsh_index_min_hash_simple() {
+        let (data, query_vectors) = get_simple_vectors();
+
+        let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash);
+        for vector in &data {
+            index.add_vector(vector);
+        }
+        index.build();
+
+        let neighbors = index.search(&query_vectors[0], 2);
         println!("Nearest neighbors: {:?}", neighbors);
 
         assert!(true);
