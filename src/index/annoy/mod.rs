@@ -1,7 +1,11 @@
-use std::collections::{BinaryHeap, HashSet};
+use std::{
+    collections::{BinaryHeap, HashSet},
+    sync::Mutex,
+};
 
 use ordered_float::OrderedFloat;
 use rand::Rng;
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 use crate::data::{QueryResult, SparseVector};
 
@@ -146,6 +150,93 @@ impl AnnoyIndex {
         self.trees = trees;
     }
 
+    pub fn build_parallel(&mut self) {
+        let n_dims = self
+            .vectors
+            .iter()
+            .map(|v| v.indices.len())
+            .max()
+            .unwrap_or(0);
+
+        let trees: Vec<Tree> = (0..self.n_trees)
+            .into_par_iter()
+            .map(|_| {
+                let indices: Vec<usize> = (0..self.vectors.len()).collect();
+                let root = Node::build(
+                    &self.vectors,
+                    &indices,
+                    n_dims,
+                    self.max_points,
+                    &self.metric,
+                );
+                Tree { root, n_dims }
+            })
+            .collect();
+
+        self.trees = trees;
+    }
+
+    pub fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+        let candidates = Mutex::new(HashSet::new());
+
+        self.trees.par_iter().for_each(|tree| {
+            let mut local_candidates: HashSet<usize> = HashSet::new();
+            let mut nodes = vec![(0.0, &tree.root)];
+            let mut visited = 0;
+
+            while let Some((_, node)) = nodes.pop() {
+                visited += 1;
+                if visited > self.search_k {
+                    break;
+                }
+
+                local_candidates.extend(&node.indices);
+
+                if let Some(ref left) = node.left {
+                    nodes.push((0.0, left));
+                }
+                if let Some(ref right) = node.right {
+                    nodes.push((0.0, right));
+                }
+            }
+
+            let mut global_candidates = candidates.lock().unwrap();
+            global_candidates.extend(local_candidates);
+        });
+
+        let candidates: Vec<_> = candidates.into_inner().unwrap().into_iter().collect();
+
+        let results: Vec<_> = candidates
+            .into_par_iter()
+            .map(|point| {
+                let distance =
+                    OrderedFloat(query_vector.distance(&self.vectors[point], &self.metric));
+                (distance, point)
+            })
+            .collect();
+
+        let mut heap = BinaryHeap::with_capacity(k);
+        for (distance, point) in results {
+            if heap.len() < k {
+                heap.push((distance, point));
+            } else if distance < heap.peek().unwrap().0 {
+                heap.pop();
+                heap.push((distance, point));
+            }
+        }
+
+        let mut results = heap.into_iter().collect::<Vec<_>>();
+        results.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+
+        results
+            .into_iter()
+            .map(|(distance, i)| QueryResult {
+                index: i,
+                score: distance,
+            })
+            .collect()
+    }
+
     pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let mut heap = BinaryHeap::with_capacity(k);
         let mut candidates = HashSet::new();
@@ -204,6 +295,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_search_parallel() {
+        let (data, query_vectors) = get_simple_vectors();
+        let mut index = AnnoyIndex::new(3, 2, 10, DistanceMetric::Cosine);
+        for vector in &data {
+            index.add_vector(vector);
+        }
+        index.build();
+
+        let neighbors = index.search_parallel(&query_vectors[0], 2);
+        println!("Nearest neighbors: {:?}", neighbors);
+        assert!(true);
+    }
+
+    #[test]
+    fn test_build_parallel() {
+        let (data, query_vectors) = get_simple_vectors();
+        let mut index = AnnoyIndex::new(3, 2, 10, DistanceMetric::Cosine);
+        for vector in &data {
+            index.add_vector(vector);
+        }
+        index.build_parallel();
+
+        let neighbors = index.search(&query_vectors[0], 2);
+        println!("Nearest neighbors: {:?}", neighbors);
+        assert!(true);
+    }
+
+    #[test]
     fn test_remove_vector() {
         let mut index = AnnoyIndex::new(3, 2, 10, DistanceMetric::Euclidean);
 
@@ -231,40 +350,14 @@ mod tests {
 
     #[test]
     fn test_annoy_index_simple() {
-        let data = vec![
-            SparseVector {
-                indices: vec![0, 2],
-                values: vec![OrderedFloat(1.0), OrderedFloat(2.0)],
-            },
-            SparseVector {
-                indices: vec![1, 3],
-                values: vec![OrderedFloat(3.0), OrderedFloat(4.0)],
-            },
-            SparseVector {
-                indices: vec![0, 2],
-                values: vec![OrderedFloat(5.0), OrderedFloat(6.0)],
-            },
-            SparseVector {
-                indices: vec![1, 3],
-                values: vec![OrderedFloat(7.0), OrderedFloat(8.0)],
-            },
-            SparseVector {
-                indices: vec![0, 2],
-                values: vec![OrderedFloat(9.0), OrderedFloat(10.0)],
-            },
-        ];
-
+        let (data, query_vectors) = get_simple_vectors();
         let mut index = AnnoyIndex::new(10, 10, 10, DistanceMetric::Cosine);
         for vector in &data {
             index.add_vector(vector);
         }
         index.build();
 
-        let query = SparseVector {
-            indices: vec![0, 2],
-            values: vec![OrderedFloat(6.0), OrderedFloat(7.0)],
-        };
-        let neighbors = index.search(&query, 2);
+        let neighbors = index.search(&query_vectors[0], 2);
         println!("Nearest neighbors: {:?}", neighbors);
         assert!(true);
     }
