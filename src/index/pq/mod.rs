@@ -4,7 +4,10 @@ use crate::{
     kmeans::kmeans,
 };
 use ordered_float::OrderedFloat;
-use std::vec;
+use rayon::iter::{
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
+};
+use std::{cmp::Reverse, collections::BinaryHeap, sync::Arc, vec};
 
 use super::DistanceMetric;
 
@@ -102,6 +105,72 @@ impl PQIndex {
         self.encoded_codes = self.encode(&self.vectors);
     }
 
+    pub fn build_parallel(&mut self) {
+        let vectors = Arc::new(self.vectors.clone());
+        self.codewords = (0..self.num_subvectors)
+            .into_par_iter()
+            .map(|m| {
+                let sub_vectors_m: Vec<SparseVector> = vectors
+                    .par_iter()
+                    .map(|vec| {
+                        let sub_vec_dims = vec.indices.len() / self.num_subvectors;
+                        let remaining_dims = vec.indices.len() % self.num_subvectors;
+                        let start_idx = m * sub_vec_dims + m.min(remaining_dims);
+                        let end_idx = start_idx + sub_vec_dims + (m < remaining_dims) as usize;
+                        let indices = vec.indices[start_idx..end_idx].to_vec();
+                        let values = vec.values[start_idx..end_idx].to_vec();
+                        SparseVector { indices, values }
+                    })
+                    .collect();
+
+                kmeans(
+                    &sub_vectors_m,
+                    self.num_clusters,
+                    self.iterations,
+                    self.tolerance,
+                    self.random_seed + m as u64, // Use different seeds for each subvector
+                )
+            })
+            .collect();
+
+        self.encoded_codes = vectors
+            .par_iter()
+            .map(|vec| {
+                let sub_vec_dims = vec.indices.len() / self.num_subvectors;
+                let remaining_dims = vec.indices.len() % self.num_subvectors;
+                let subvectors: Vec<SparseVector> = (0..self.num_subvectors)
+                    .map(|m| {
+                        let start_idx = m * sub_vec_dims + m.min(remaining_dims);
+                        let end_idx = start_idx + sub_vec_dims + (m < remaining_dims) as usize;
+                        let indices = vec.indices[start_idx..end_idx].to_vec();
+                        let values = vec.values[start_idx..end_idx].to_vec();
+                        SparseVector { indices, values }
+                    })
+                    .collect();
+
+                self.vector_quantize_parallel(&subvectors)
+            })
+            .collect();
+    }
+
+    fn vector_quantize_parallel(&self, vectors: &[SparseVector]) -> Vec<usize> {
+        vectors
+            .par_iter()
+            .enumerate()
+            .map(|(m, subvector)| {
+                self.codewords[m]
+                    .par_iter()
+                    .enumerate()
+                    .map(|(k, code)| (k, subvector.distance(code, &self.metric)))
+                    .min_by(|&(_, a), &(_, b)| {
+                        a.partial_cmp(&b).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|(k, _)| k)
+                    .unwrap()
+            })
+            .collect()
+    }
+
     pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let mut heap: MinHeap<QueryResult> = MinHeap::new();
         let sub_vec_dims = query_vector.indices.len() / self.num_subvectors;
@@ -150,6 +219,70 @@ impl PQIndex {
             .map(|query_result| QueryResult {
                 index: query_result.index,
                 score: OrderedFloat(-query_result.score.into_inner()),
+            })
+            .collect()
+    }
+
+    pub fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+        let sub_vec_dims = query_vector.indices.len() / self.num_subvectors;
+        let remaining_dims = query_vector.indices.len() % self.num_subvectors;
+
+        let distance_tables: Vec<Vec<f32>> = (0..self.num_subvectors)
+            .into_par_iter()
+            .map(|m| {
+                let start_idx = m * sub_vec_dims + m.min(remaining_dims);
+                let end_idx = start_idx + sub_vec_dims + (m < remaining_dims) as usize;
+                let query_sub_indices = query_vector.indices[start_idx..end_idx].to_vec();
+                let query_sub_values = query_vector.values[start_idx..end_idx].to_vec();
+
+                let query_sub = SparseVector {
+                    indices: query_sub_indices,
+                    values: query_sub_values,
+                };
+
+                self.codewords[m]
+                    .iter()
+                    .map(|codeword| query_sub.distance(codeword, &self.metric))
+                    .collect()
+            })
+            .collect();
+
+        let distance_tables = Arc::new(distance_tables);
+        let encoded_codes = Arc::new(self.encoded_codes.clone());
+
+        let scores: Vec<(f32, usize)> = (0..self.encoded_codes.len())
+            .into_par_iter()
+            .map(|n| {
+                let distance: f32 = encoded_codes[n]
+                    .iter()
+                    .enumerate()
+                    .map(|(m, &code)| distance_tables[m][code])
+                    .sum();
+                (distance, n)
+            })
+            .collect();
+
+        let mut heap: MinHeap<QueryResult> = MinHeap::new();
+        for (score, index) in scores {
+            if heap.len() < k || score > heap.peek().unwrap().score.into_inner() {
+                heap.push(
+                    QueryResult {
+                        score: OrderedFloat(-score),
+                        index,
+                    },
+                    OrderedFloat(-score),
+                );
+                if heap.len() > k {
+                    heap.pop();
+                }
+            }
+        }
+
+        heap.into_sorted_vec()
+            .into_iter()
+            .map(|query_result| QueryResult {
+                index: query_result.index,
+                score: -query_result.score,
             })
             .collect()
     }
@@ -205,6 +338,62 @@ mod tests {
     use crate::test_utils::get_simple_vectors;
 
     use super::*;
+
+    #[test]
+    fn test_search_parallel() {
+        let num_subvectors = 4;
+        let num_clusters = 4;
+        let iterations = 10;
+        let mut pq_index = PQIndex::new(
+            num_subvectors,
+            num_clusters,
+            iterations,
+            0.01,
+            DistanceMetric::Euclidean,
+            42,
+        );
+
+        let (data, query_vectors) = get_simple_vectors();
+
+        for vector in &data {
+            pq_index.add_vector(vector);
+        }
+
+        pq_index.build();
+
+        let result = pq_index.search_parallel(&query_vectors[0], 2);
+        println!("{:?}", result);
+
+        assert!(false);
+    }
+
+    #[test]
+    fn test_build_parallel() {
+        let num_subvectors = 4;
+        let num_clusters = 4;
+        let iterations = 20;
+        let mut pq_index = PQIndex::new(
+            num_subvectors,
+            num_clusters,
+            iterations,
+            0.01,
+            DistanceMetric::Euclidean,
+            42,
+        );
+
+        let (data, query_vectors) = get_simple_vectors();
+
+        for vector in &data {
+            pq_index.add_vector(vector);
+        }
+
+        pq_index.build_parallel();
+
+        let result = pq_index.search(&query_vectors[0], 2);
+        println!("{:?}", result);
+
+        assert!(true);
+    }
 
     #[test]
     fn test_remove_vector() {
