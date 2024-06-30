@@ -15,14 +15,16 @@
   - [x] t-SNE
     - [x] Remove nalgebra and use pure ndarray for PCA
 - [ ] Cleanup repository
+  - [ ] Use similar functionalities for multi threaded and single threaded functionality
 
 - [ ] Develop async functionalities for each algorithm
   - [ ] HNSW
   - [ ] NSW
-  - [ ] ANNOY
+  - [x] ANNOY
   - [x] LinScan
+  - [x] LSH
   - [ ] IVFPQ
-  - [ ] PQ
+  - [x] PQ
 
 ## Experiments
 
