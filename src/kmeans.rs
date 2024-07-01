@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use ordered_float::{Float, OrderedFloat};
 use rand::{rngs::StdRng, SeedableRng};
 
-use crate::data::SparseVector;
+use crate::{data::SparseVector, index::DistanceMetric};
 
 pub fn kmeans(
     vectors: &Vec<SparseVector>,
@@ -13,6 +13,7 @@ pub fn kmeans(
     iterations: usize,
     tolerance: f32,
     random_seed: u64,
+    metric: &DistanceMetric,
 ) -> Vec<SparseVector> {
     let mut rng = StdRng::seed_from_u64(random_seed);
     if vectors.is_empty() {
@@ -32,7 +33,7 @@ pub fn kmeans(
             let mut closest_distance = f32::MAX;
 
             for (j, center) in centers.iter().enumerate() {
-                let distance = node.euclidean_distance(center);
+                let distance = node.distance(center, &metric);
 
                 if distance < closest_distance {
                     closest = j;
@@ -57,6 +58,12 @@ pub fn kmeans(
         let mut max_change = 0.0;
 
         for (i, center) in centers.iter_mut().enumerate() {
+            if counts[i] == 0 {
+                // If a cluster is empty, reinitialize its center to a random vector
+                *center = vectors.choose(&mut rng).unwrap().clone();
+                continue;
+            }
+
             let mut new_indices = Vec::new();
             let mut new_values = Vec::new();
             for (&index, &sum_value) in new_centers[i].iter() {
@@ -64,14 +71,15 @@ pub fn kmeans(
                 new_values.push(OrderedFloat(sum_value / counts[i] as f32));
             }
 
-            let mut change = 0.0;
-            for (a, b) in center.values.iter().zip(&new_values) {
-                change += (a.0 - b.0).abs();
-            }
+            let new_center = SparseVector {
+                indices: new_indices,
+                values: new_values,
+            };
+
+            let change = center.distance(&new_center, &metric);
             max_change = max_change.max(change);
 
-            center.indices = new_indices;
-            center.values = new_values;
+            *center = new_center;
         }
 
         if max_change < tolerance {
@@ -88,8 +96,16 @@ pub fn kmeans_index(
     iterations: usize,
     tolerance: f32,
     random_seed: u64,
+    metric: &DistanceMetric,
 ) -> Vec<usize> {
-    let centers = kmeans(&vectors, num_clusters, iterations, tolerance, random_seed);
+    let centers = kmeans(
+        &vectors,
+        num_clusters,
+        iterations,
+        tolerance,
+        random_seed,
+        metric,
+    );
 
     centers
         .iter()
@@ -99,8 +115,8 @@ pub fn kmeans_index(
                 .enumerate()
                 .min_by(|(_, node1), (_, node2)| {
                     node1
-                        .euclidean_distance(center)
-                        .partial_cmp(&node2.euclidean_distance(center))
+                        .distance(center, &metric)
+                        .partial_cmp(&node2.distance(center, &metric))
                         .unwrap_or(std::cmp::Ordering::Equal)
                 })
                 .map(|(index, _)| index)
@@ -134,7 +150,14 @@ mod tests {
         let tolerance = 0.1;
         let random_seed = 42;
 
-        let centers = kmeans(&vectors, num_clusters, iterations, tolerance, random_seed);
+        let centers = kmeans(
+            &vectors,
+            num_clusters,
+            iterations,
+            tolerance,
+            random_seed,
+            &DistanceMetric::Euclidean,
+        );
 
         assert_eq!(centers.len(), num_clusters);
 
@@ -162,7 +185,14 @@ mod tests {
         let tolerance = 10.0;
         let random_seed = 42;
 
-        let centers = kmeans(&vectors, num_clusters, iterations, tolerance, random_seed);
+        let centers = kmeans(
+            &vectors,
+            num_clusters,
+            iterations,
+            tolerance,
+            random_seed,
+            &DistanceMetric::Euclidean,
+        );
         assert_eq!(centers.len(), num_clusters);
 
         assert!(centers
@@ -189,7 +219,14 @@ mod tests {
         let tolerance = 0.1;
         let random_seed = 42;
 
-        let indices = kmeans_index(&vectors, num_clusters, iterations, tolerance, random_seed);
+        let indices = kmeans_index(
+            &vectors,
+            num_clusters,
+            iterations,
+            tolerance,
+            random_seed,
+            &DistanceMetric::Euclidean,
+        );
 
         assert_eq!(indices.len(), num_clusters);
 

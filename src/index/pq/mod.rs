@@ -98,6 +98,7 @@ impl PQIndex {
                 self.iterations,
                 self.tolerance,
                 self.random_seed,
+                &self.metric,
             );
             self.codewords.push(codewords_m);
         }
@@ -129,6 +130,7 @@ impl PQIndex {
                     self.iterations,
                     self.tolerance,
                     self.random_seed + m as u64, // Use different seeds for each subvector
+                    &self.metric,
                 )
             })
             .collect();
@@ -335,7 +337,7 @@ impl PQIndex {
 mod tests {
     use ordered_float::OrderedFloat;
 
-    use crate::test_utils::get_simple_vectors;
+    use crate::test_utils::{get_complex_vectors, get_simple_vectors};
 
     use super::*;
 
@@ -445,37 +447,18 @@ mod tests {
             num_clusters,
             iterations,
             0.01,
-            DistanceMetric::Euclidean,
+            DistanceMetric::Cosine,
             42,
         );
 
-        let vectors = vec![
-            SparseVector {
-                indices: vec![0, 2, 5],
-                values: vec![OrderedFloat(1.0), OrderedFloat(2.0), OrderedFloat(3.0)],
-            },
-            SparseVector {
-                indices: vec![1, 3, 4],
-                values: vec![OrderedFloat(4.0), OrderedFloat(5.0), OrderedFloat(6.0)],
-            },
-            SparseVector {
-                indices: vec![0, 2, 5],
-                values: vec![OrderedFloat(7.0), OrderedFloat(8.0), OrderedFloat(9.0)],
-            },
-        ];
-
+        let (vectors, query_vectors) = get_simple_vectors();
         for vector in &vectors {
             pq_index.add_vector(vector);
         }
 
         pq_index.build();
 
-        let query_vector = SparseVector {
-            indices: vec![0, 2, 5],
-            values: vec![OrderedFloat(1.0), OrderedFloat(2.0), OrderedFloat(3.0)],
-        };
-
-        let result = pq_index.search(&query_vector, 10);
+        let result = pq_index.search(&query_vectors[0], 2);
         println!("{:?}", result);
 
         assert!(true);
@@ -548,7 +531,7 @@ mod tests {
     #[test]
     fn test_pq_index_complex() {
         let num_subvectors = 2;
-        let num_clusters = 10;
+        let num_clusters = 20;
         let iterations = 256;
         let random_seed = 42;
         let mut index = PQIndex::new(
@@ -556,28 +539,17 @@ mod tests {
             num_clusters,
             iterations,
             0.01,
-            DistanceMetric::Euclidean,
+            DistanceMetric::Cosine,
             random_seed,
         );
 
-        let mut vectors = vec![];
-        for i in 0..100 {
-            vectors.push(SparseVector {
-                indices: vec![i % 10, (i / 10) % 10],
-                values: vec![OrderedFloat((i % 10) as f32), OrderedFloat((i / 10) as f32)],
-            });
-        }
-
+        let (vectors, query_vector) = get_complex_vectors();
         for vector in &vectors {
             index.add_vector(vector);
         }
 
         index.build();
 
-        let query_vector = SparseVector {
-            indices: vec![1, 7],
-            values: vec![OrderedFloat(1.5), OrderedFloat(7.0)],
-        };
         let results = index.search(&query_vector, 10);
         println!("Results for search on query vector: {:?}", results);
         println!("Top Search: {:?}", vectors[results[0].index]);
