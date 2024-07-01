@@ -254,6 +254,77 @@ impl IVFPQIndex {
             .collect()
     }
 
+    pub fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+        let mut coarse_distances: Vec<(usize, f32)> = self
+            .coarse_centroids
+            .par_iter()
+            .enumerate()
+            .map(|(i, coarse_codeword)| (i, query_vector.distance(coarse_codeword, &self.metric)))
+            .collect();
+        coarse_distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+        let sub_vec_dims = query_vector.indices.len() / self.num_subvectors;
+        let mut scores = Mutex::new(Vec::with_capacity(self.vectors.len()));
+
+        coarse_distances
+            .par_iter()
+            .take(k)
+            .for_each(|&(coarse_index, _)| {
+                let local_scores: Vec<(f32, usize)> = self
+                    .coarse_codes
+                    .par_iter()
+                    .enumerate()
+                    .filter(|&(_, &coarse_code)| coarse_code == coarse_index)
+                    .map(|(n, _)| {
+                        let distance: f32 = (0..self.num_subvectors)
+                            .map(|m| {
+                                let start_idx = m * sub_vec_dims;
+                                let end_idx =
+                                    ((m + 1) * sub_vec_dims).min(query_vector.indices.len());
+                                let query_sub = SparseVector {
+                                    indices: query_vector.indices[start_idx..end_idx].to_vec(),
+                                    values: query_vector.values[start_idx..end_idx].to_vec(),
+                                };
+                                query_sub.distance(
+                                    &self.sub_quantizers[coarse_index][m][self.pq_codes[n][m]],
+                                    &self.metric,
+                                )
+                            })
+                            .sum();
+                        (distance, n)
+                    })
+                    .collect();
+
+                scores.lock().unwrap().extend(local_scores);
+            });
+
+        let scores = scores.into_inner().unwrap();
+
+        let mut heap: MinHeap<QueryResult> = MinHeap::new();
+        for (score, index) in scores.iter() {
+            if heap.len() < k || *score > heap.peek().unwrap().score.into_inner() {
+                heap.push(
+                    QueryResult {
+                        index: *index,
+                        score: OrderedFloat(-score),
+                    },
+                    OrderedFloat(-score),
+                );
+                if heap.len() > k {
+                    heap.pop();
+                }
+            }
+        }
+
+        heap.into_sorted_vec()
+            .iter()
+            .map(|query_result| QueryResult {
+                index: query_result.index,
+                score: OrderedFloat(-query_result.score.into_inner()),
+            })
+            .collect()
+    }
+
     fn encode_coarse(&self, vectors: &Vec<SparseVector>) -> Vec<usize> {
         let mut coarse_codes: Vec<usize> = Vec::new();
         for vec in vectors {
@@ -323,6 +394,35 @@ mod tests {
     use crate::test_utils::get_simple_vectors;
 
     use super::*;
+
+    #[test]
+    fn test_search_parallel() {
+        let random_seed = 42;
+        let num_subvectors = 2;
+        let num_clusters = 3;
+        let num_coarse_clusters = 2;
+        let iterations = 10;
+        let mut index = IVFPQIndex::new(
+            num_subvectors,
+            num_clusters,
+            num_coarse_clusters,
+            iterations,
+            0.01,
+            DistanceMetric::Euclidean,
+            random_seed,
+        );
+
+        let (data, query_vectors) = get_simple_vectors();
+
+        for vector in &data {
+            index.add_vector(vector);
+        }
+        index.build();
+
+        let neighbors = index.search_parallel(&query_vectors[0], 2);
+        println!("Nearest neighbors: {:?}", neighbors);
+        assert!(false);
+    }
 
     #[test]
     fn test_build_parallel() {
