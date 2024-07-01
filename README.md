@@ -16,6 +16,7 @@
     - [x] Remove nalgebra and use pure ndarray for PCA
 - [ ] Cleanup repository
   - [ ] Use similar functionalities for multi threaded and single threaded functionality
+- [ ] Adjust kmeans to work with other distance metrics
 
 - [ ] Develop async functionalities for each algorithm
   - [ ] HNSW
@@ -23,7 +24,7 @@
   - [x] ANNOY
   - [x] LinScan
   - [x] LSH
-  - [ ] IVFPQ
+  - [x] IVFPQ
   - [x] PQ
 
 ## Experiments
