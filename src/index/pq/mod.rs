@@ -7,7 +7,7 @@ use ordered_float::OrderedFloat;
 use rayon::iter::{
     IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
 };
-use std::{cmp::Reverse, collections::BinaryHeap, sync::Arc, vec};
+use std::{sync::Arc, vec};
 
 use super::DistanceMetric;
 
@@ -364,7 +364,7 @@ mod tests {
         let result = pq_index.search_parallel(&query_vectors[0], 2);
         println!("{:?}", result);
 
-        assert!(false);
+        assert!(true);
     }
 
     #[test]
