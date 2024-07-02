@@ -17,15 +17,6 @@
 - [ ] Cleanup repository
   - [ ] Use similar functionalities for multi threaded and single threaded functionality
 
-- [ ] Develop async functionalities for each algorithm
-  - [ ] HNSW
-  - [x] NSW
-  - [x] ANNOY
-  - [x] LinScan
-  - [x] LSH
-  - [x] IVFPQ
-  - [x] PQ
-
 ## Experiments
 
 - [ ] Define experiments that are going to be created
