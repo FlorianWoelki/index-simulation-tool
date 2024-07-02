@@ -1,8 +1,12 @@
-use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::{
+    collections::{BinaryHeap, HashMap, HashSet},
+    sync::{Arc, Mutex},
+};
 
 use node::Node;
 use ordered_float::OrderedFloat;
 use rand::{rngs::StdRng, Rng, SeedableRng};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::data::{QueryResult, SparseVector};
 
@@ -126,6 +130,43 @@ impl HNSWIndex {
 
         let nodes: Vec<Node> = self.nodes.values().cloned().collect();
         for node in nodes {
+            for layer in (0..=node.layer).rev() {
+                self.connect_new_node(&node, layer);
+            }
+        }
+    }
+
+    pub fn build_parallel(&mut self) {
+        let nodes = Arc::new(Mutex::new(HashMap::new()));
+        let vectors = Arc::new(self.vectors.clone());
+        let max_layers = self.max_layers;
+        let level_distribution_factor = self.level_distribution_factor;
+        let random_seed = self.random_seed;
+
+        (0..self.vectors.len()).into_par_iter().for_each(|i| {
+            let mut rng = StdRng::seed_from_u64(random_seed);
+            let mut layer = 0;
+            while rng.gen::<f32>() < level_distribution_factor.powi(layer as i32)
+                && layer < max_layers
+            {
+                layer += 1;
+            }
+
+            let new_node = Node {
+                id: i,
+                connections: vec![Vec::new(); max_layers + 1],
+                vector: vectors[i].clone(),
+                layer,
+            };
+
+            let mut nodes_guard = nodes.lock().unwrap();
+            nodes_guard.insert(i, new_node);
+        });
+
+        self.nodes = Arc::try_unwrap(nodes).unwrap().into_inner().unwrap();
+        let node_values: Vec<Node> = self.nodes.values().cloned().collect();
+        // TODO: Parallelize this.
+        for node in node_values {
             for layer in (0..=node.layer).rev() {
                 self.connect_new_node(&node, layer);
             }
@@ -269,7 +310,35 @@ mod tests {
     use ordered_float::OrderedFloat;
     use rand::thread_rng;
 
+    use crate::test_utils::get_simple_vectors;
+
     use super::*;
+
+    #[test]
+    fn test_build_parallel() {
+        let random_seed = 42;
+        let mut index = HNSWIndex::new(
+            1.0 / 3.0,
+            16,
+            200,
+            200,
+            DistanceMetric::Euclidean,
+            random_seed,
+        );
+
+        let (vectors, query_vectors) = get_simple_vectors();
+
+        for vector in &vectors {
+            index.add_vector(vector);
+        }
+
+        index.build_parallel();
+
+        let results = index.search(&query_vectors[0], 2);
+
+        println!("{:?}", results);
+        assert!(false);
+    }
 
     #[test]
     fn test_remove_vector() {

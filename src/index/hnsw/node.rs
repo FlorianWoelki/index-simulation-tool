@@ -1,6 +1,6 @@
 use crate::data::SparseVector;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) struct Node {
     pub(super) id: usize,
     pub(super) connections: Vec<Vec<usize>>,
