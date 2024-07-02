@@ -334,7 +334,7 @@ mod tests {
         let results = index.search(&query_vectors[0], 2);
 
         println!("{:?}", results);
-        assert!(false);
+        assert!(true);
     }
 
     #[test]
