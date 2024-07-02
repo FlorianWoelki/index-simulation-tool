@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
 };
 
 use ordered_float::OrderedFloat;
@@ -90,14 +90,14 @@ impl NSWIndex {
     }
 
     pub fn build_parallel(&mut self) {
-        let graph = Arc::new(Mutex::new(HashMap::new()));
+        let graph = Arc::new(RwLock::new(HashMap::new()));
         let vectors = Arc::new(self.vectors.clone());
 
         (0..vectors.len()).into_par_iter().for_each(|i| {
-            let mut current_graph = graph.lock().unwrap();
             let neighbors = if i == 0 {
                 HashSet::new()
             } else {
+                let current_graph = graph.read().unwrap();
                 self.knn_search(
                     &vectors[i],
                     self.ef_construction,
@@ -108,9 +108,10 @@ impl NSWIndex {
                 .collect()
             };
 
-            current_graph.insert(i, neighbors.clone());
+            let mut write_graph = graph.write().unwrap();
+            write_graph.insert(i, neighbors.clone());
             for &neighbor in &neighbors {
-                current_graph.entry(neighbor).or_default().insert(i);
+                write_graph.entry(neighbor).or_default().insert(i);
             }
         });
 
