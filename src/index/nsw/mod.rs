@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex},
 };
 
 use ordered_float::OrderedFloat;
@@ -90,15 +90,15 @@ impl NSWIndex {
     }
 
     pub fn build_parallel(&mut self) {
-        let graph = Arc::new(RwLock::new(HashMap::new()));
+        let graph = Arc::new(Mutex::new(HashMap::new()));
         let vectors = Arc::new(self.vectors.clone());
 
         (0..vectors.len()).into_par_iter().for_each(|i| {
             let neighbors = if i == 0 {
                 HashSet::new()
             } else {
-                let current_graph = graph.read().unwrap();
-                self.knn_search(
+                let current_graph = graph.lock().unwrap().clone();
+                self.knn_search_parallel(
                     &vectors[i],
                     self.ef_construction,
                     self.ef_search,
@@ -108,14 +108,94 @@ impl NSWIndex {
                 .collect()
             };
 
-            let mut write_graph = graph.write().unwrap();
-            write_graph.insert(i, neighbors.clone());
+            let mut current_graph = graph.lock().unwrap();
+            current_graph.insert(i, neighbors.clone());
             for &neighbor in &neighbors {
-                write_graph.entry(neighbor).or_default().insert(i);
+                current_graph.entry(neighbor).or_default().insert(i);
             }
         });
 
         self.graph = Arc::try_unwrap(graph).unwrap().into_inner().unwrap();
+    }
+
+    fn knn_search_parallel(
+        &self,
+        query: &SparseVector,
+        m: usize,
+        k: usize,
+        graph: &HashMap<usize, HashSet<usize>>,
+    ) -> Vec<usize> {
+        let result = Arc::new(Mutex::new(HashSet::new()));
+        let candidates = Arc::new(Mutex::new(HashSet::new()));
+        let visited_set = Arc::new(Mutex::new(HashSet::new()));
+
+        (0..m).into_par_iter().for_each(|_| {
+            if let Some(entry_point) = self.get_random_entry_point(graph) {
+                candidates.lock().unwrap().insert(entry_point);
+            }
+
+            loop {
+                let c = {
+                    let candidates_guard = candidates.lock().unwrap();
+                    if candidates_guard.is_empty() {
+                        break;
+                    }
+                    *candidates_guard
+                        .iter()
+                        .min_by(|&&x, &&y| {
+                            query
+                                .distance(&self.vectors[x], &self.metric)
+                                .partial_cmp(&query.distance(&self.vectors[y], &self.metric))
+                                .unwrap()
+                        })
+                        .unwrap()
+                };
+
+                candidates.lock().unwrap().remove(&c);
+
+                if !visited_set.lock().unwrap().insert(c) {
+                    continue;
+                }
+
+                {
+                    let mut result_guard = result.lock().unwrap();
+                    result_guard.insert(c);
+
+                    if result_guard.len() > k {
+                        let d1 = query.distance(&self.vectors[c], &self.metric);
+                        let d2 = result_guard
+                            .iter()
+                            .map(|&x| query.distance(&self.vectors[x], &self.metric))
+                            .max_by(|a, b| a.partial_cmp(b).unwrap())
+                            .unwrap();
+
+                        if d1 > d2 {
+                            result_guard.remove(&c);
+                        }
+                    }
+                }
+
+                if let Some(neighbors) = self.graph.get(&c) {
+                    let mut candidates_guard = candidates.lock().unwrap();
+                    let visited_set_guard = visited_set.lock().unwrap();
+                    for &e in neighbors {
+                        if !visited_set_guard.contains(&e) {
+                            candidates_guard.insert(e);
+                        }
+                    }
+                }
+            }
+        });
+
+        let mut result_vec: Vec<usize> = result.lock().unwrap().iter().cloned().collect();
+        result_vec.sort_by(|&x, &y| {
+            query
+                .distance(&self.vectors[x], &self.metric)
+                .partial_cmp(&query.distance(&self.vectors[y], &self.metric))
+                .unwrap()
+        });
+        result_vec.truncate(k);
+        result_vec
     }
 
     fn knn_search(
@@ -198,6 +278,18 @@ impl NSWIndex {
             })
             .collect()
     }
+
+    pub fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+        let nearest_neighbors =
+            self.knn_search_parallel(query_vector, self.graph.len(), k, &self.graph);
+        nearest_neighbors
+            .into_par_iter()
+            .map(|idx| QueryResult {
+                index: idx,
+                score: OrderedFloat(query_vector.distance(&self.vectors[idx], &self.metric)),
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -208,6 +300,24 @@ mod tests {
     use crate::test_utils::get_simple_vectors;
 
     use super::*;
+
+    #[test]
+    fn test_search_parallel() {
+        let random_seed = 42;
+        let mut index = NSWIndex::new(5, 3, DistanceMetric::Euclidean, random_seed);
+
+        let (vectors, query_vectors) = get_simple_vectors();
+        for vector in &vectors {
+            index.add_vector(vector);
+        }
+
+        index.build();
+
+        let results = index.search_parallel(&query_vectors[0], 2);
+
+        println!("{:?}", results);
+        assert!(true);
+    }
 
     #[test]
     fn test_build_parallel() {
