@@ -19,7 +19,7 @@
 
 - [ ] Develop async functionalities for each algorithm
   - [ ] HNSW
-  - [ ] NSW
+  - [x] NSW
   - [x] ANNOY
   - [x] LinScan
   - [x] LSH
