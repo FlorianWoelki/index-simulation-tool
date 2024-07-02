@@ -210,6 +210,90 @@ impl HNSWIndex {
         self.knn_search(query_vector, current_node, k)
     }
 
+    pub fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+        let entry_point = StdRng::seed_from_u64(self.random_seed).gen_range(0..self.nodes.len());
+        let mut current_node = &self.nodes[&entry_point];
+
+        for layer in (0..self.max_layers).rev() {
+            current_node = self.find_closest_node(current_node, query_vector, layer);
+        }
+
+        self.knn_search_parallel(query_vector, current_node, k)
+    }
+
+    fn knn_search_parallel(
+        &self,
+        query_vector: &SparseVector,
+        entry_node: &Node,
+        k: usize,
+    ) -> Vec<QueryResult> {
+        let top_k = Arc::new(Mutex::new(BinaryHeap::new()));
+        let visited = Arc::new(Mutex::new(HashMap::new()));
+        let candidates = Arc::new(Mutex::new(BinaryHeap::new()));
+
+        let entry_distance = query_vector.distance(&entry_node.vector, &self.metric);
+        candidates.lock().unwrap().push(NeighborNode {
+            id: entry_node.id,
+            distance: OrderedFloat(entry_distance),
+        });
+        top_k.lock().unwrap().push(NeighborNode {
+            id: entry_node.id,
+            distance: OrderedFloat(entry_distance),
+        });
+        visited.lock().unwrap().insert(entry_node.id, true);
+
+        while !candidates.lock().unwrap().is_empty() {
+            let candidate_batch: Vec<_> = (0..self.ef_search)
+                .filter_map(|_| candidates.lock().unwrap().pop())
+                .collect();
+
+            candidate_batch.into_par_iter().for_each(|candidate| {
+                for layer in (0..=self.max_layers).rev() {
+                    for &neighbor_id in &self.nodes[&candidate.id].connections[layer] {
+                        let mut visited_guard = visited.lock().unwrap();
+                        if visited_guard.contains_key(&neighbor_id) {
+                            continue;
+                        }
+                        visited_guard.insert(neighbor_id, true);
+                        drop(visited_guard);
+
+                        let neighbor_node = &self.nodes[&neighbor_id];
+                        let distance = query_vector.distance(&neighbor_node.vector, &self.metric);
+
+                        let mut top_k_guard = top_k.lock().unwrap();
+                        if top_k_guard.len() < k
+                            || distance < -top_k_guard.peek().unwrap().distance.into_inner()
+                        {
+                            candidates.lock().unwrap().push(NeighborNode {
+                                id: neighbor_id,
+                                distance: OrderedFloat(distance),
+                            });
+                            top_k_guard.push(NeighborNode {
+                                id: neighbor_id,
+                                distance: OrderedFloat(distance),
+                            });
+                            if top_k_guard.len() > k {
+                                top_k_guard.pop();
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        Arc::try_unwrap(top_k)
+            .unwrap()
+            .into_inner()
+            .unwrap()
+            .into_sorted_vec()
+            .into_iter()
+            .map(|neighbor| QueryResult {
+                index: neighbor.id,
+                score: neighbor.distance,
+            })
+            .collect()
+    }
+
     fn find_closest_node<'a>(
         &'a self,
         start_node: &'a Node,
@@ -315,6 +399,32 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_search_parallel() {
+        let random_seed = 42;
+        let mut index = HNSWIndex::new(
+            1.0 / 3.0,
+            16,
+            200,
+            200,
+            DistanceMetric::Euclidean,
+            random_seed,
+        );
+
+        let (vectors, query_vectors) = get_simple_vectors();
+
+        for vector in &vectors {
+            index.add_vector(vector);
+        }
+
+        index.build();
+
+        let results = index.search_parallel(&query_vectors[0], 2);
+
+        println!("{:?}", results);
+        assert!(true);
+    }
+
+    #[test]
     fn test_build_parallel() {
         let random_seed = 42;
         let mut index = HNSWIndex::new(
@@ -337,7 +447,7 @@ mod tests {
         let results = index.search(&query_vectors[0], 2);
 
         println!("{:?}", results);
-        assert!(false);
+        assert!(true);
     }
 
     #[test]
