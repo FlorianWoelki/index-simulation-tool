@@ -1,7 +1,11 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex},
+};
 
 use ordered_float::OrderedFloat;
 use rand::{rngs::StdRng, seq::IteratorRandom, SeedableRng};
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 use crate::data::{QueryResult, SparseVector};
 
@@ -76,7 +80,8 @@ impl NSWIndex {
                 continue;
             }
 
-            let neighbors = self.knn_search(vector, self.ef_construction, self.ef_search);
+            let neighbors =
+                self.knn_search(vector, self.ef_construction, self.ef_search, &self.graph);
             self.graph.insert(i, neighbors.iter().cloned().collect());
             for &neighbor in &neighbors {
                 self.graph.get_mut(&neighbor).unwrap().insert(i);
@@ -84,13 +89,47 @@ impl NSWIndex {
         }
     }
 
-    fn knn_search(&self, query: &SparseVector, m: usize, k: usize) -> Vec<usize> {
+    pub fn build_parallel(&mut self) {
+        let graph = Arc::new(Mutex::new(HashMap::new()));
+        let vectors = Arc::new(self.vectors.clone());
+
+        (0..vectors.len()).into_par_iter().for_each(|i| {
+            let mut current_graph = graph.lock().unwrap();
+            let neighbors = if i == 0 {
+                HashSet::new()
+            } else {
+                self.knn_search(
+                    &vectors[i],
+                    self.ef_construction,
+                    self.ef_search,
+                    &current_graph,
+                )
+                .into_iter()
+                .collect()
+            };
+
+            current_graph.insert(i, neighbors.clone());
+            for &neighbor in &neighbors {
+                current_graph.entry(neighbor).or_default().insert(i);
+            }
+        });
+
+        self.graph = Arc::try_unwrap(graph).unwrap().into_inner().unwrap();
+    }
+
+    fn knn_search(
+        &self,
+        query: &SparseVector,
+        m: usize,
+        k: usize,
+        graph: &HashMap<usize, HashSet<usize>>,
+    ) -> Vec<usize> {
         let mut result = HashSet::new();
         let mut candidates = HashSet::new();
         let mut visited_set = HashSet::new();
 
         for _ in 0..m {
-            if let Some(entry_point) = self.get_random_entry_point() {
+            if let Some(entry_point) = self.get_random_entry_point(graph) {
                 candidates.insert(entry_point);
             }
 
@@ -143,13 +182,13 @@ impl NSWIndex {
         result_vec
     }
 
-    fn get_random_entry_point(&self) -> Option<usize> {
+    fn get_random_entry_point(&self, graph: &HashMap<usize, HashSet<usize>>) -> Option<usize> {
         let mut rng = StdRng::seed_from_u64(self.random_seed);
-        self.graph.keys().choose(&mut rng).cloned()
+        graph.keys().choose(&mut rng).cloned()
     }
 
     pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        let nearest_neighbors = self.knn_search(query_vector, self.graph.len(), k);
+        let nearest_neighbors = self.knn_search(query_vector, self.graph.len(), k, &self.graph);
         nearest_neighbors
             .into_iter()
             .map(|idx| QueryResult {
@@ -165,7 +204,27 @@ mod tests {
     use ordered_float::OrderedFloat;
     use rand::{thread_rng, Rng};
 
+    use crate::test_utils::get_simple_vectors;
+
     use super::*;
+
+    #[test]
+    fn test_build_parallel() {
+        let random_seed = 42;
+        let mut index = NSWIndex::new(5, 3, DistanceMetric::Euclidean, random_seed);
+
+        let (vectors, query_vectors) = get_simple_vectors();
+        for vector in &vectors {
+            index.add_vector(vector);
+        }
+
+        index.build_parallel();
+
+        let results = index.search(&query_vectors[0], 2);
+
+        println!("{:?}", results);
+        assert!(false);
+    }
 
     #[test]
     fn test_remove_vector() {
