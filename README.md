@@ -14,12 +14,15 @@
   - [x] PCA
   - [x] t-SNE
     - [x] Remove nalgebra and use pure ndarray for PCA
+- [ ] Implement saving/loading functionality
 - [ ] Cleanup repository
   - [ ] Use similar functionalities for multi threaded and single threaded functionality
 
 ## Experiments
 
 - [ ] Define experiments that are going to be created
+  - [ ] Single-Threaded experiment
+  - [ ] Multi-Threaded experiment
 - [ ] Experiment using different distance metrics
 - [ ] Experiment using different distance and similarity measures
 
