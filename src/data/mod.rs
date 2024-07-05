@@ -25,6 +25,8 @@ impl SparseVector {
         }
     }
 
+    /// Angular distance is the normalized angle between two vectors,
+    /// calculated using the arccosine of the cosine similarity.
     pub fn angular_distance(&self, other: &SparseVector) -> f32 {
         let cosine_sim = self.cosine_similarity(other);
         (cosine_sim.acos() / std::f32::consts::PI).min(1.0).max(0.0)
@@ -86,6 +88,9 @@ impl SparseVector {
         self.values = new_values;
     }
 
+    /// Jaccard distance is based on the Jaccard similarity coefficient, which
+    /// measures the overlap between two sets. The Jaccard distance is 1 minus
+    /// the Jaccard similarity.
     pub fn jaccard_similarity(&self, other: &SparseVector) -> f32 {
         let mut p = 0;
         let mut q = 0;
@@ -117,6 +122,9 @@ impl SparseVector {
         intersection as f32 / union as f32
     }
 
+    /// Straight-line distance between two points in a multi-dimensional space.
+    /// It's calculated as the square root of the sum of squared differences
+    /// between correspdoning elements of the vectors.
     pub fn euclidean_distance(&self, other: &SparseVector) -> f32 {
         let mut p = 0;
         let mut q = 0;
@@ -150,6 +158,9 @@ impl SparseVector {
         distance.sqrt()
     }
 
+    /// Cosine distance is derived from cosine similarity, which measures the cosine
+    /// of the angle between two vectors. The cosine distance is calculated as 1
+    /// minus the cosine similarity.
     pub fn cosine_similarity(&self, other: &SparseVector) -> f32 {
         let mut dot_product = 0.0f32;
         let mut magnitude_a = 0.0f32;
