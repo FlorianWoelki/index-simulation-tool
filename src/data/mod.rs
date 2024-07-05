@@ -21,7 +21,13 @@ impl SparseVector {
             DistanceMetric::Euclidean => self.euclidean_distance(other),
             DistanceMetric::Cosine => 1.0 - self.cosine_similarity(other),
             DistanceMetric::Jaccard => 1.0 - self.jaccard_similarity(other),
+            DistanceMetric::Angular => self.angular_distance(other),
         }
+    }
+
+    pub fn angular_distance(&self, other: &SparseVector) -> f32 {
+        let cosine_sim = self.cosine_similarity(other);
+        (cosine_sim.acos() / std::f32::consts::PI).min(1.0).max(0.0)
     }
 
     pub fn dot(&self, other: &SparseVector) -> f32 {
@@ -210,6 +216,34 @@ impl Ord for QueryResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_angular_distance() {
+        let v1 = SparseVector {
+            indices: vec![0, 1, 2],
+            values: vec![OrderedFloat(1.0), OrderedFloat(0.0), OrderedFloat(0.0)],
+        };
+        let v2 = SparseVector {
+            indices: vec![0, 1, 2],
+            values: vec![OrderedFloat(0.0), OrderedFloat(1.0), OrderedFloat(0.0)],
+        };
+
+        let angular_dist = v1.angular_distance(&v2);
+
+        assert_eq!(angular_dist, 0.5);
+    }
+
+    #[test]
+    fn test_angular_distance_same_vector() {
+        let v = SparseVector {
+            indices: vec![0, 1, 2],
+            values: vec![OrderedFloat(1.0), OrderedFloat(2.0), OrderedFloat(3.0)],
+        };
+
+        let angular_dist = v.angular_distance(&v);
+
+        assert_eq!(angular_dist, 0.00010990189); // around 0
+    }
 
     #[test]
     fn test_euclidean_distance() {

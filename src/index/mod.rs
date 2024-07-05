@@ -16,6 +16,7 @@ pub enum DistanceMetric {
     Euclidean,
     Cosine,
     Jaccard,
+    Angular,
 }
 
 impl Debug for DistanceMetric {
@@ -24,6 +25,7 @@ impl Debug for DistanceMetric {
             DistanceMetric::Euclidean => write!(f, "Euclidean"),
             DistanceMetric::Cosine => write!(f, "Cosine"),
             DistanceMetric::Jaccard => write!(f, "Jaccard"),
+            DistanceMetric::Angular => write!(f, "Angular"),
         }
     }
 }
