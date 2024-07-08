@@ -1,13 +1,13 @@
-use std::{
-    collections::{BinaryHeap, HashSet},
-    sync::Mutex,
-};
+use std::{collections::HashSet, sync::Mutex};
 
 use ordered_float::OrderedFloat;
 use rand::Rng;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
-use crate::data::{QueryResult, SparseVector};
+use crate::{
+    data::{QueryResult, SparseVector},
+    data_structures::min_heap::MinHeap,
+};
 
 use super::DistanceMetric;
 
@@ -215,30 +215,33 @@ impl AnnoyIndex {
             })
             .collect();
 
-        let mut heap = BinaryHeap::with_capacity(k);
+        let mut heap: MinHeap<QueryResult> = MinHeap::new();
+        // Evaluate distance for each candidate and maintain max-heap.
         for (distance, point) in results {
-            if heap.len() < k {
-                heap.push((distance, point));
-            } else if distance < heap.peek().unwrap().0 {
-                heap.pop();
-                heap.push((distance, point));
+            if heap.len() < k || distance > heap.peek().unwrap().score {
+                heap.push(
+                    QueryResult {
+                        index: point,
+                        score: -distance,
+                    },
+                    -distance,
+                );
+                if heap.len() > k {
+                    heap.pop();
+                }
             }
         }
 
-        let mut results = heap.into_iter().collect::<Vec<_>>();
-        results.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-
-        results
-            .into_iter()
-            .map(|(distance, i)| QueryResult {
-                index: i,
-                score: distance,
+        heap.into_sorted_vec()
+            .iter()
+            .map(|query_result| QueryResult {
+                index: query_result.index,
+                score: OrderedFloat(-query_result.score.into_inner()),
             })
             .collect()
     }
 
     pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        let mut heap = BinaryHeap::with_capacity(k);
         let mut candidates = HashSet::new();
 
         // Traverse each tree to collect candidate points.
@@ -264,25 +267,29 @@ impl AnnoyIndex {
 
         let candidates: Vec<_> = candidates.into_iter().collect();
 
+        let mut heap: MinHeap<QueryResult> = MinHeap::new();
         // Evaluate distance for each candidate and maintain max-heap.
         for point in candidates {
             let distance = OrderedFloat(query_vector.distance(&self.vectors[point], &self.metric));
-            if heap.len() < k {
-                heap.push((distance, point));
-            } else if distance < heap.peek().unwrap().0 {
-                heap.pop();
-                heap.push((distance, point));
+            if heap.len() < k || distance > heap.peek().unwrap().score {
+                heap.push(
+                    QueryResult {
+                        index: point,
+                        score: -distance,
+                    },
+                    -distance,
+                );
+                if heap.len() > k {
+                    heap.pop();
+                }
             }
         }
 
-        let mut results = heap.into_iter().collect::<Vec<_>>();
-        results.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-
-        results
-            .into_iter()
-            .map(|(distance, i)| QueryResult {
-                index: i,
-                score: distance,
+        heap.into_sorted_vec()
+            .iter()
+            .map(|query_result| QueryResult {
+                index: query_result.index,
+                score: OrderedFloat(-query_result.score.into_inner()),
             })
             .collect()
     }
