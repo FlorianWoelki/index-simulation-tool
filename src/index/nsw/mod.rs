@@ -5,7 +5,7 @@ use std::{
 
 use ordered_float::OrderedFloat;
 use rand::{rngs::StdRng, seq::IteratorRandom, SeedableRng};
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::data::{QueryResult, SparseVector};
 

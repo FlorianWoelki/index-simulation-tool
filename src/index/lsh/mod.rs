@@ -201,20 +201,23 @@ impl LSHIndex {
             })
             .collect();
 
-        let mut heap = BinaryHeap::with_capacity(k);
+        let mut heap: MinHeap<QueryResult> = MinHeap::new();
         for (similarity, index) in results {
-            if heap.len() < k {
-                heap.push(Reverse((OrderedFloat(similarity), index)));
-            } else if similarity > heap.peek().unwrap().0 .0.into_inner() {
-                heap.pop();
-                heap.push(Reverse((OrderedFloat(similarity), index)));
+            if heap.len() < k || similarity > heap.peek().unwrap().score.into_inner() {
+                heap.push(
+                    QueryResult {
+                        score: OrderedFloat(similarity),
+                        index,
+                    },
+                    OrderedFloat(similarity),
+                );
+                if heap.len() > k {
+                    heap.pop();
+                }
             }
         }
 
         heap.into_sorted_vec()
-            .into_iter()
-            .map(|Reverse((score, index))| QueryResult { index, score })
-            .collect()
     }
 }
 

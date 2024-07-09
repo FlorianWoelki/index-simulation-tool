@@ -174,7 +174,6 @@ impl PQIndex {
     }
 
     pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        let mut heap: MinHeap<QueryResult> = MinHeap::new();
         let sub_vec_dims = query_vector.indices.len() / self.num_subvectors;
         let remaining_dims = query_vector.indices.len() % self.num_subvectors;
 
@@ -201,6 +200,7 @@ impl PQIndex {
             scores[n] += distance;
         }
 
+        let mut heap: MinHeap<QueryResult> = MinHeap::new();
         for (index, &score) in scores.iter().enumerate() {
             if heap.len() < k || score > heap.peek().unwrap().score.into_inner() {
                 heap.push(
