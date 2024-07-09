@@ -4,7 +4,10 @@ mod tests {
 
     use index_simulation_tool::{
         data::SparseVector,
-        index::lsh::{LSHHashType, LSHIndex},
+        index::{
+            lsh::{LSHHashType, LSHIndex},
+            SparseIndex,
+        },
     };
     use ordered_float::OrderedFloat;
     use rand::{Rng, SeedableRng};
