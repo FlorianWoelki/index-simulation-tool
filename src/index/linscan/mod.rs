@@ -83,6 +83,37 @@ impl LinScanIndex {
     }
 
     pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+        let mut scores = vec![0.0; self.vectors.len()];
+
+        for (index, value) in query_vector.indices.iter().zip(query_vector.values.iter()) {
+            if let Some(vectors) = self.inverted_index.get(index) {
+                vectors.iter().for_each(|(vec_id, vec_value)| {
+                    scores[*vec_id] += value.into_inner() * vec_value.into_inner();
+                });
+            }
+        }
+
+        let mut heap: MinHeap<QueryResult> = MinHeap::new();
+        for (index, &score) in scores.iter().enumerate() {
+            if heap.len() < k || score > heap.peek().unwrap().score.into_inner() {
+                heap.push(
+                    QueryResult {
+                        //vector: self.vectors[index].clone(),
+                        index,
+                        score: OrderedFloat(score),
+                    },
+                    OrderedFloat(score),
+                );
+                if heap.len() > k {
+                    heap.pop();
+                }
+            }
+        }
+
+        heap.into_sorted_vec()
+    }
+
+    pub fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let scores = Mutex::new(vec![0.0; self.vectors.len()]);
 
         for (index, value) in query_vector.indices.iter().zip(query_vector.values.iter()) {
@@ -112,17 +143,6 @@ impl LinScanIndex {
 
         heap.into_sorted_vec()
     }
-
-    pub fn search_parallel(
-        &self,
-        query_vectors: &Vec<SparseVector>,
-        k: usize,
-    ) -> Vec<Vec<QueryResult>> {
-        query_vectors
-            .par_iter()
-            .map(|query_vector| self.search(&query_vector, k))
-            .collect()
-    }
 }
 
 #[cfg(test)]
@@ -130,6 +150,22 @@ mod tests {
     use crate::test_utils::get_simple_vectors;
 
     use super::*;
+
+    #[test]
+    fn test_linscan_parallel() {
+        let (data, query_vectors) = get_simple_vectors();
+
+        let mut index = LinScanIndex::new(DistanceMetric::Cosine);
+        for vector in &data {
+            index.add_vector(vector);
+        }
+        index.build();
+
+        let neighbors = index.search_parallel(&query_vectors[0], 2);
+        println!("Nearest neighbors: {:?}", neighbors);
+
+        assert!(true);
+    }
 
     #[test]
     fn test_add_vector() {
@@ -247,22 +283,6 @@ mod tests {
         index.build();
 
         let neighbors = index.search(&query_vectors[0], 2);
-        println!("Nearest neighbors: {:?}", neighbors);
-
-        assert!(true);
-    }
-
-    #[test]
-    fn test_linscan_parallel() {
-        let (data, query_vectors) = get_simple_vectors();
-
-        let mut index = LinScanIndex::new(DistanceMetric::Cosine);
-        for vector in &data {
-            index.add_vector(vector);
-        }
-        index.build();
-
-        let neighbors = index.search_parallel(&query_vectors, 2);
         println!("Nearest neighbors: {:?}", neighbors);
 
         assert!(true);
