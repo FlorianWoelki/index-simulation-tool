@@ -12,7 +12,7 @@ use crate::{
     kmeans::kmeans,
 };
 
-use super::DistanceMetric;
+use super::{DistanceMetric, SparseIndex};
 
 pub struct IVFPQIndex {
     num_subvectors: usize,
@@ -55,11 +55,73 @@ impl IVFPQIndex {
         }
     }
 
-    pub fn add_vector(&mut self, vector: &SparseVector) {
+    fn encode_coarse(&self, vectors: &Vec<SparseVector>) -> Vec<usize> {
+        let mut coarse_codes: Vec<usize> = Vec::new();
+        for vec in vectors {
+            let mut min_distance = f32::MAX;
+            let mut min_distance_code_index = 0;
+
+            for (i, coarse_codeword) in self.coarse_centroids.iter().enumerate() {
+                let distance = vec.distance(&coarse_codeword, &self.metric);
+                if distance < min_distance {
+                    min_distance = distance;
+                    min_distance_code_index = i;
+                }
+            }
+
+            coarse_codes.push(min_distance_code_index);
+        }
+
+        coarse_codes
+    }
+
+    fn encode(&self, vectors: &Vec<SparseVector>) -> Vec<Vec<usize>> {
+        let mut vector_codes: Vec<Vec<usize>> = Vec::new();
+        for (i, vec) in vectors.iter().enumerate() {
+            let coarse_code = self.coarse_codes[i];
+            let sub_vec_dims: usize = vec.indices.len() / self.num_subvectors;
+            let mut subvectors: Vec<SparseVector> = Vec::new();
+            for m in 0..self.num_subvectors {
+                let start_idx = m * sub_vec_dims;
+                let end_idx = ((m + 1) * sub_vec_dims).min(vec.indices.len());
+                let indices = vec.indices[start_idx..end_idx].to_vec();
+                let values = vec.values[start_idx..end_idx].to_vec();
+                subvectors.push(SparseVector { indices, values });
+            }
+            vector_codes.push(self.vector_quantize(&subvectors, coarse_code));
+        }
+
+        vector_codes
+    }
+
+    fn vector_quantize(&self, vectors: &[SparseVector], coarse_code: usize) -> Vec<usize> {
+        let mut codes: Vec<usize> = Vec::new();
+
+        for (m, subvector) in vectors.iter().enumerate() {
+            let mut min_distance = f32::MAX;
+            let mut min_distance_code_index = 0;
+
+            for (k, code) in self.sub_quantizers[coarse_code][m].iter().enumerate() {
+                let distance = subvector.distance(&code, &self.metric);
+                if distance < min_distance {
+                    min_distance = distance;
+                    min_distance_code_index = k;
+                }
+            }
+
+            codes.push(min_distance_code_index);
+        }
+
+        codes
+    }
+}
+
+impl SparseIndex for IVFPQIndex {
+    fn add_vector(&mut self, vector: &SparseVector) {
         self.vectors.push(vector.clone());
     }
 
-    pub fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
+    fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
         if id >= self.vectors.len() {
             return None;
         }
@@ -79,7 +141,7 @@ impl IVFPQIndex {
         Some(removed_vector)
     }
 
-    pub fn build(&mut self) {
+    fn build(&mut self) {
         // Perform coarse quantization using k-means clustering while assigning
         // each vector to the nearest centroid.
         self.coarse_centroids = kmeans(
@@ -135,7 +197,7 @@ impl IVFPQIndex {
         self.pq_codes = self.encode(&self.vectors);
     }
 
-    pub fn build_parallel(&mut self) {
+    fn build_parallel(&mut self) {
         self.coarse_centroids = kmeans(
             &self.vectors,
             self.num_coarse_clusters,
@@ -196,7 +258,7 @@ impl IVFPQIndex {
         self.pq_codes = self.encode(&self.vectors);
     }
 
-    pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+    fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let mut coarse_distances: Vec<(usize, f32)> = self
             .coarse_centroids
             .iter()
@@ -258,7 +320,7 @@ impl IVFPQIndex {
             .collect()
     }
 
-    pub fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let mut coarse_distances: Vec<(usize, f32)> = self
             .coarse_centroids
             .par_iter()
@@ -327,66 +389,6 @@ impl IVFPQIndex {
                 score: OrderedFloat(-query_result.score.into_inner()),
             })
             .collect()
-    }
-
-    fn encode_coarse(&self, vectors: &Vec<SparseVector>) -> Vec<usize> {
-        let mut coarse_codes: Vec<usize> = Vec::new();
-        for vec in vectors {
-            let mut min_distance = f32::MAX;
-            let mut min_distance_code_index = 0;
-
-            for (i, coarse_codeword) in self.coarse_centroids.iter().enumerate() {
-                let distance = vec.distance(&coarse_codeword, &self.metric);
-                if distance < min_distance {
-                    min_distance = distance;
-                    min_distance_code_index = i;
-                }
-            }
-
-            coarse_codes.push(min_distance_code_index);
-        }
-
-        coarse_codes
-    }
-
-    fn encode(&self, vectors: &Vec<SparseVector>) -> Vec<Vec<usize>> {
-        let mut vector_codes: Vec<Vec<usize>> = Vec::new();
-        for (i, vec) in vectors.iter().enumerate() {
-            let coarse_code = self.coarse_codes[i];
-            let sub_vec_dims: usize = vec.indices.len() / self.num_subvectors;
-            let mut subvectors: Vec<SparseVector> = Vec::new();
-            for m in 0..self.num_subvectors {
-                let start_idx = m * sub_vec_dims;
-                let end_idx = ((m + 1) * sub_vec_dims).min(vec.indices.len());
-                let indices = vec.indices[start_idx..end_idx].to_vec();
-                let values = vec.values[start_idx..end_idx].to_vec();
-                subvectors.push(SparseVector { indices, values });
-            }
-            vector_codes.push(self.vector_quantize(&subvectors, coarse_code));
-        }
-
-        vector_codes
-    }
-
-    fn vector_quantize(&self, vectors: &[SparseVector], coarse_code: usize) -> Vec<usize> {
-        let mut codes: Vec<usize> = Vec::new();
-
-        for (m, subvector) in vectors.iter().enumerate() {
-            let mut min_distance = f32::MAX;
-            let mut min_distance_code_index = 0;
-
-            for (k, code) in self.sub_quantizers[coarse_code][m].iter().enumerate() {
-                let distance = subvector.distance(&code, &self.metric);
-                if distance < min_distance {
-                    min_distance = distance;
-                    min_distance_code_index = k;
-                }
-            }
-
-            codes.push(min_distance_code_index);
-        }
-
-        codes
     }
 }
 

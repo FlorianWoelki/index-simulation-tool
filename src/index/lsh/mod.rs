@@ -1,8 +1,4 @@
-use std::{
-    cmp::Reverse,
-    collections::{BinaryHeap, HashSet},
-    sync::Mutex,
-};
+use std::{collections::HashSet, sync::Mutex};
 
 use minhash::minhash;
 use ordered_float::OrderedFloat;
@@ -13,6 +9,8 @@ use crate::{
     data::{QueryResult, SparseVector},
     data_structures::min_heap::MinHeap,
 };
+
+use super::SparseIndex;
 
 mod minhash;
 mod simhash;
@@ -67,12 +65,19 @@ impl LSHIndex {
             LSHHashType::SimHash => simhash(vector, i),
         }
     }
+}
 
-    pub fn add_vector(&mut self, vector: &SparseVector) {
+impl SparseIndex for LSHIndex {
+    fn add_vector(&mut self, vector: &SparseVector) {
         self.vectors.push(vector.clone());
     }
 
-    pub fn build(&mut self) {
+    fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
+        // TODO: Needs implementation
+        None
+    }
+
+    fn build(&mut self) {
         for (id, vector) in self.vectors.iter().enumerate() {
             for i in 0..self.num_hash_functions {
                 let hash = self.hash(vector, i);
@@ -86,7 +91,7 @@ impl LSHIndex {
         }
     }
 
-    pub fn build_parallel(&mut self) {
+    fn build_parallel(&mut self) {
         let mutex_buckets: Vec<Mutex<Vec<(usize, SparseVector)>>> = self
             .buckets
             .iter()
@@ -117,7 +122,7 @@ impl LSHIndex {
             .for_each(|bucket| bucket.sort_by(|a, b| a.1.values.partial_cmp(&b.1.values).unwrap()));
     }
 
-    pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+    fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let mut results: Vec<(f32, usize, SparseVector, usize)> = Vec::new();
 
         for i in 0..self.num_hash_functions {
@@ -173,7 +178,7 @@ impl LSHIndex {
             .collect()
     }
 
-    pub fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let candidate_set = Mutex::new(HashSet::new());
 
         (0..self.num_hash_functions).into_par_iter().for_each(|i| {

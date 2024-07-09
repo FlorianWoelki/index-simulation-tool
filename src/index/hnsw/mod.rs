@@ -10,7 +10,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::data::{QueryResult, SparseVector};
 
-use super::{neighbor::NeighborNode, DistanceMetric};
+use super::{neighbor::NeighborNode, DistanceMetric, SparseIndex};
 
 mod node;
 
@@ -50,129 +50,6 @@ impl HNSWIndex {
         }
     }
 
-    pub fn add_vector(&mut self, item: &SparseVector) {
-        self.vectors.push(item.clone());
-    }
-
-    pub fn remove_vector(&mut self, index: usize) -> Option<SparseVector> {
-        if index >= self.vectors.len() {
-            return None;
-        }
-
-        let removed_vector = self.vectors.swap_remove(index);
-
-        if let Some(removed_node) = self.nodes.remove(&index) {
-            let last_index = self.vectors.len();
-            let mut connections_to_update: Vec<(usize, usize, HashSet<usize>)> = Vec::new();
-
-            for layer in 0..=removed_node.layer {
-                let mut layer_connections = HashSet::new();
-                layer_connections.extend(removed_node.connections[layer].iter().cloned());
-
-                if index != last_index {
-                    if let Some(last_node) = self.nodes.get(&last_index) {
-                        for neighbor_id in &last_node.connections[layer] {
-                            layer_connections.insert(*neighbor_id);
-                        }
-                    }
-                }
-
-                connections_to_update.push((layer, index, layer_connections));
-            }
-
-            for (layer, removed_index, connections) in connections_to_update {
-                for &neighbor_id in &connections {
-                    if let Some(neighbor_node) = self.nodes.get_mut(&neighbor_id) {
-                        neighbor_node.connections[layer]
-                            .retain(|&id| id != removed_index && id != last_index);
-                        if index != last_index && neighbor_id != last_index {
-                            neighbor_node.connections[layer].push(removed_index);
-                        }
-                    }
-                }
-            }
-
-            if index != last_index {
-                if let Some(swapped_node) = self.nodes.get_mut(&last_index) {
-                    swapped_node.id = index;
-                }
-
-                if let Some(swapped_node) = self.nodes.remove(&last_index) {
-                    self.nodes.insert(index, swapped_node);
-                }
-            }
-
-            Some(removed_vector)
-        } else {
-            None
-        }
-    }
-
-    pub fn build(&mut self) {
-        for (i, vector) in self.vectors.iter().enumerate() {
-            let mut rng = StdRng::seed_from_u64(self.random_seed);
-            let mut layer = 0;
-            while rng.gen::<f32>() < self.level_distribution_factor.powi(layer as i32)
-                && layer < self.max_layers
-            {
-                layer += 1;
-            }
-
-            let new_node = Node {
-                id: i,
-                connections: vec![Vec::new(); self.max_layers + 1],
-                vector: vector.clone(),
-                layer,
-            };
-
-            self.nodes.insert(i, new_node);
-        }
-
-        let nodes: Vec<Node> = self.nodes.values().cloned().collect();
-        for node in nodes {
-            for layer in (0..=node.layer).rev() {
-                self.connect_new_node(&node, layer);
-            }
-        }
-    }
-
-    pub fn build_parallel(&mut self) {
-        let nodes = Arc::new(Mutex::new(HashMap::new()));
-        let vectors = Arc::new(self.vectors.clone());
-        let max_layers = self.max_layers;
-        let level_distribution_factor = self.level_distribution_factor;
-        let random_seed = self.random_seed;
-
-        (0..self.vectors.len()).into_par_iter().for_each(|i| {
-            let mut rng = StdRng::seed_from_u64(random_seed);
-            let mut layer = 0;
-            while rng.gen::<f32>() < level_distribution_factor.powi(layer as i32)
-                && layer < max_layers
-            {
-                layer += 1;
-            }
-
-            let new_node = Node {
-                id: i,
-                connections: vec![Vec::new(); max_layers + 1],
-                vector: vectors[i].clone(),
-                layer,
-            };
-
-            let mut nodes_guard = nodes.lock().unwrap();
-            nodes_guard.insert(i, new_node);
-        });
-
-        self.nodes = Arc::try_unwrap(nodes).unwrap().into_inner().unwrap();
-        let node_values: Vec<Node> = self.nodes.values().cloned().collect();
-        // TODO: Parallelize this.
-        for node in node_values {
-            for layer in (0..=node.layer).rev() {
-                self.connect_new_node(&node, layer);
-            }
-        }
-    }
-
     fn connect_new_node(&mut self, new_node: &Node, layer: usize) {
         let neighbors: BinaryHeap<NeighborNode> = self
             .nodes
@@ -197,28 +74,6 @@ impl HNSWIndex {
             self.nodes.get_mut(&new_node.id).unwrap().connections[layer].push(neighbor.id);
             self.nodes.get_mut(&neighbor.id).unwrap().connections[layer].push(new_node.id);
         }
-    }
-
-    pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        let entry_point = StdRng::seed_from_u64(self.random_seed).gen_range(0..self.nodes.len());
-        let mut current_node = &self.nodes[&entry_point];
-
-        for layer in (0..self.max_layers).rev() {
-            current_node = self.find_closest_node(current_node, query_vector, layer);
-        }
-
-        self.knn_search(query_vector, current_node, k)
-    }
-
-    pub fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        let entry_point = StdRng::seed_from_u64(self.random_seed).gen_range(0..self.nodes.len());
-        let mut current_node = &self.nodes[&entry_point];
-
-        for layer in (0..self.max_layers).rev() {
-            current_node = self.find_closest_node(current_node, query_vector, layer);
-        }
-
-        self.knn_search_parallel(query_vector, current_node, k)
     }
 
     fn knn_search_parallel(
@@ -386,6 +241,153 @@ impl HNSWIndex {
                 score: neighbor.distance,
             })
             .collect()
+    }
+}
+
+impl SparseIndex for HNSWIndex {
+    fn add_vector(&mut self, item: &SparseVector) {
+        self.vectors.push(item.clone());
+    }
+
+    fn remove_vector(&mut self, index: usize) -> Option<SparseVector> {
+        if index >= self.vectors.len() {
+            return None;
+        }
+
+        let removed_vector = self.vectors.swap_remove(index);
+
+        if let Some(removed_node) = self.nodes.remove(&index) {
+            let last_index = self.vectors.len();
+            let mut connections_to_update: Vec<(usize, usize, HashSet<usize>)> = Vec::new();
+
+            for layer in 0..=removed_node.layer {
+                let mut layer_connections = HashSet::new();
+                layer_connections.extend(removed_node.connections[layer].iter().cloned());
+
+                if index != last_index {
+                    if let Some(last_node) = self.nodes.get(&last_index) {
+                        for neighbor_id in &last_node.connections[layer] {
+                            layer_connections.insert(*neighbor_id);
+                        }
+                    }
+                }
+
+                connections_to_update.push((layer, index, layer_connections));
+            }
+
+            for (layer, removed_index, connections) in connections_to_update {
+                for &neighbor_id in &connections {
+                    if let Some(neighbor_node) = self.nodes.get_mut(&neighbor_id) {
+                        neighbor_node.connections[layer]
+                            .retain(|&id| id != removed_index && id != last_index);
+                        if index != last_index && neighbor_id != last_index {
+                            neighbor_node.connections[layer].push(removed_index);
+                        }
+                    }
+                }
+            }
+
+            if index != last_index {
+                if let Some(swapped_node) = self.nodes.get_mut(&last_index) {
+                    swapped_node.id = index;
+                }
+
+                if let Some(swapped_node) = self.nodes.remove(&last_index) {
+                    self.nodes.insert(index, swapped_node);
+                }
+            }
+
+            Some(removed_vector)
+        } else {
+            None
+        }
+    }
+
+    fn build(&mut self) {
+        for (i, vector) in self.vectors.iter().enumerate() {
+            let mut rng = StdRng::seed_from_u64(self.random_seed);
+            let mut layer = 0;
+            while rng.gen::<f32>() < self.level_distribution_factor.powi(layer as i32)
+                && layer < self.max_layers
+            {
+                layer += 1;
+            }
+
+            let new_node = Node {
+                id: i,
+                connections: vec![Vec::new(); self.max_layers + 1],
+                vector: vector.clone(),
+                layer,
+            };
+
+            self.nodes.insert(i, new_node);
+        }
+
+        let nodes: Vec<Node> = self.nodes.values().cloned().collect();
+        for node in nodes {
+            for layer in (0..=node.layer).rev() {
+                self.connect_new_node(&node, layer);
+            }
+        }
+    }
+
+    fn build_parallel(&mut self) {
+        let nodes = Arc::new(Mutex::new(HashMap::new()));
+        let vectors = Arc::new(self.vectors.clone());
+        let max_layers = self.max_layers;
+        let level_distribution_factor = self.level_distribution_factor;
+        let random_seed = self.random_seed;
+
+        (0..self.vectors.len()).into_par_iter().for_each(|i| {
+            let mut rng = StdRng::seed_from_u64(random_seed);
+            let mut layer = 0;
+            while rng.gen::<f32>() < level_distribution_factor.powi(layer as i32)
+                && layer < max_layers
+            {
+                layer += 1;
+            }
+
+            let new_node = Node {
+                id: i,
+                connections: vec![Vec::new(); max_layers + 1],
+                vector: vectors[i].clone(),
+                layer,
+            };
+
+            let mut nodes_guard = nodes.lock().unwrap();
+            nodes_guard.insert(i, new_node);
+        });
+
+        self.nodes = Arc::try_unwrap(nodes).unwrap().into_inner().unwrap();
+        let node_values: Vec<Node> = self.nodes.values().cloned().collect();
+        // TODO: Parallelize this.
+        for node in node_values {
+            for layer in (0..=node.layer).rev() {
+                self.connect_new_node(&node, layer);
+            }
+        }
+    }
+
+    fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+        let entry_point = StdRng::seed_from_u64(self.random_seed).gen_range(0..self.nodes.len());
+        let mut current_node = &self.nodes[&entry_point];
+
+        for layer in (0..self.max_layers).rev() {
+            current_node = self.find_closest_node(current_node, query_vector, layer);
+        }
+
+        self.knn_search(query_vector, current_node, k)
+    }
+
+    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+        let entry_point = StdRng::seed_from_u64(self.random_seed).gen_range(0..self.nodes.len());
+        let mut current_node = &self.nodes[&entry_point];
+
+        for layer in (0..self.max_layers).rev() {
+            current_node = self.find_closest_node(current_node, query_vector, layer);
+        }
+
+        self.knn_search_parallel(query_vector, current_node, k)
     }
 }
 

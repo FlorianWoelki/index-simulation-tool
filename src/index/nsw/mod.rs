@@ -9,7 +9,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::data::{QueryResult, SparseVector};
 
-use super::DistanceMetric;
+use super::{DistanceMetric, SparseIndex};
 
 pub struct NSWIndex {
     vectors: Vec<SparseVector>,
@@ -37,85 +37,6 @@ impl NSWIndex {
             metric,
             random_seed,
         }
-    }
-
-    pub fn add_vector(&mut self, item: &SparseVector) {
-        self.vectors.push(item.clone());
-    }
-
-    pub fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
-        if id >= self.vectors.len() {
-            return None;
-        }
-
-        let removed_vector = self.vectors.remove(id);
-        self.graph.remove(&id);
-
-        // Updates the graph: remove references to the deleted id and shift ids
-        let mut new_graph = HashMap::new();
-        for (&k, v) in self.graph.iter() {
-            let mut new_set = HashSet::new();
-            for &neighbor in v {
-                if neighbor != id {
-                    if neighbor > id {
-                        new_set.insert(neighbor - 1);
-                    } else {
-                        new_set.insert(neighbor);
-                    }
-                }
-            }
-
-            let new_key = if k > id { k - 1 } else { k };
-            new_graph.insert(new_key, new_set);
-        }
-        self.graph = new_graph;
-
-        Some(removed_vector)
-    }
-
-    pub fn build(&mut self) {
-        for (i, vector) in self.vectors.iter().enumerate() {
-            if i == 0 {
-                self.graph.insert(i, HashSet::new());
-                continue;
-            }
-
-            let neighbors =
-                self.knn_search(vector, self.ef_construction, self.ef_search, &self.graph);
-            self.graph.insert(i, neighbors.iter().cloned().collect());
-            for &neighbor in &neighbors {
-                self.graph.get_mut(&neighbor).unwrap().insert(i);
-            }
-        }
-    }
-
-    pub fn build_parallel(&mut self) {
-        let graph = Arc::new(Mutex::new(HashMap::new()));
-        let vectors = Arc::new(self.vectors.clone());
-
-        (0..vectors.len()).into_par_iter().for_each(|i| {
-            let neighbors = if i == 0 {
-                HashSet::new()
-            } else {
-                let current_graph = graph.lock().unwrap().clone();
-                self.knn_search_parallel(
-                    &vectors[i],
-                    self.ef_construction,
-                    self.ef_search,
-                    &current_graph,
-                )
-                .into_iter()
-                .collect()
-            };
-
-            let mut current_graph = graph.lock().unwrap();
-            current_graph.insert(i, neighbors.clone());
-            for &neighbor in &neighbors {
-                current_graph.entry(neighbor).or_default().insert(i);
-            }
-        });
-
-        self.graph = Arc::try_unwrap(graph).unwrap().into_inner().unwrap();
     }
 
     fn knn_search_parallel(
@@ -267,8 +188,89 @@ impl NSWIndex {
         let mut rng = StdRng::seed_from_u64(self.random_seed);
         graph.keys().choose(&mut rng).cloned()
     }
+}
 
-    pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+impl SparseIndex for NSWIndex {
+    fn add_vector(&mut self, item: &SparseVector) {
+        self.vectors.push(item.clone());
+    }
+
+    fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
+        if id >= self.vectors.len() {
+            return None;
+        }
+
+        let removed_vector = self.vectors.remove(id);
+        self.graph.remove(&id);
+
+        // Updates the graph: remove references to the deleted id and shift ids
+        let mut new_graph = HashMap::new();
+        for (&k, v) in self.graph.iter() {
+            let mut new_set = HashSet::new();
+            for &neighbor in v {
+                if neighbor != id {
+                    if neighbor > id {
+                        new_set.insert(neighbor - 1);
+                    } else {
+                        new_set.insert(neighbor);
+                    }
+                }
+            }
+
+            let new_key = if k > id { k - 1 } else { k };
+            new_graph.insert(new_key, new_set);
+        }
+        self.graph = new_graph;
+
+        Some(removed_vector)
+    }
+
+    fn build(&mut self) {
+        for (i, vector) in self.vectors.iter().enumerate() {
+            if i == 0 {
+                self.graph.insert(i, HashSet::new());
+                continue;
+            }
+
+            let neighbors =
+                self.knn_search(vector, self.ef_construction, self.ef_search, &self.graph);
+            self.graph.insert(i, neighbors.iter().cloned().collect());
+            for &neighbor in &neighbors {
+                self.graph.get_mut(&neighbor).unwrap().insert(i);
+            }
+        }
+    }
+
+    fn build_parallel(&mut self) {
+        let graph = Arc::new(Mutex::new(HashMap::new()));
+        let vectors = Arc::new(self.vectors.clone());
+
+        (0..vectors.len()).into_par_iter().for_each(|i| {
+            let neighbors = if i == 0 {
+                HashSet::new()
+            } else {
+                let current_graph = graph.lock().unwrap().clone();
+                self.knn_search_parallel(
+                    &vectors[i],
+                    self.ef_construction,
+                    self.ef_search,
+                    &current_graph,
+                )
+                .into_iter()
+                .collect()
+            };
+
+            let mut current_graph = graph.lock().unwrap();
+            current_graph.insert(i, neighbors.clone());
+            for &neighbor in &neighbors {
+                current_graph.entry(neighbor).or_default().insert(i);
+            }
+        });
+
+        self.graph = Arc::try_unwrap(graph).unwrap().into_inner().unwrap();
+    }
+
+    fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let nearest_neighbors = self.knn_search(query_vector, self.graph.len(), k, &self.graph);
         nearest_neighbors
             .into_iter()
@@ -279,7 +281,7 @@ impl NSWIndex {
             .collect()
     }
 
-    pub fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let nearest_neighbors =
             self.knn_search_parallel(query_vector, self.graph.len(), k, &self.graph);
         nearest_neighbors

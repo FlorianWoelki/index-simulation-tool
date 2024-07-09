@@ -9,7 +9,7 @@ use rayon::iter::{
 };
 use std::{sync::Arc, vec};
 
-use super::DistanceMetric;
+use super::{DistanceMetric, SparseIndex};
 
 pub struct PQIndex {
     /// Number of subvectors to divide each vector into for quantization.
@@ -54,11 +54,74 @@ impl PQIndex {
         }
     }
 
-    pub fn add_vector(&mut self, vector: &SparseVector) {
+    fn encode(&self, vectors: &Vec<SparseVector>) -> Vec<Vec<usize>> {
+        let mut vector_codes: Vec<Vec<usize>> = Vec::new();
+        for vec in vectors {
+            let sub_vec_dims = vec.indices.len() / self.num_subvectors;
+            let remaining_dims = vec.indices.len() % self.num_subvectors;
+            let mut subvectors: Vec<SparseVector> = Vec::new();
+            for m in 0..self.num_subvectors {
+                // Divides each vector into subvectors to perform quantization on smaller
+                // subvectors independently.
+                let start_idx = m * sub_vec_dims + m.min(remaining_dims);
+                let end_idx = start_idx + sub_vec_dims + (m < remaining_dims) as usize;
+                let indices = vec.indices[start_idx..end_idx].to_vec();
+                let values = vec.values[start_idx..end_idx].to_vec();
+                subvectors.push(SparseVector { indices, values });
+            }
+            vector_codes.push(self.vector_quantize(&subvectors));
+        }
+
+        vector_codes
+    }
+
+    fn vector_quantize(&self, vectors: &[SparseVector]) -> Vec<usize> {
+        let mut codes: Vec<usize> = Vec::new();
+
+        for (m, subvector) in vectors.iter().enumerate() {
+            let mut min_distance = f32::MAX;
+            let mut min_distance_code_index = 0;
+
+            for (k, code) in self.codewords[m].iter().enumerate() {
+                // Finds the closest codeword to the subvector based on the distance metric.
+                let distance = subvector.distance(&code, &self.metric);
+                if distance < min_distance {
+                    min_distance = distance;
+                    min_distance_code_index = k;
+                }
+            }
+
+            codes.push(min_distance_code_index);
+        }
+
+        codes
+    }
+
+    fn vector_quantize_parallel(&self, vectors: &[SparseVector]) -> Vec<usize> {
+        vectors
+            .par_iter()
+            .enumerate()
+            .map(|(m, subvector)| {
+                self.codewords[m]
+                    .par_iter()
+                    .enumerate()
+                    .map(|(k, code)| (k, subvector.distance(code, &self.metric)))
+                    .min_by(|&(_, a), &(_, b)| {
+                        a.partial_cmp(&b).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|(k, _)| k)
+                    .unwrap()
+            })
+            .collect()
+    }
+}
+
+impl SparseIndex for PQIndex {
+    fn add_vector(&mut self, vector: &SparseVector) {
         self.vectors.push(vector.clone());
     }
 
-    pub fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
+    fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
         if id >= self.vectors.len() {
             return None;
         }
@@ -76,7 +139,7 @@ impl PQIndex {
         Some(removed_vector)
     }
 
-    pub fn build(&mut self) {
+    fn build(&mut self) {
         self.codewords = Vec::new();
         for m in 0..self.num_subvectors {
             let mut sub_vectors_m: Vec<SparseVector> = Vec::new();
@@ -106,7 +169,7 @@ impl PQIndex {
         self.encoded_codes = self.encode(&self.vectors);
     }
 
-    pub fn build_parallel(&mut self) {
+    fn build_parallel(&mut self) {
         let vectors = Arc::new(self.vectors.clone());
         self.codewords = (0..self.num_subvectors)
             .into_par_iter()
@@ -155,25 +218,7 @@ impl PQIndex {
             .collect();
     }
 
-    fn vector_quantize_parallel(&self, vectors: &[SparseVector]) -> Vec<usize> {
-        vectors
-            .par_iter()
-            .enumerate()
-            .map(|(m, subvector)| {
-                self.codewords[m]
-                    .par_iter()
-                    .enumerate()
-                    .map(|(k, code)| (k, subvector.distance(code, &self.metric)))
-                    .min_by(|&(_, a), &(_, b)| {
-                        a.partial_cmp(&b).unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                    .map(|(k, _)| k)
-                    .unwrap()
-            })
-            .collect()
-    }
-
-    pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+    fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let sub_vec_dims = query_vector.indices.len() / self.num_subvectors;
         let remaining_dims = query_vector.indices.len() % self.num_subvectors;
 
@@ -225,7 +270,7 @@ impl PQIndex {
             .collect()
     }
 
-    pub fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let sub_vec_dims = query_vector.indices.len() / self.num_subvectors;
         let remaining_dims = query_vector.indices.len() % self.num_subvectors;
 
@@ -287,49 +332,6 @@ impl PQIndex {
                 score: -query_result.score,
             })
             .collect()
-    }
-
-    fn encode(&self, vectors: &Vec<SparseVector>) -> Vec<Vec<usize>> {
-        let mut vector_codes: Vec<Vec<usize>> = Vec::new();
-        for vec in vectors {
-            let sub_vec_dims = vec.indices.len() / self.num_subvectors;
-            let remaining_dims = vec.indices.len() % self.num_subvectors;
-            let mut subvectors: Vec<SparseVector> = Vec::new();
-            for m in 0..self.num_subvectors {
-                // Divides each vector into subvectors to perform quantization on smaller
-                // subvectors independently.
-                let start_idx = m * sub_vec_dims + m.min(remaining_dims);
-                let end_idx = start_idx + sub_vec_dims + (m < remaining_dims) as usize;
-                let indices = vec.indices[start_idx..end_idx].to_vec();
-                let values = vec.values[start_idx..end_idx].to_vec();
-                subvectors.push(SparseVector { indices, values });
-            }
-            vector_codes.push(self.vector_quantize(&subvectors));
-        }
-
-        vector_codes
-    }
-
-    fn vector_quantize(&self, vectors: &[SparseVector]) -> Vec<usize> {
-        let mut codes: Vec<usize> = Vec::new();
-
-        for (m, subvector) in vectors.iter().enumerate() {
-            let mut min_distance = f32::MAX;
-            let mut min_distance_code_index = 0;
-
-            for (k, code) in self.codewords[m].iter().enumerate() {
-                // Finds the closest codeword to the subvector based on the distance metric.
-                let distance = subvector.distance(&code, &self.metric);
-                if distance < min_distance {
-                    min_distance = distance;
-                    min_distance_code_index = k;
-                }
-            }
-
-            codes.push(min_distance_code_index);
-        }
-
-        codes
     }
 }
 

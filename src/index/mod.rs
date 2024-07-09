@@ -31,10 +31,10 @@ impl Debug for DistanceMetric {
 }
 
 pub trait SparseIndex {
-    fn new(metric: DistanceMetric) -> Self
-    where
-        Self: Sized;
     fn add_vector(&mut self, vector: &SparseVector);
+    fn remove_vector(&mut self, id: usize) -> Option<SparseVector>;
     fn build(&mut self);
+    fn build_parallel(&mut self);
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult>;
+    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult>;
 }

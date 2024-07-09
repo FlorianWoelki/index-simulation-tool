@@ -6,8 +6,10 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use crate::{
     data::{QueryResult, SparseVector},
     data_structures::min_heap::MinHeap,
-    index::{DistanceMetric, SparseIndex},
+    index::DistanceMetric,
 };
+
+use super::SparseIndex;
 
 #[derive(Debug)]
 pub struct LinScanIndex {
@@ -17,18 +19,17 @@ pub struct LinScanIndex {
 }
 
 impl LinScanIndex {
-    pub fn new(metric: DistanceMetric) -> Self
-    where
-        Self: Sized,
-    {
+    pub fn new(metric: DistanceMetric) -> Self {
         LinScanIndex {
             vectors: Vec::new(),
             inverted_index: HashMap::new(),
             metric,
         }
     }
+}
 
-    pub fn add_vector(&mut self, vector: &SparseVector) {
+impl SparseIndex for LinScanIndex {
+    fn add_vector(&mut self, vector: &SparseVector) {
         for (index, value) in vector.indices.iter().zip(vector.values.iter()) {
             self.inverted_index
                 .entry(*index)
@@ -39,7 +40,7 @@ impl LinScanIndex {
         self.vectors.push(vector.clone());
     }
 
-    pub fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
+    fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
         if id >= self.vectors.len() {
             return None;
         }
@@ -78,11 +79,15 @@ impl LinScanIndex {
         Some(removed_vector)
     }
 
-    pub fn build(&mut self) {
+    fn build(&mut self) {
         // LinScan does not need to build an index
     }
 
-    pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+    fn build_parallel(&mut self) {
+        // LinScan does not need to build an index
+    }
+
+    fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let mut scores = vec![0.0; self.vectors.len()];
 
         for (index, value) in query_vector.indices.iter().zip(query_vector.values.iter()) {
@@ -113,7 +118,7 @@ impl LinScanIndex {
         heap.into_sorted_vec()
     }
 
-    pub fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let scores = Mutex::new(vec![0.0; self.vectors.len()]);
 
         for (index, value) in query_vector.indices.iter().zip(query_vector.values.iter()) {

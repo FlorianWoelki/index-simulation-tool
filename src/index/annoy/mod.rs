@@ -9,7 +9,7 @@ use crate::{
     data_structures::min_heap::MinHeap,
 };
 
-use super::DistanceMetric;
+use super::{DistanceMetric, SparseIndex};
 
 struct Node {
     left: Option<Box<Node>>,
@@ -111,13 +111,15 @@ impl AnnoyIndex {
             metric,
         }
     }
+}
 
-    pub fn add_vector(&mut self, vector: &SparseVector) {
+impl SparseIndex for AnnoyIndex {
+    fn add_vector(&mut self, vector: &SparseVector) {
         self.vectors.push(vector.clone());
     }
 
     /// Needs rebuilding after removing vector.
-    pub fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
+    fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
         if id >= self.vectors.len() {
             return None;
         }
@@ -126,7 +128,7 @@ impl AnnoyIndex {
         Some(removed_vector)
     }
 
-    pub fn build(&mut self) {
+    fn build(&mut self) {
         let n_dims = self
             .vectors
             .iter()
@@ -150,7 +152,7 @@ impl AnnoyIndex {
         self.trees = trees;
     }
 
-    pub fn build_parallel(&mut self) {
+    fn build_parallel(&mut self) {
         let n_dims = self
             .vectors
             .iter()
@@ -176,7 +178,7 @@ impl AnnoyIndex {
         self.trees = trees;
     }
 
-    pub fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let candidates = Mutex::new(HashSet::new());
 
         self.trees.par_iter().for_each(|tree| {
@@ -241,7 +243,7 @@ impl AnnoyIndex {
             .collect()
     }
 
-    pub fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+    fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let mut candidates = HashSet::new();
 
         // Traverse each tree to collect candidate points.

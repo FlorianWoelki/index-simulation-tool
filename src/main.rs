@@ -1,9 +1,21 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 
-use data::{generator_dense::DenseDataGenerator, SparseVector};
-use index::{linscan::LinScanIndex, minhash::MinHashIndex, DistanceMetric, SparseIndex};
+use data::{
+    generator_dense::DenseDataGenerator, generator_sparse::SparseDataGenerator, SparseVector,
+};
+use index::{
+    annoy::AnnoyIndex,
+    hnsw::HNSWIndex,
+    ivfpq::IVFPQIndex,
+    linscan::LinScanIndex,
+    lsh::{LSHHashType, LSHIndex},
+    nsw::NSWIndex,
+    pq::PQIndex,
+    DistanceMetric, SparseIndex,
+};
 
 use clap::Parser;
+use ordered_float::Float;
 use rand::{rngs::StdRng, thread_rng, Rng, SeedableRng};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use sysinfo::Pid;
@@ -13,6 +25,7 @@ mod data;
 mod data_structures;
 mod index;
 mod kmeans;
+mod test_utils;
 
 #[derive(Parser)]
 struct Args {
@@ -24,67 +37,112 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
-    let (groundtruth, vectors, query_vectors) = data::ms_marco::load_msmarco_dataset().unwrap();
+    //let (groundtruth, vectors, query_vectors) = data::ms_marco::load_msmarco_dataset().unwrap();
+    let amount = 200;
+    let mut generator =
+        SparseDataGenerator::new(100, amount, (0.0, 10.0), 0.9, DistanceMetric::Cosine);
+    let (vectors, query_vectors, groundtruth) = generator.generate().await;
 
-    // let mut index = LinScanIndex::new(DistanceMetric::Euclidean);
-    let seed = thread_rng().gen_range(0..1000);
-    let mut index = MinHashIndex::new_with_rng(200, 20, 100, seed);
-    let mut query_sparse_vectors = vec![];
-    let mut vectors_sparse_vectors = vec![];
-    for query_vector in query_vectors.iter() {
-        let sparse_vector = SparseVector {
-            indices: query_vector.0.clone(),
-            values: query_vector
-                .1
-                .iter()
-                .map(|&v| ordered_float::OrderedFloat(v))
-                .collect(),
-        };
-        query_sparse_vectors.push(sparse_vector);
-    }
-
-    for vector in vectors.iter().take(15000) {
-        let sparse_vector = SparseVector {
-            indices: vector.0.clone(),
-            values: vector
-                .1
-                .iter()
-                .map(|&v| ordered_float::OrderedFloat(v))
-                .collect(),
-        };
-        vectors_sparse_vectors.push(sparse_vector);
-    }
-
+    let seed = thread_rng().gen_range(0..10000);
+    let mut annoy_index = AnnoyIndex::new(20, 20, 40, DistanceMetric::Cosine);
+    let mut simhash_index = LSHIndex::new(20, 4, LSHHashType::SimHash);
+    let mut minhash_index = LSHIndex::new(20, 4, LSHHashType::MinHash);
+    let mut pq_index = PQIndex::new(3, 50, 256, 0.01, DistanceMetric::Cosine, seed);
+    let mut ivfpq_index = IVFPQIndex::new(3, 100, 200, 256, 0.01, DistanceMetric::Cosine, seed);
+    let mut nsw_index = NSWIndex::new(200, 200, DistanceMetric::Cosine, seed);
+    let mut linscan_index = LinScanIndex::new(DistanceMetric::Euclidean);
+    let mut hnsw_index = HNSWIndex::new(0.5, 16, 200, 200, DistanceMetric::Cosine, seed);
+    //let mut query_sparse_vectors = vec![];
+    //let mut vectors_sparse_vectors = vec![];
+    /*for query_vector in query_vectors.iter() {
+    let sparse_vector = SparseVector {
+        indices: query_vector.0.clone(),
+        values: query_vector
+            .1
+            .iter()
+            .map(|&v| ordered_float::OrderedFloat(v))
+            .collect(),
+    };
+    query_sparse_vectors.push(sparse_vector);
+    }*/
+    /*for vector in vectors.iter().take(amount) {
+    let sparse_vector = SparseVector {
+        indices: vector.0.clone(),
+        values: vector
+            .1
+            .iter()
+            .map(|&v| ordered_float::OrderedFloat(v))
+            .collect(),
+    };
+    vectors_sparse_vectors.push(sparse_vector);
+    }*/
     println!("Start adding vectors...");
-    for (i, vector) in vectors_sparse_vectors.iter().enumerate() {
-        index.add_vector(vector);
+    for (i, vector) in vectors.iter().enumerate() {
+        linscan_index.add_vector(vector);
+        annoy_index.add_vector(vector);
+        simhash_index.add_vector(vector);
+        minhash_index.add_vector(vector);
+        pq_index.add_vector(vector);
+        ivfpq_index.add_vector(vector);
+        hnsw_index.add_vector(vector);
+        nsw_index.add_vector(vector);
         println!("Vector {}", i)
     }
     println!("Done adding vectors...");
 
-    let r = index.search(&query_sparse_vectors[0], 10);
-    println!("{:?}", r);
-    let r = index.search(
-        &vectors_sparse_vectors[thread_rng().gen_range(0..15000)],
-        10,
-    );
-    println!("{:?}", r);
+    println!("Start building index...");
+    linscan_index.build();
+    annoy_index.build();
+    simhash_index.build();
+    minhash_index.build();
+    pq_index.build();
+    ivfpq_index.build();
+    hnsw_index.build();
+    nsw_index.build();
+    println!("Done building index...");
 
-    println!("gt: {:?}", groundtruth.0[0]);
+    let linscan_result = linscan_index.search(&query_vectors[0], 10);
+    let pq_result = pq_index.search(&query_vectors[0], 10);
+    let ivfpq_result = ivfpq_index.search(&query_vectors[0], 10);
+    let simhash_result = simhash_index.search(&query_vectors[0], 10);
+    let minhash_result = minhash_index.search(&query_vectors[0], 10);
+    let hnsw_result = hnsw_index.search(&query_vectors[0], 10);
+    let nsw_result = nsw_index.search(&query_vectors[0], 10);
+    let annoy_result = annoy_index.search(&query_vectors[0], 10);
+    // println!("{:?}", r);
+    //let r = index.search(&vectors[thread_rng().gen_range(0..amount)], 10);
+    // println!("{:?}", r);
 
-    for (i, res) in r.iter().enumerate() {
-        /*let gt_index = groundtruth.0[0][i];
-        if res.index != gt_index as usize {
-            println!("{}: expected: {}, got: {}", i, gt_index, res.index);
-            }*/
+    println!("l1: {:?}", vectors[linscan_result[0].index].indices);
+    println!("l2: {:?}", vectors[linscan_result[1].index].indices);
+    println!("h1: {:?}", vectors[hnsw_result[0].index].indices);
+    println!("h2: {:?}", vectors[hnsw_result[1].index].indices);
+    println!("n1: {:?}", vectors[nsw_result[0].index].indices);
+    println!("n2: {:?}", vectors[nsw_result[1].index].indices);
+    println!("p1: {:?}", vectors[pq_result[0].index].indices);
+    println!("p2: {:?}", vectors[pq_result[1].index].indices);
+    println!("s1: {:?}", vectors[simhash_result[0].index].indices);
+    println!("s2: {:?}", vectors[simhash_result[1].index].indices);
+    println!("i1: {:?}", vectors[ivfpq_result[0].index].indices);
+    println!("i2: {:?}", vectors[ivfpq_result[1].index].indices);
+    println!("a1: {:?}", vectors[annoy_result[0].index].indices);
+    println!("a2: {:?}", vectors[annoy_result[1].index].indices);
+    println!("m1: {:?}", vectors[minhash_result[0].index].indices);
+    println!("m2: {:?}", vectors[minhash_result[1].index].indices);
+    println!("gt: {:?}", groundtruth[0][0].indices);
 
-        /*if (res.score - groundtruth.1[0][i]).abs() > 0.01 {
-        println!(
-            "{}: expected: {}, got: {}",
-            i, groundtruth.1[0][i], res.score
-        );
+    // for (i, res) in r.iter().enumerate() {
+    /*let gt_index = groundtruth.0[0][i];
+    if res.index != gt_index as usize {
+        println!("{}: expected: {}, got: {}", i, gt_index, res.index);
         }*/
-    }
+    /*if (res.score - groundtruth.1[0][i]).abs() > 0.01 {
+    println!(
+        "{}: expected: {}, got: {}",
+        i, groundtruth.1[0][i], res.score
+    );
+    }*/
+    // }
 
     /*let start = std::time::Instant::now();
     let mut hit = 0;
@@ -120,7 +178,6 @@ async fn main() {
         hit as f32 / (query_sparse_vectors.len() * 10) as f32
     );
     println!("elapsed: {:?}", elapsed);*/
-
     /*let (query_vectors, groundtruth, vectors) = data::sift::get_data().unwrap();
 
     let mut index = LSHIndex::new(DistanceMetric::Euclidean);
@@ -129,7 +186,6 @@ async fn main() {
     }
 
     index.build();*/
-
     /*let query_id = 0;
     let query_vector = HighDimVector::new(query_id, query_vectors[query_id].to_vec());
     let baseline = &groundtruth[query_id];
@@ -139,7 +195,6 @@ async fn main() {
         println!("{:?}", res.id);
     }
     println!("{:?}", &baseline[0..k]);*/
-
     /*let round = 100;
     let mut hit = 0;
     let mut rng = thread_rng();
@@ -159,7 +214,6 @@ async fn main() {
     }
 
     println!("recall: {}", hit as f32 / (round * 5) as f32);*/
-
     /*let n = 1000;
     let mut samples = Vec::with_capacity(n);
     for i in 0..n {
@@ -176,7 +230,6 @@ async fn main() {
     for (i, vec) in result.iter().enumerate() {
         println!("{} {:?}", i, vec.id);
         }*/
-
     /*let args = Args::parse();
     let dimensions = args.dimensions.unwrap_or(100);
     let num_images = args.num_images.unwrap_or(1000);
