@@ -10,7 +10,7 @@ use crate::{
     data_structures::min_heap::MinHeap,
 };
 
-use super::SparseIndex;
+use super::{DistanceMetric, SparseIndex};
 
 mod minhash;
 mod simhash;
@@ -26,10 +26,16 @@ pub struct LSHIndex {
     buckets: Vec<Vec<(usize, SparseVector)>>,
     vectors: Vec<SparseVector>,
     hash_type: LSHHashType,
+    metric: DistanceMetric,
 }
 
 impl LSHIndex {
-    pub fn new(num_buckets: usize, num_hash_functions: usize, hash_type: LSHHashType) -> Self {
+    pub fn new(
+        num_buckets: usize,
+        num_hash_functions: usize,
+        hash_type: LSHHashType,
+        metric: DistanceMetric,
+    ) -> Self {
         assert!(
             num_hash_functions >= 2,
             "num_hash_functions must be at least 2"
@@ -40,6 +46,7 @@ impl LSHIndex {
             buckets: vec![Vec::new(); num_buckets],
             vectors: Vec::new(),
             hash_type,
+            metric,
         }
     }
 
@@ -131,7 +138,7 @@ impl SparseIndex for LSHIndex {
             let bucket = &self.buckets[bucket_index];
 
             for (index, vector) in bucket.iter() {
-                let similarity = query_vector.cosine_similarity(&vector);
+                let similarity = query_vector.distance(&vector, &self.metric);
                 let mut found = false;
 
                 for (existing_similarity, _, existing_vector, bucket_count) in &mut results {
@@ -159,9 +166,9 @@ impl SparseIndex for LSHIndex {
                 heap.push(
                     QueryResult {
                         index: *index,
-                        score: OrderedFloat(*score),
+                        score: OrderedFloat(-score),
                     },
-                    OrderedFloat(*score),
+                    OrderedFloat(-score),
                 );
                 if heap.len() > k {
                     heap.pop();
@@ -173,7 +180,7 @@ impl SparseIndex for LSHIndex {
             .iter()
             .map(|query_result| QueryResult {
                 index: query_result.index,
-                score: OrderedFloat(query_result.score.into_inner()),
+                score: OrderedFloat(-query_result.score.into_inner()),
             })
             .collect()
     }
@@ -201,7 +208,7 @@ impl SparseIndex for LSHIndex {
             .into_par_iter()
             .map(|index| {
                 let vector = &self.vectors[index];
-                let similarity = query_vector.cosine_similarity(vector);
+                let similarity = query_vector.distance(vector, &self.metric);
                 (similarity, index)
             })
             .collect();
@@ -211,10 +218,10 @@ impl SparseIndex for LSHIndex {
             if heap.len() < k || similarity > heap.peek().unwrap().score.into_inner() {
                 heap.push(
                     QueryResult {
-                        score: OrderedFloat(similarity),
+                        score: OrderedFloat(-similarity),
                         index,
                     },
-                    OrderedFloat(similarity),
+                    OrderedFloat(-similarity),
                 );
                 if heap.len() > k {
                     heap.pop();
@@ -223,12 +230,18 @@ impl SparseIndex for LSHIndex {
         }
 
         heap.into_sorted_vec()
+            .iter()
+            .map(|query_result| QueryResult {
+                index: query_result.index,
+                score: OrderedFloat(-query_result.score.into_inner()),
+            })
+            .collect()
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::test_utils::get_simple_vectors;
+    use crate::test_utils::{get_complex_vectors, get_simple_vectors};
 
     use super::*;
 
@@ -236,7 +249,7 @@ mod tests {
     fn test_search_parallel() {
         let (data, query_vectors) = get_simple_vectors();
 
-        let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash);
+        let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash, DistanceMetric::Cosine);
         for vector in &data {
             index.add_vector(vector);
         }
@@ -252,7 +265,7 @@ mod tests {
     fn test_build_parallel() {
         let (data, query_vectors) = get_simple_vectors();
 
-        let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash);
+        let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash, DistanceMetric::Cosine);
         for vector in &data {
             index.add_vector(vector);
         }
@@ -268,7 +281,7 @@ mod tests {
     fn test_lsh_index_min_hash_simple() {
         let (data, query_vectors) = get_simple_vectors();
 
-        let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash);
+        let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash, DistanceMetric::Cosine);
         for vector in &data {
             index.add_vector(vector);
         }
@@ -282,7 +295,7 @@ mod tests {
 
     #[test]
     fn test_lsh_index_min_hash_complex() {
-        let mut index = LSHIndex::new(10, 4, LSHHashType::MinHash);
+        let mut index = LSHIndex::new(10, 4, LSHHashType::MinHash, DistanceMetric::Cosine);
 
         let mut vectors = vec![];
         for i in 0..100 {
@@ -312,40 +325,15 @@ mod tests {
 
     #[test]
     fn test_lsh_index_sim_hash_simple() {
-        let data = vec![
-            SparseVector {
-                indices: vec![0, 2],
-                values: vec![OrderedFloat(1.0), OrderedFloat(2.0)],
-            },
-            SparseVector {
-                indices: vec![1, 3],
-                values: vec![OrderedFloat(3.0), OrderedFloat(4.0)],
-            },
-            SparseVector {
-                indices: vec![0, 2],
-                values: vec![OrderedFloat(5.0), OrderedFloat(6.0)],
-            },
-            SparseVector {
-                indices: vec![1, 3],
-                values: vec![OrderedFloat(7.0), OrderedFloat(8.0)],
-            },
-            SparseVector {
-                indices: vec![0, 2],
-                values: vec![OrderedFloat(9.0), OrderedFloat(10.0)],
-            },
-        ];
+        let (data, query_vectors) = get_simple_vectors();
 
-        let mut index = LSHIndex::new(4, 4, LSHHashType::SimHash);
+        let mut index = LSHIndex::new(4, 4, LSHHashType::SimHash, DistanceMetric::Cosine);
         for vector in &data {
             index.add_vector(vector);
         }
         index.build();
 
-        let query = SparseVector {
-            indices: vec![0, 2],
-            values: vec![OrderedFloat(6.0), OrderedFloat(7.0)],
-        };
-        let neighbors = index.search(&query, 2);
+        let neighbors = index.search(&query_vectors[0], 2);
         println!("Nearest neighbors: {:?}", neighbors);
 
         assert!(true);
@@ -353,29 +341,19 @@ mod tests {
 
     #[test]
     fn test_lsh_index_sim_hash_complex() {
-        let mut index = LSHIndex::new(10, 4, LSHHashType::SimHash);
+        let (data, query_vector) = get_complex_vectors();
 
-        let mut vectors = vec![];
-        for i in 0..100 {
-            vectors.push(SparseVector {
-                indices: vec![i % 10, (i / 10) % 10],
-                values: vec![OrderedFloat((i % 10) as f32), OrderedFloat((i / 10) as f32)],
-            });
-        }
+        let mut index = LSHIndex::new(10, 4, LSHHashType::SimHash, DistanceMetric::Cosine);
 
-        for vector in &vectors {
+        for vector in &data {
             index.add_vector(vector);
         }
 
         index.build();
 
-        let query_vector = SparseVector {
-            indices: vec![5, 9],
-            values: vec![OrderedFloat(5.0), OrderedFloat(9.0)],
-        };
         let results = index.search(&query_vector, 10);
         println!("Results for search on query vector: {:?}", results);
-        println!("Top Search: {:?}", vectors[results[0].index]);
+        println!("Top Search: {:?}", data[results[0].index]);
         println!("Groundtruth: {:?}", query_vector);
 
         assert!(true);

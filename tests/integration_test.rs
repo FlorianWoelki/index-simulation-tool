@@ -59,10 +59,20 @@ mod tests {
         let seed = 42;
         let num_buckets = 10;
         let num_hash_functions = 10;
-        let mut index = LSHIndex::new(num_buckets, num_hash_functions, LSHHashType::SimHash);
+        let mut index = LSHIndex::new(
+            num_buckets,
+            num_hash_functions,
+            LSHHashType::SimHash,
+            DistanceMetric::Cosine,
+        );
         test_index(seed, &mut index);
 
-        let mut index = LSHIndex::new(num_buckets, num_hash_functions, LSHHashType::MinHash);
+        let mut index = LSHIndex::new(
+            num_buckets,
+            num_hash_functions,
+            LSHHashType::MinHash,
+            DistanceMetric::Cosine,
+        );
         test_index(seed, &mut index);
     }
 

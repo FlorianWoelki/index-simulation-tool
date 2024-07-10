@@ -45,8 +45,8 @@ async fn main() {
 
     let seed = thread_rng().gen_range(0..10000);
     let mut annoy_index = AnnoyIndex::new(20, 20, 40, DistanceMetric::Cosine);
-    let mut simhash_index = LSHIndex::new(20, 4, LSHHashType::SimHash);
-    let mut minhash_index = LSHIndex::new(20, 4, LSHHashType::MinHash);
+    let mut simhash_index = LSHIndex::new(20, 4, LSHHashType::SimHash, DistanceMetric::Cosine);
+    let mut minhash_index = LSHIndex::new(20, 4, LSHHashType::MinHash, DistanceMetric::Cosine);
     let mut pq_index = PQIndex::new(3, 50, 256, 0.01, DistanceMetric::Cosine, seed);
     let mut ivfpq_index = IVFPQIndex::new(3, 100, 200, 256, 0.01, DistanceMetric::Cosine, seed);
     let mut nsw_index = NSWIndex::new(200, 200, DistanceMetric::Cosine, seed);
