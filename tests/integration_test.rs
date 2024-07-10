@@ -5,8 +5,9 @@ mod tests {
     use index_simulation_tool::{
         data::SparseVector,
         index::{
+            annoy::AnnoyIndex,
             lsh::{LSHHashType, LSHIndex},
-            SparseIndex,
+            DistanceMetric, SparseIndex,
         },
     };
     use ordered_float::OrderedFloat;
@@ -45,7 +46,7 @@ mod tests {
 
         assert_eq!(results.len(), 10);
         assert_eq!(results[0].index, 500);
-        assert_eq!(results[0].score.into_inner(), 1.0);
+        assert_eq!(results[0].score.into_inner(), 0.0);
 
         for result in results.iter().skip(1) {
             assert!(result.score.into_inner() > 0.0);
@@ -62,6 +63,16 @@ mod tests {
         test_index(seed, &mut index);
 
         let mut index = LSHIndex::new(num_buckets, num_hash_functions, LSHHashType::MinHash);
+        test_index(seed, &mut index);
+    }
+
+    #[test]
+    fn test_annoy_index() {
+        let seed = 42;
+        let n_trees = 10;
+        let max_points = 10;
+        let search_k = 20;
+        let mut index = AnnoyIndex::new(n_trees, max_points, search_k, DistanceMetric::Cosine);
         test_index(seed, &mut index);
     }
 }
