@@ -1,8 +1,6 @@
 use std::{collections::HashMap, time::Instant};
 
-use data::{
-    generator_dense::DenseDataGenerator, generator_sparse::SparseDataGenerator, SparseVector,
-};
+use data::{generator_sparse::SparseDataGenerator, SparseVector};
 use index::{
     annoy::AnnoyIndex,
     hnsw::HNSWIndex,
