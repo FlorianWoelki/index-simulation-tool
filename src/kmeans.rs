@@ -5,7 +5,7 @@ use rayon::iter::{
 
 use std::{
     collections::BTreeMap,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex},
 };
 
 use ordered_float::{Float, OrderedFloat};
@@ -114,7 +114,7 @@ pub fn kmeans_parallel(
         .choose_multiple(&mut rng, num_clusters)
         .cloned()
         .collect();
-    let assignments = RwLock::new(vec![0; vectors.len()]);
+    let assignments = Mutex::new(vec![0; vectors.len()]);
 
     for _ in 0..iterations {
         vectors.par_iter().enumerate().for_each(|(i, node)| {
@@ -136,7 +136,7 @@ pub fn kmeans_parallel(
                     },
                 );
 
-            assignments.write().unwrap()[i] = closest;
+            assignments.lock().unwrap()[i] = closest;
         });
 
         // Recalculate the cluster centers based on the new assignments.
@@ -147,7 +147,7 @@ pub fn kmeans_parallel(
 
         vectors
             .par_iter()
-            .zip(assignments.read().unwrap().par_iter())
+            .zip(assignments.lock().unwrap().par_iter())
             .for_each(|(node, &cluster)| {
                 let mut center = new_centers[cluster].lock().unwrap();
                 for (index, &value) in node.indices.iter().zip(node.values.iter()) {
