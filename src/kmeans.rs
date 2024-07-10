@@ -160,14 +160,13 @@ pub fn kmeans_parallel(
             });
 
         let max_change = Arc::new(Mutex::new(0.0));
-        let rng = Arc::new(Mutex::new(rng.clone()));
 
         centers.par_iter_mut().enumerate().for_each(|(i, center)| {
             let counts = counts.lock().unwrap();
 
             if counts[i] == 0 {
-                let mut rng = rng.lock().unwrap();
-                *center = vectors.choose(&mut *rng).unwrap().clone();
+                let mut rng = rng.clone();
+                *center = vectors.choose(&mut rng).unwrap().clone();
                 return;
             }
 
