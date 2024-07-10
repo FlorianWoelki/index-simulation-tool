@@ -1,7 +1,7 @@
 use crate::{
     data::{QueryResult, SparseVector},
     data_structures::min_heap::MinHeap,
-    kmeans::kmeans,
+    kmeans::{kmeans, kmeans_parallel},
 };
 use ordered_float::OrderedFloat;
 use rayon::iter::{
@@ -187,7 +187,7 @@ impl SparseIndex for PQIndex {
                     })
                     .collect();
 
-                kmeans(
+                kmeans_parallel(
                     &sub_vectors_m,
                     self.num_clusters,
                     self.iterations,

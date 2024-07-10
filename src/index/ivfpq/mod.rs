@@ -9,7 +9,7 @@ use rayon::iter::{
 use crate::{
     data::{QueryResult, SparseVector},
     data_structures::min_heap::MinHeap,
-    kmeans::kmeans,
+    kmeans::{kmeans, kmeans_parallel},
 };
 
 use super::{DistanceMetric, SparseIndex};
@@ -198,7 +198,7 @@ impl SparseIndex for IVFPQIndex {
     }
 
     fn build_parallel(&mut self) {
-        self.coarse_centroids = kmeans(
+        self.coarse_centroids = kmeans_parallel(
             &self.vectors,
             self.num_coarse_clusters,
             self.iterations,
@@ -243,7 +243,7 @@ impl SparseIndex for IVFPQIndex {
                             })
                             .collect();
 
-                        kmeans(
+                        kmeans_parallel(
                             &sub_vectors_m,
                             self.num_clusters,
                             self.iterations,
