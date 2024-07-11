@@ -1,22 +1,102 @@
-use plotly::{common::Title, layout::Axis, BoxPlot, Histogram, Layout, Plot, Scatter};
+use plotly::{
+    common::{DashType, Font, Marker, Title},
+    layout::{Annotation, Axis, Legend, Shape, ShapeLine, ShapeType},
+    Histogram, Layout, Plot,
+};
 
 use crate::{data::SparseVector, index::DistanceMetric};
 
-pub fn plot_sparsity_distribution(data: &[SparseVector]) -> Plot {
-    let non_zero_counts: Vec<usize> = data.iter().map(|v| v.indices.len()).collect();
+fn mean(data: &Vec<f32>) -> Option<f32> {
+    if data.is_empty() {
+        return None;
+    }
 
-    let trace = Histogram::new(non_zero_counts);
+    let sum: f32 = data.iter().sum();
+    Some(sum / data.len() as f32)
+}
+
+fn median(data: &Vec<f32>) -> Option<f32> {
+    if data.is_empty() {
+        return None;
+    }
+
+    let mut data = data.clone();
+    let mid = data.len() / 2;
+    data.select_nth_unstable_by(mid, |a, b| {
+        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    if data.len() % 2 == 0 {
+        Some((data[mid - 1] + data[mid]) / 2.0)
+    } else {
+        Some(data[mid])
+    }
+}
+
+/// Creates a histogram showing the distribution of non-zero elements in
+/// a set of sparse vectors.
+/// This function helps to understand the sparsity characteristics of the
+/// provided dataset.
+pub fn plot_sparsity_distribution(data: &[SparseVector]) -> Plot {
+    let non_zero_counts: Vec<f32> = data.iter().map(|v| v.indices.len() as f32).collect();
+
+    let trace = Histogram::new(non_zero_counts.clone())
+        .marker(Marker::new().color("lightgray"))
+        .name("Sparsity");
+
+    let mean_value = mean(&non_zero_counts).unwrap_or(0.0);
+    let median_value = median(&non_zero_counts).unwrap_or(0.0);
+
     let mut plot = Plot::new();
     plot.add_trace(trace);
     plot.set_layout(
         Layout::new()
             .title(Title::new("Distribution of Non-Zero Elements"))
             .x_axis(Axis::new().title(Title::new("Number of Non-Zero Elements")))
-            .y_axis(Axis::new().title(Title::new("Frequency"))),
+            .y_axis(Axis::new().title(Title::new("Frequency")))
+            .legend(Legend::new().title(Title::new("Legend")))
+            .shapes(vec![
+                Shape::new()
+                    .shape_type(ShapeType::Line)
+                    .x0(mean_value)
+                    .x1(mean_value)
+                    .y0(0)
+                    .y1(1)
+                    .y_ref("paper")
+                    .line(ShapeLine::new().color("red").dash(DashType::Dash)),
+                Shape::new()
+                    .shape_type(ShapeType::Line)
+                    .x0(median_value)
+                    .x1(median_value)
+                    .y0(0)
+                    .y1(1)
+                    .y_ref("paper")
+                    .line(ShapeLine::new().color("green").dash(DashType::Dash)),
+            ])
+            .annotations(vec![
+                Annotation::new()
+                    .x(mean_value)
+                    .y(1)
+                    .y_ref("paper")
+                    .text("Mean")
+                    .show_arrow(false)
+                    .font(Font::new().color("red")),
+                Annotation::new()
+                    .x(median_value)
+                    .y(0.9)
+                    .y_ref("paper")
+                    .text("Median")
+                    .show_arrow(false)
+                    .font(Font::new().color("green")),
+            ]),
     );
     plot
 }
 
+/// Generates a histogram of distances between query vectors and their
+/// nearest neighbors in the groundtruth data.
+/// Helps you to analyze the distribution of distances in nearest neighbor
+/// searches.
 pub fn plot_nearest_neighbor_distances(
     query_vectors: &[SparseVector],
     groundtruth: &[Vec<SparseVector>],
@@ -28,16 +108,55 @@ pub fn plot_nearest_neighbor_distances(
         .map(|(q, gt)| q.distance(&gt[0], metric))
         .collect();
 
-    let trace = Histogram::new(distances);
+    let trace = Histogram::new(distances.clone())
+        .marker(Marker::new().color("lightgray"))
+        .name("Distances");
+
+    let mean_distance = mean(&distances).unwrap_or(0.0);
+    let median_distance = median(&distances).unwrap_or(0.0);
+
     let mut plot = Plot::new();
     plot.add_trace(trace);
     plot.set_layout(
-        plotly::Layout::new()
-            .title(plotly::common::Title::new(
-                "Distribution of Nearest Neighbor Distances",
-            ))
-            .x_axis(plotly::layout::Axis::new().title(plotly::common::Title::new("Distance")))
-            .y_axis(plotly::layout::Axis::new().title(plotly::common::Title::new("Frequency"))),
+        Layout::new()
+            .title(Title::new("Distribution of Nearest Neighbor Distances"))
+            .x_axis(Axis::new().title(Title::new("Distance")))
+            .y_axis(Axis::new().title(Title::new("Frequency")))
+            .legend(Legend::new().title(Title::new("Legend")))
+            .shapes(vec![
+                Shape::new()
+                    .shape_type(ShapeType::Line)
+                    .x0(mean_distance)
+                    .x1(mean_distance)
+                    .y0(0)
+                    .y1(1)
+                    .y_ref("paper")
+                    .line(ShapeLine::new().color("red").dash(DashType::Dash)),
+                Shape::new()
+                    .shape_type(ShapeType::Line)
+                    .x0(median_distance)
+                    .x1(median_distance)
+                    .y0(0)
+                    .y1(1)
+                    .y_ref("paper")
+                    .line(ShapeLine::new().color("green").dash(DashType::Dash)),
+            ])
+            .annotations(vec![
+                Annotation::new()
+                    .x(mean_distance)
+                    .y(1)
+                    .y_ref("paper")
+                    .text("Mean")
+                    .show_arrow(false)
+                    .font(Font::new().color("red")),
+                Annotation::new()
+                    .x(median_distance)
+                    .y(0.9)
+                    .y_ref("paper")
+                    .text("Median")
+                    .show_arrow(false)
+                    .font(Font::new().color("green")),
+            ]),
     );
     plot
 }
