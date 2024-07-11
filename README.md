@@ -14,7 +14,6 @@
   - [x] PCA
   - [x] t-SNE
     - [x] Remove nalgebra and use pure ndarray for PCA
-- [ ] Check parallel build and search for NSW algorithm
 - [ ] Implement saving/loading functionality
 - [ ] Cleanup repository
   - [ ] Use similar functionalities for multi threaded and single threaded functionality
