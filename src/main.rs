@@ -89,26 +89,26 @@ async fn main() {
     println!("Done adding vectors...");
 
     println!("Start building index...");
-    linscan_index.build();
-    annoy_index.build();
-    simhash_index.build();
-    minhash_index.build();
-    pq_index.build();
-    ivfpq_index.build();
-    hnsw_index.build();
-    nsw_index.build();
+    linscan_index.build_parallel();
+    annoy_index.build_parallel();
+    simhash_index.build_parallel();
+    minhash_index.build_parallel();
+    pq_index.build_parallel();
+    ivfpq_index.build_parallel();
+    hnsw_index.build_parallel();
+    nsw_index.build_parallel();
     println!("Done building index...");
 
-    let linscan_result = linscan_index.search(&query_vectors[0], 10);
-    let pq_result = pq_index.search(&query_vectors[0], 10);
-    let ivfpq_result = ivfpq_index.search(&query_vectors[0], 10);
-    let simhash_result = simhash_index.search(&query_vectors[0], 10);
-    let minhash_result = minhash_index.search(&query_vectors[0], 10);
-    let hnsw_result = hnsw_index.search(&query_vectors[0], 10);
-    let nsw_result = nsw_index.search(&query_vectors[0], 10);
-    let annoy_result = annoy_index.search(&query_vectors[0], 10);
+    let linscan_result = linscan_index.search_parallel(&query_vectors[0], 10);
+    let pq_result = pq_index.search_parallel(&query_vectors[0], 10);
+    let ivfpq_result = ivfpq_index.search_parallel(&query_vectors[0], 10);
+    let simhash_result = simhash_index.search_parallel(&query_vectors[0], 10);
+    let minhash_result = minhash_index.search_parallel(&query_vectors[0], 10);
+    let hnsw_result = hnsw_index.search_parallel(&query_vectors[0], 10);
+    let nsw_result = nsw_index.search_parallel(&query_vectors[0], 10);
+    let annoy_result = annoy_index.search_parallel(&query_vectors[0], 10);
     // println!("{:?}", r);
-    //let r = index.search(&vectors[thread_rng().gen_range(0..amount)], 10);
+    //let r = index.search_parallel(&vectors[thread_rng().gen_range(0..amount)], 10);
     // println!("{:?}", r);
 
     println!("l1: {:?}", vectors[linscan_result[0].index].indices);
@@ -145,7 +145,7 @@ async fn main() {
     /*let start = std::time::Instant::now();
     let mut hit = 0;
     for (i, query_vector) in query_sparse_vectors.iter().enumerate() {
-        let result = index.search(query_vector, 10);
+        let result = index.search_parallel(query_vector, 10);
 
         let expected_indices = &groundtruth.0[i];
         let expected_scores = &groundtruth.1[i];
@@ -183,12 +183,12 @@ async fn main() {
         index.add_vector(HighDimVector::new(i, vector.to_vec()));
     }
 
-    index.build();*/
+    index.build_parallel();*/
     /*let query_id = 0;
     let query_vector = HighDimVector::new(query_id, query_vectors[query_id].to_vec());
     let baseline = &groundtruth[query_id];
     let k = 5;
-    let result = index.search(&query_vector, k);
+    let result = index.search_parallel(&query_vector, k);
     for res in result {
         println!("{:?}", res.id);
     }
@@ -201,7 +201,7 @@ async fn main() {
         let query_i = rng.gen_range(0..query_vectors.len());
         let query = HighDimVector::new(query_i, query_vectors[query_i].to_vec());
 
-        let result = index.search(&query, 5);
+        let result = index.search_parallel(&query, 5);
         let top5_groundtruth = &groundtruth[query_i][0..5];
         for res in result {
             let id = res.id as i32;
@@ -221,9 +221,9 @@ async fn main() {
     for sample in samples {
         index.add_vector(sample);
     }
-    index.build();
+    index.build_parallel();
     let query = HighDimVector::new(999999999, vec![208.0; 3]);
-    let result = index.search(&query, 5);
+    let result = index.search_parallel(&query, 5);
 
     for (i, vec) in result.iter().enumerate() {
         println!("{} {:?}", i, vec.id);
