@@ -152,7 +152,7 @@ impl SparseIndex for LinScanIndex {
 
 #[cfg(test)]
 mod tests {
-    use crate::test_utils::get_simple_vectors;
+    use crate::test_utils::{get_complex_vectors, get_simple_vectors, is_in_actual_result};
 
     use super::*;
 
@@ -287,9 +287,22 @@ mod tests {
         }
         index.build();
 
-        let neighbors = index.search(&query_vectors[0], 2);
-        println!("Nearest neighbors: {:?}", neighbors);
+        let results = index.search(&query_vectors[0], 10);
+        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
+    }
 
-        assert!(true);
+    #[test]
+    fn test_linscan_complex() {
+        let (data, query_vector) = get_complex_vectors();
+
+        let mut index = LinScanIndex::new(DistanceMetric::Cosine);
+        for vector in &data {
+            index.add_vector(vector);
+        }
+        index.build();
+
+        let results = index.search(&query_vector, 2);
+        println!("{:?}", results);
+        assert!(is_in_actual_result(&data, &query_vector, &results));
     }
 }

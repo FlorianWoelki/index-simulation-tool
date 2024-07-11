@@ -299,7 +299,7 @@ impl SparseIndex for AnnoyIndex {
 
 #[cfg(test)]
 mod tests {
-    use crate::test_utils::get_simple_vectors;
+    use crate::test_utils::{get_complex_vectors, get_simple_vectors, is_in_actual_result};
 
     use super::*;
 
@@ -312,9 +312,8 @@ mod tests {
         }
         index.build();
 
-        let neighbors = index.search_parallel(&query_vectors[0], 2);
-        println!("Nearest neighbors: {:?}", neighbors);
-        assert!(true);
+        let results = index.search_parallel(&query_vectors[0], 2);
+        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
     }
 
     #[test]
@@ -326,9 +325,8 @@ mod tests {
         }
         index.build_parallel();
 
-        let neighbors = index.search(&query_vectors[0], 2);
-        println!("Nearest neighbors: {:?}", neighbors);
-        assert!(true);
+        let results = index.search(&query_vectors[0], 2);
+        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
     }
 
     #[test]
@@ -353,8 +351,8 @@ mod tests {
         index.build();
 
         let results = index.search(&query_vectors[0], 2);
-        println!("{:?}", results);
-        assert!(true);
+        assert_eq!(results[0].index, 3);
+        assert_eq!(results[1].index, 0);
     }
 
     #[test]
@@ -366,38 +364,22 @@ mod tests {
         }
         index.build();
 
-        let neighbors = index.search(&query_vectors[0], 2);
-        println!("Nearest neighbors: {:?}", neighbors);
-        assert!(true);
+        let results = index.search(&query_vectors[0], 2);
+        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
     }
 
     #[test]
     fn test_annoy_index_complex() {
         let mut index = AnnoyIndex::new(10, 10, 10, DistanceMetric::Cosine);
 
-        let mut vectors = vec![];
-        for i in 0..100 {
-            vectors.push(SparseVector {
-                indices: vec![i % 10, (i / 10) % 10],
-                values: vec![OrderedFloat((i % 10) as f32), OrderedFloat((i / 10) as f32)],
-            });
-        }
-
-        for vector in &vectors {
+        let (data, query_vector) = get_complex_vectors();
+        for vector in &data {
             index.add_vector(vector);
         }
 
         index.build();
 
-        let query_vector = SparseVector {
-            indices: vec![5, 9],
-            values: vec![OrderedFloat(5.0), OrderedFloat(9.0)],
-        };
-        let results = index.search(&query_vector, 10);
-        println!("Results for search on query vector: {:?}", results);
-        println!("Top Search: {:?}", vectors[results[0].index]);
-        println!("Groundtruth: {:?}", query_vector);
-
-        assert!(true);
+        let results = index.search(&query_vector, 2);
+        assert!(is_in_actual_result(&data, &query_vector, &results));
     }
 }

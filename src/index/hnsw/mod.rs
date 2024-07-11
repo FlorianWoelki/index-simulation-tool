@@ -396,7 +396,7 @@ mod tests {
     use ordered_float::OrderedFloat;
     use rand::thread_rng;
 
-    use crate::test_utils::get_simple_vectors;
+    use crate::test_utils::{get_complex_vectors, get_simple_vectors, is_in_actual_result};
 
     use super::*;
 
@@ -412,18 +412,16 @@ mod tests {
             random_seed,
         );
 
-        let (vectors, query_vectors) = get_simple_vectors();
+        let (data, query_vectors) = get_simple_vectors();
 
-        for vector in &vectors {
+        for vector in &data {
             index.add_vector(vector);
         }
 
         index.build();
 
         let results = index.search_parallel(&query_vectors[0], 2);
-
-        println!("{:?}", results);
-        assert!(true);
+        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
     }
 
     #[test]
@@ -438,18 +436,16 @@ mod tests {
             random_seed,
         );
 
-        let (vectors, query_vectors) = get_simple_vectors();
+        let (data, query_vectors) = get_simple_vectors();
 
-        for vector in &vectors {
+        for vector in &data {
             index.add_vector(vector);
         }
 
         index.build_parallel();
 
         let results = index.search(&query_vectors[0], 2);
-
-        println!("{:?}", results);
-        assert!(true);
+        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
     }
 
     #[test]
@@ -496,48 +492,17 @@ mod tests {
     #[test]
     fn test_hnsw_index_simple() {
         let random_seed = 42;
-        let mut index = HNSWIndex::new(
-            1.0 / 3.0,
-            16,
-            200,
-            200,
-            DistanceMetric::Euclidean,
-            random_seed,
-        );
+        let mut index = HNSWIndex::new(0.5, 16, 50, 50, DistanceMetric::Euclidean, random_seed);
 
-        let vectors = vec![
-            SparseVector {
-                indices: vec![0, 1, 2],
-                values: vec![OrderedFloat(0.1), OrderedFloat(0.2), OrderedFloat(0.3)],
-            },
-            SparseVector {
-                indices: vec![1, 2, 3],
-                values: vec![OrderedFloat(0.4), OrderedFloat(0.5), OrderedFloat(0.6)],
-            },
-            SparseVector {
-                indices: vec![2, 3, 4],
-                values: vec![OrderedFloat(0.7), OrderedFloat(0.8), OrderedFloat(0.9)],
-            },
-            SparseVector {
-                indices: vec![3, 4, 5],
-                values: vec![OrderedFloat(1.0), OrderedFloat(1.1), OrderedFloat(1.2)],
-            },
-            SparseVector {
-                indices: vec![4, 5, 6],
-                values: vec![OrderedFloat(1.3), OrderedFloat(1.4), OrderedFloat(1.5)],
-            },
-        ];
-
-        for vector in &vectors {
+        let (data, query_vectors) = get_simple_vectors();
+        for vector in &data {
             index.add_vector(vector);
         }
 
         index.build();
 
-        let results = index.search(&vectors[0], 3);
-
-        println!("{:?}", results);
-        assert!(true);
+        let results = index.search(&query_vectors[0], 2);
+        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
     }
 
     #[test]
@@ -552,29 +517,15 @@ mod tests {
             random_seed,
         );
 
-        let mut vectors = vec![];
-        for i in 0..100 {
-            vectors.push(SparseVector {
-                indices: vec![i % 10, (i / 10) % 10],
-                values: vec![OrderedFloat((i % 10) as f32), OrderedFloat((i / 10) as f32)],
-            });
-        }
+        let (data, query_vector) = get_complex_vectors();
 
-        for vector in &vectors {
+        for vector in &data {
             index.add_vector(vector);
         }
 
         index.build();
 
-        let query_vector = SparseVector {
-            indices: vec![5, 9],
-            values: vec![OrderedFloat(5.0), OrderedFloat(9.0)],
-        };
-        let results = index.search(&query_vector, 10);
-        println!("Results for search on query vector: {:?}", results);
-        println!("Top Search: {:?}", vectors[results[0].index]);
-        println!("Groundtruth: {:?}", query_vector);
-
-        assert!(true);
+        let results = index.search(&query_vector, 2);
+        assert!(is_in_actual_result(&data, &query_vector, &results));
     }
 }

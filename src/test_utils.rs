@@ -1,6 +1,6 @@
 use ordered_float::OrderedFloat;
 
-use crate::data::SparseVector;
+use crate::data::{QueryResult, SparseVector};
 
 /// Returns a tuple where the first entry is easy to index vector data
 /// and the second entry are possible query vectors to use.
@@ -31,11 +31,11 @@ pub fn get_simple_vectors() -> (Vec<SparseVector>, Vec<SparseVector>) {
         vec![
             SparseVector {
                 indices: vec![0, 2],
-                values: vec![OrderedFloat(6.0), OrderedFloat(7.0)],
+                values: vec![OrderedFloat(9.0), OrderedFloat(10.0)],
             },
             SparseVector {
                 indices: vec![0, 2],
-                values: vec![OrderedFloat(2.0), OrderedFloat(3.0)],
+                values: vec![OrderedFloat(5.0), OrderedFloat(6.0)],
             },
         ],
     );
@@ -57,4 +57,19 @@ pub fn get_complex_vectors() -> (Vec<SparseVector>, SparseVector) {
             values: vec![OrderedFloat(5.0), OrderedFloat(9.0)],
         },
     )
+}
+
+pub fn is_in_actual_result(
+    data: &[SparseVector],
+    expected: &SparseVector,
+    results: &[QueryResult],
+) -> bool {
+    for r in results.iter() {
+        let v = &data[r.index];
+        if expected == v {
+            return true;
+        }
+    }
+
+    false
 }

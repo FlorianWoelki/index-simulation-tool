@@ -339,7 +339,7 @@ impl SparseIndex for PQIndex {
 mod tests {
     use ordered_float::OrderedFloat;
 
-    use crate::test_utils::{get_complex_vectors, get_simple_vectors};
+    use crate::test_utils::{get_complex_vectors, get_simple_vectors, is_in_actual_result};
 
     use super::*;
 
@@ -365,10 +365,8 @@ mod tests {
 
         pq_index.build();
 
-        let result = pq_index.search_parallel(&query_vectors[0], 2);
-        println!("{:?}", result);
-
-        assert!(true);
+        let results = pq_index.search_parallel(&query_vectors[0], 2);
+        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
     }
 
     #[test]
@@ -393,10 +391,8 @@ mod tests {
 
         pq_index.build_parallel();
 
-        let result = pq_index.search(&query_vectors[0], 2);
-        println!("{:?}", result);
-
-        assert!(true);
+        let results = pq_index.search(&query_vectors[0], 2);
+        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
     }
 
     #[test]
@@ -449,21 +445,19 @@ mod tests {
             num_clusters,
             iterations,
             0.01,
-            DistanceMetric::Cosine,
+            DistanceMetric::Euclidean,
             42,
         );
 
-        let (vectors, query_vectors) = get_simple_vectors();
-        for vector in &vectors {
+        let (data, query_vectors) = get_simple_vectors();
+        for vector in &data {
             pq_index.add_vector(vector);
         }
 
         pq_index.build();
 
-        let result = pq_index.search(&query_vectors[0], 2);
-        println!("{:?}", result);
-
-        assert!(true);
+        let results = pq_index.search(&query_vectors[0], 10);
+        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
     }
 
     #[test]
@@ -545,18 +539,14 @@ mod tests {
             random_seed,
         );
 
-        let (vectors, query_vector) = get_complex_vectors();
-        for vector in &vectors {
+        let (data, query_vector) = get_complex_vectors();
+        for vector in &data {
             index.add_vector(vector);
         }
 
         index.build();
 
         let results = index.search(&query_vector, 10);
-        println!("Results for search on query vector: {:?}", results);
-        println!("Top Search: {:?}", vectors[results[0].index]);
-        println!("Groundtruth: {:?}", query_vector);
-
-        assert!(true);
+        assert!(is_in_actual_result(&data, &query_vector, &results));
     }
 }
