@@ -1,6 +1,10 @@
 use std::{collections::HashMap, time::Instant};
 
-use data::{generator_sparse::SparseDataGenerator, SparseVector};
+use data::{
+    generator_sparse::SparseDataGenerator,
+    plot::{plot_nearest_neighbor_distances, plot_sparsity_distribution},
+    SparseVector,
+};
 use index::{
     annoy::AnnoyIndex,
     hnsw::HNSWIndex,
@@ -40,6 +44,9 @@ async fn main() {
     let mut generator =
         SparseDataGenerator::new(100, amount, (0.0, 10.0), 0.9, DistanceMetric::Cosine);
     let (vectors, query_vectors, groundtruth) = generator.generate().await;
+
+    plot_sparsity_distribution(&vectors).show();
+    plot_nearest_neighbor_distances(&query_vectors, &groundtruth, &DistanceMetric::Cosine).show();
 
     let seed = thread_rng().gen_range(0..10000);
     let mut annoy_index = AnnoyIndex::new(20, 20, 40, DistanceMetric::Cosine);

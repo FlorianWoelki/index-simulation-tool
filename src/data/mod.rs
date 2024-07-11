@@ -5,6 +5,7 @@ use crate::index::DistanceMetric;
 pub mod generator_sparse;
 pub mod ms_marco;
 pub mod pca;
+pub mod plot;
 pub mod tsne;
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone)]
