@@ -245,7 +245,7 @@ impl SparseIndex for NSWIndex {
         let graph = Arc::new(Mutex::new(HashMap::new()));
         let vectors = Arc::new(self.vectors.clone());
 
-        (0..vectors.len()).into_par_iter().for_each(|i| {
+        (0..vectors.len()).into_iter().for_each(|i| {
             let neighbors = if i == 0 {
                 HashSet::new()
             } else {
