@@ -39,8 +39,33 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
-    //let (groundtruth, vectors, query_vectors) = data::ms_marco::load_msmarco_dataset().unwrap();
-    let amount = 200;
+    // let (groundtruth, vectors, query_vectors) = data::ms_marco::load_msmarco_dataset().unwrap();
+    // let mut query_sparse_vectors = vec![];
+    // let mut vectors_sparse_vectors = vec![];
+    // for query_vector in query_vectors.iter() {
+    //     let sparse_vector = SparseVector {
+    //         indices: query_vector.0.clone(),
+    //         values: query_vector
+    //             .1
+    //             .iter()
+    //             .map(|&v| ordered_float::OrderedFloat(v))
+    //             .collect(),
+    //     };
+    //     query_sparse_vectors.push(sparse_vector);
+    // }
+    // for vector in vectors.iter().take(5000) {
+    //     let sparse_vector = SparseVector {
+    //         indices: vector.0.clone(),
+    //         values: vector
+    //             .1
+    //             .iter()
+    //             .map(|&v| ordered_float::OrderedFloat(v))
+    //             .collect(),
+    //     };
+    //     vectors_sparse_vectors.push(sparse_vector);
+    // }
+
+    let amount = 300;
     let mut generator =
         SparseDataGenerator::new(100, amount, (0.0, 10.0), 0.9, DistanceMetric::Cosine);
     let (vectors, query_vectors, groundtruth) = generator.generate().await;
@@ -57,30 +82,7 @@ async fn main() {
     let mut nsw_index = NSWIndex::new(200, 200, DistanceMetric::Cosine, seed);
     let mut linscan_index = LinScanIndex::new(DistanceMetric::Euclidean);
     let mut hnsw_index = HNSWIndex::new(0.5, 16, 200, 200, DistanceMetric::Cosine, seed);
-    //let mut query_sparse_vectors = vec![];
-    //let mut vectors_sparse_vectors = vec![];
-    /*for query_vector in query_vectors.iter() {
-    let sparse_vector = SparseVector {
-        indices: query_vector.0.clone(),
-        values: query_vector
-            .1
-            .iter()
-            .map(|&v| ordered_float::OrderedFloat(v))
-            .collect(),
-    };
-    query_sparse_vectors.push(sparse_vector);
-    }*/
-    /*for vector in vectors.iter().take(amount) {
-    let sparse_vector = SparseVector {
-        indices: vector.0.clone(),
-        values: vector
-            .1
-            .iter()
-            .map(|&v| ordered_float::OrderedFloat(v))
-            .collect(),
-    };
-    vectors_sparse_vectors.push(sparse_vector);
-    }*/
+
     println!("Start adding vectors...");
     for (i, vector) in vectors.iter().enumerate() {
         linscan_index.add_vector(vector);

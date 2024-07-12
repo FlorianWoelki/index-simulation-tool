@@ -2,6 +2,10 @@ use nalgebra::DMatrix;
 use ordered_float::OrderedFloat;
 use plotly::{common::Mode, Plot, Scatter};
 use rand::{rngs::StdRng, Rng};
+use rayon::iter::{
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator,
+    IntoParallelRefMutIterator, ParallelIterator,
+};
 
 use super::SparseVector;
 
@@ -49,6 +53,7 @@ fn tsne(
 ) -> Vec<SparseVector> {
     let n_samples = data.len();
     let mut low_dim_data: Vec<SparseVector> = (0..n_samples)
+        .into_par_iter()
         .map(|_| {
             let mut sv = SparseVector {
                 indices: vec![],
@@ -70,9 +75,12 @@ fn tsne(
         let gradient = compute_gradient(&p, &q, &low_dim_data);
 
         let learning_rate = 200.0 / (1.0 + iter as f64) as f32;
-        for (low_dim_vector, grad_vector) in low_dim_data.iter_mut().zip(gradient.iter()) {
-            low_dim_vector.add_scaled(grad_vector, -learning_rate);
-        }
+        low_dim_data
+            .par_iter_mut()
+            .zip(gradient.par_iter())
+            .for_each(|(low_dim_vector, grad_vector)| {
+                low_dim_vector.add_scaled(grad_vector, -learning_rate);
+            });
 
         let kl_div = kl_divergence(&p, &q);
         println!("Iteration {}: KL divergence = {}", iter, kl_div);
@@ -92,6 +100,19 @@ fn compute_pairwise_similarities(data: &[SparseVector], perplexity: f64) -> DMat
                 p[(i, j)] = (-dist / (2.0 * perplexity.powi(2))).exp();
             }
         }
+    }
+
+    // Symmetrize the matrix
+    for i in 0..n_samples {
+        for j in (i + 1)..n_samples {
+            let avg = (p[(i, j)] + p[(j, i)]) / 2.0;
+            p[(i, j)] = avg;
+            p[(j, i)] = avg;
+        }
+    }
+
+    // Normalize each row to sum to 1
+    for i in 0..n_samples {
         let sum: f64 = p.row(i).sum();
         p.row_mut(i).iter_mut().for_each(|x| *x /= sum);
     }
@@ -110,6 +131,21 @@ fn compute_low_dim_similarities(low_dim_data: &[SparseVector]) -> DMatrix<f64> {
                 q[(i, j)] = 1.0 / (1.0 + dist);
             }
         }
+        // let sum: f64 = q.row(i).sum();
+        // q.row_mut(i).iter_mut().for_each(|x| *x /= sum);
+    }
+
+    // Symmetrize the matrix
+    for i in 0..n_samples {
+        for j in (i + 1)..n_samples {
+            let avg = (q[(i, j)] + q[(j, i)]) / 2.0;
+            q[(i, j)] = avg;
+            q[(j, i)] = avg;
+        }
+    }
+
+    // Normalize each row to sum to 1
+    for i in 0..n_samples {
         let sum: f64 = q.row(i).sum();
         q.row_mut(i).iter_mut().for_each(|x| *x /= sum);
     }
@@ -124,33 +160,34 @@ fn compute_gradient(
 ) -> Vec<SparseVector> {
     let n_samples = low_dim_data.len();
     let n_components = low_dim_data[0].indices.len();
-    let mut gradient = vec![
-        SparseVector {
-            indices: vec![],
-            values: vec![],
-        };
-        n_samples
-    ];
 
-    for i in 0..n_samples {
-        for j in 0..n_samples {
-            if i != j {
-                let mut diff = SparseVector {
-                    indices: vec![],
-                    values: vec![],
-                };
-                for k in 0..n_components {
-                    let d = low_dim_data[i].values[k].0 - low_dim_data[j].values[k].0;
-                    diff.indices.push(k);
-                    diff.values.push(OrderedFloat(d));
+    (0..n_samples)
+        .into_par_iter()
+        .map(|i| {
+            let mut gradient = SparseVector {
+                indices: vec![],
+                values: vec![],
+            };
+
+            for j in 0..n_samples {
+                if i != j {
+                    let mut diff = SparseVector {
+                        indices: vec![],
+                        values: vec![],
+                    };
+                    for k in 0..n_components {
+                        let d = low_dim_data[i].values[k].0 - low_dim_data[j].values[k].0;
+                        diff.indices.push(k);
+                        diff.values.push(OrderedFloat(d));
+                    }
+                    let pq_diff = 4.0 * (p[(i, j)] - q[(i, j)]) * q[(i, j)];
+                    gradient.add_scaled(&diff, pq_diff as f32);
                 }
-                let pq_diff = 4.0 * (p[(i, j)] - q[(i, j)]) * q[(i, j)];
-                gradient[i].add_scaled(&diff, pq_diff as f32);
             }
-        }
-    }
 
-    gradient
+            gradient
+        })
+        .collect()
 }
 
 fn kl_divergence(p: &DMatrix<f64>, q: &DMatrix<f64>) -> f64 {
@@ -206,6 +243,40 @@ mod tests {
     use rand::SeedableRng;
 
     use super::*;
+
+    #[test]
+    fn test_compute_gradient() {
+        let low_dim_data = vec![
+            SparseVector {
+                indices: vec![0],
+                values: vec![OrderedFloat(0.0)],
+            },
+            SparseVector {
+                indices: vec![0],
+                values: vec![OrderedFloat(1.0)],
+            },
+        ];
+        let p = DMatrix::from_row_slice(2, 2, &[0.0, 0.5, 0.5, 0.0]);
+        let q = DMatrix::from_row_slice(2, 2, &[0.0, 0.25, 0.25, 0.0]);
+
+        let gradient = compute_gradient(&p, &q, &low_dim_data);
+
+        assert_eq!(gradient.len(), 2);
+        assert_eq!(gradient[0].indices, vec![0]);
+        assert_eq!(gradient[1].indices, vec![0]);
+        assert!(gradient[0].values[0].0 < 0.0);
+        assert!(gradient[1].values[0].0 > 0.0);
+    }
+
+    #[test]
+    fn test_kl_divergence() {
+        let p = DMatrix::from_row_slice(2, 2, &[0.0, 0.5, 0.5, 0.0]);
+        let q = DMatrix::from_row_slice(2, 2, &[0.0, 0.25, 0.25, 0.0]);
+
+        let kl_div = kl_divergence(&p, &q);
+
+        assert!(kl_div > 0.0);
+    }
 
     // #[test]
     // fn test_tsne_simple() {
