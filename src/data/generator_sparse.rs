@@ -3,7 +3,8 @@ use std::collections::BinaryHeap;
 use ordered_float::OrderedFloat;
 use rand::{
     distributions::{Bernoulli, Distribution, Uniform},
-    thread_rng,
+    rngs::StdRng,
+    SeedableRng,
 };
 
 use crate::index::DistanceMetric;
@@ -17,6 +18,7 @@ pub struct SparseDataGenerator {
     sparsity: f32,
     metric: DistanceMetric,
     system: sysinfo::System,
+    seed: u64,
 }
 
 impl SparseDataGenerator {
@@ -39,6 +41,7 @@ impl SparseDataGenerator {
         range: (f32, f32),
         sparsity: f32,
         metric: DistanceMetric,
+        seed: u64,
     ) -> Self {
         SparseDataGenerator {
             dim,
@@ -47,6 +50,7 @@ impl SparseDataGenerator {
             sparsity,
             metric,
             system: sysinfo::System::new(),
+            seed,
         }
     }
 
@@ -60,12 +64,14 @@ impl SparseDataGenerator {
         let chunks = self.system.cpus().len(); // Number of parallel tasks.
         let per_chunk = self.count / chunks;
 
-        for _ in 0..chunks {
+        for i in 0..chunks {
             let dim = self.dim;
             let range = self.range;
             let sparsity = self.sparsity;
+            let seed = self.seed.wrapping_add(i as u64);
 
             let handle = tokio::task::spawn_blocking(move || {
+                let mut rng = StdRng::seed_from_u64(seed);
                 let uniform_dist = Uniform::from(range.0..range.1);
                 let bernoulli_dist = Bernoulli::new(sparsity as f64).unwrap();
                 let mut data_chunk = Vec::with_capacity(dim);
@@ -74,9 +80,9 @@ impl SparseDataGenerator {
                     let mut indices = Vec::new();
                     let mut values = Vec::new();
                     for i in 0..dim {
-                        if !bernoulli_dist.sample(&mut thread_rng()) {
+                        if !bernoulli_dist.sample(&mut rng) {
                             indices.push(i);
-                            values.push(OrderedFloat(uniform_dist.sample(&mut thread_rng())));
+                            values.push(OrderedFloat(uniform_dist.sample(&mut rng)));
                         }
                     }
 
@@ -113,6 +119,7 @@ impl SparseDataGenerator {
         range: (f32, f32),
         sparsity: f32,
     ) -> Vec<SparseVector> {
+        let mut rng = StdRng::seed_from_u64(self.seed.wrapping_add(1000));
         let uniform_dist = Uniform::from(range.0..range.1);
         let bernoulli_dist = Bernoulli::new(sparsity as f64).unwrap();
         let mut vectors = Vec::with_capacity(count);
@@ -121,9 +128,9 @@ impl SparseDataGenerator {
             let mut indices = Vec::new();
             let mut values = Vec::new();
             for i in 0..dim {
-                if !bernoulli_dist.sample(&mut thread_rng()) {
+                if !bernoulli_dist.sample(&mut rng) {
                     indices.push(i);
-                    values.push(OrderedFloat(uniform_dist.sample(&mut thread_rng())));
+                    values.push(OrderedFloat(uniform_dist.sample(&mut rng)));
                 }
             }
 
@@ -166,12 +173,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_sparse_data_generation() {
+        let seed = 42;
         let count = 10;
         let dim = 100;
         let range = (0.0, 1.0);
         let sparsity = 0.5;
         let mut generator =
-            SparseDataGenerator::new(dim, count, range, sparsity, DistanceMetric::Euclidean);
+            SparseDataGenerator::new(dim, count, range, sparsity, DistanceMetric::Euclidean, seed);
         let (vectors, query_vectors, groundtruth_vectors) = generator.generate().await;
 
         assert_eq!(vectors.len(), count);
@@ -214,12 +222,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_sparsity() {
+        let seed = 42;
         let count = 10;
         let dim = 100;
         let range = (0.0, 1.0);
         let sparsity = 0.8;
         let mut generator =
-            SparseDataGenerator::new(dim, count, range, sparsity, DistanceMetric::Euclidean);
+            SparseDataGenerator::new(dim, count, range, sparsity, DistanceMetric::Euclidean, seed);
         let (vectors, _, _) = generator.generate().await;
 
         assert_eq!(vectors.len(), count);
@@ -240,13 +249,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_groundtruth_generation() {
+        let seed = 42;
         let count = 100;
         let dim = 50;
         let range = (0.0, 1.0);
         let sparsity = 0.5;
         let k = 10;
         let mut generator =
-            SparseDataGenerator::new(dim, count, range, sparsity, DistanceMetric::Euclidean);
+            SparseDataGenerator::new(dim, count, range, sparsity, DistanceMetric::Euclidean, seed);
         let (vectors, query_vectors, groundtruth_vectors) = generator.generate().await;
 
         assert_eq!(query_vectors.len(), count / 10);
@@ -262,6 +272,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_manual_groundtruth() {
+        let seed = 42;
         let vectors = vec![
             SparseVector {
                 indices: vec![0, 2, 4],
@@ -297,7 +308,8 @@ mod tests {
             },
         ];
 
-        let generator = SparseDataGenerator::new(0, 0, (0.0, 1.0), 0.0, DistanceMetric::Euclidean);
+        let generator =
+            SparseDataGenerator::new(0, 0, (0.0, 1.0), 0.0, DistanceMetric::Euclidean, seed);
         let groundtruth_vectors = generator.find_nearest_neighbors(&vectors, &query_vector, 3);
 
         assert_eq!(groundtruth_vectors, expected_groundtruth);

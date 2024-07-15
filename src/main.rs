@@ -65,78 +65,98 @@ async fn main() {
     //     vectors_sparse_vectors.push(sparse_vector);
     // }
 
-    let amount = 300;
+    // Dimensionality:
+    // - Text data: 10,000 - 100,000 features
+    // - Image data: 1,000 - 1,000,000 pixels
+    // - Sensor data: 50 - 500 features
+    // Number of data points:
+    // - Small dataset: 1,000 - 10,000 samples
+    // - Medium dataset: 100,000 - 1,000,000 samples
+    // - Large dataset: 1,000,000+ samples
+    // Value range:
+    // - Binary data: (0, 1)
+    // - Normalized data: (-1, 1) or (0, 1)
+    // - Count data: (0, 100) or (0, 1000) depending on the specific application
+    // Sparsity:
+    // - Text data (e.g., document-term matrices): 0.95 - 0.99
+    // - Recommender systems: 0.99 - 0.9999
+    // - Biological data (e.g., gene expression): 0.7 - 0.9
+    // Distance metric:
+    // - Text data: Cosine distance
+    // - Binary sparse data: Jaccard distance
+    // - High-dimensional sparse data: Manhattan distance
+    let amount = 1000;
     let mut generator =
-        SparseDataGenerator::new(100, amount, (0.0, 10.0), 0.9, DistanceMetric::Cosine);
+        SparseDataGenerator::new(10000, amount, (0.0, 1.0), 0.95, DistanceMetric::Cosine, 42);
     let (vectors, query_vectors, groundtruth) = generator.generate().await;
 
     plot_sparsity_distribution(&vectors).show();
     plot_nearest_neighbor_distances(&query_vectors, &groundtruth, &DistanceMetric::Cosine).show();
 
-    let seed = thread_rng().gen_range(0..10000);
-    let mut annoy_index = AnnoyIndex::new(20, 20, 40, DistanceMetric::Cosine);
-    let mut simhash_index = LSHIndex::new(20, 4, LSHHashType::SimHash, DistanceMetric::Cosine);
-    let mut minhash_index = LSHIndex::new(20, 4, LSHHashType::MinHash, DistanceMetric::Cosine);
-    let mut pq_index = PQIndex::new(3, 50, 256, 0.01, DistanceMetric::Cosine, seed);
-    let mut ivfpq_index = IVFPQIndex::new(3, 100, 200, 256, 0.01, DistanceMetric::Cosine, seed);
-    let mut nsw_index = NSWIndex::new(200, 200, DistanceMetric::Cosine, seed);
-    let mut linscan_index = LinScanIndex::new(DistanceMetric::Euclidean);
-    let mut hnsw_index = HNSWIndex::new(0.5, 16, 200, 200, DistanceMetric::Cosine, seed);
+    // let seed = thread_rng().gen_range(0..10000);
+    // let mut annoy_index = AnnoyIndex::new(20, 20, 40, DistanceMetric::Cosine);
+    // let mut simhash_index = LSHIndex::new(20, 4, LSHHashType::SimHash, DistanceMetric::Cosine);
+    // let mut minhash_index = LSHIndex::new(20, 4, LSHHashType::MinHash, DistanceMetric::Cosine);
+    // let mut pq_index = PQIndex::new(3, 50, 256, 0.01, DistanceMetric::Cosine, seed);
+    // let mut ivfpq_index = IVFPQIndex::new(3, 100, 200, 256, 0.01, DistanceMetric::Cosine, seed);
+    // let mut nsw_index = NSWIndex::new(200, 200, DistanceMetric::Cosine, seed);
+    // let mut linscan_index = LinScanIndex::new(DistanceMetric::Euclidean);
+    // let mut hnsw_index = HNSWIndex::new(0.5, 16, 200, 200, DistanceMetric::Cosine, seed);
 
-    println!("Start adding vectors...");
-    for (i, vector) in vectors.iter().enumerate() {
-        linscan_index.add_vector(vector);
-        annoy_index.add_vector(vector);
-        simhash_index.add_vector(vector);
-        minhash_index.add_vector(vector);
-        pq_index.add_vector(vector);
-        ivfpq_index.add_vector(vector);
-        hnsw_index.add_vector(vector);
-        nsw_index.add_vector(vector);
-        println!("Vector {}", i)
-    }
-    println!("Done adding vectors...");
+    // println!("Start adding vectors...");
+    // for (i, vector) in vectors.iter().enumerate() {
+    //     linscan_index.add_vector(vector);
+    //     annoy_index.add_vector(vector);
+    //     simhash_index.add_vector(vector);
+    //     minhash_index.add_vector(vector);
+    //     pq_index.add_vector(vector);
+    //     ivfpq_index.add_vector(vector);
+    //     hnsw_index.add_vector(vector);
+    //     nsw_index.add_vector(vector);
+    //     println!("Vector {}", i)
+    // }
+    // println!("Done adding vectors...");
 
-    println!("Start building index...");
-    linscan_index.build_parallel();
-    annoy_index.build_parallel();
-    simhash_index.build_parallel();
-    minhash_index.build_parallel();
-    pq_index.build_parallel();
-    ivfpq_index.build_parallel();
-    hnsw_index.build_parallel();
-    nsw_index.build_parallel();
-    println!("Done building index...");
+    // println!("Start building index...");
+    // linscan_index.build_parallel();
+    // annoy_index.build_parallel();
+    // simhash_index.build_parallel();
+    // minhash_index.build_parallel();
+    // pq_index.build_parallel();
+    // ivfpq_index.build_parallel();
+    // hnsw_index.build_parallel();
+    // nsw_index.build_parallel();
+    // println!("Done building index...");
 
-    let linscan_result = linscan_index.search_parallel(&query_vectors[0], 10);
-    let pq_result = pq_index.search_parallel(&query_vectors[0], 10);
-    let ivfpq_result = ivfpq_index.search_parallel(&query_vectors[0], 10);
-    let simhash_result = simhash_index.search_parallel(&query_vectors[0], 10);
-    let minhash_result = minhash_index.search_parallel(&query_vectors[0], 10);
-    let hnsw_result = hnsw_index.search_parallel(&query_vectors[0], 10);
-    let nsw_result = nsw_index.search_parallel(&query_vectors[0], 10);
-    let annoy_result = annoy_index.search_parallel(&query_vectors[0], 10);
-    // println!("{:?}", r);
-    //let r = index.search_parallel(&vectors[thread_rng().gen_range(0..amount)], 10);
-    // println!("{:?}", r);
+    // let linscan_result = linscan_index.search_parallel(&query_vectors[0], 10);
+    // let pq_result = pq_index.search_parallel(&query_vectors[0], 10);
+    // let ivfpq_result = ivfpq_index.search_parallel(&query_vectors[0], 10);
+    // let simhash_result = simhash_index.search_parallel(&query_vectors[0], 10);
+    // let minhash_result = minhash_index.search_parallel(&query_vectors[0], 10);
+    // let hnsw_result = hnsw_index.search_parallel(&query_vectors[0], 10);
+    // let nsw_result = nsw_index.search_parallel(&query_vectors[0], 10);
+    // let annoy_result = annoy_index.search_parallel(&query_vectors[0], 10);
+    // // println!("{:?}", r);
+    // //let r = index.search_parallel(&vectors[thread_rng().gen_range(0..amount)], 10);
+    // // println!("{:?}", r);
 
-    println!("l1: {:?}", vectors[linscan_result[0].index].indices);
-    println!("l2: {:?}", vectors[linscan_result[1].index].indices);
-    println!("h1: {:?}", vectors[hnsw_result[0].index].indices);
-    println!("h2: {:?}", vectors[hnsw_result[1].index].indices);
-    println!("n1: {:?}", vectors[nsw_result[0].index].indices);
-    println!("n2: {:?}", vectors[nsw_result[1].index].indices);
-    println!("p1: {:?}", vectors[pq_result[0].index].indices);
-    println!("p2: {:?}", vectors[pq_result[1].index].indices);
-    println!("s1: {:?}", vectors[simhash_result[0].index].indices);
-    println!("s2: {:?}", vectors[simhash_result[1].index].indices);
-    println!("i1: {:?}", vectors[ivfpq_result[0].index].indices);
-    println!("i2: {:?}", vectors[ivfpq_result[1].index].indices);
-    println!("a1: {:?}", vectors[annoy_result[0].index].indices);
-    println!("a2: {:?}", vectors[annoy_result[1].index].indices);
-    println!("m1: {:?}", vectors[minhash_result[0].index].indices);
-    println!("m2: {:?}", vectors[minhash_result[1].index].indices);
-    println!("gt: {:?}", groundtruth[0][0].indices);
+    // println!("l1: {:?}", vectors[linscan_result[0].index].indices);
+    // println!("l2: {:?}", vectors[linscan_result[1].index].indices);
+    // println!("h1: {:?}", vectors[hnsw_result[0].index].indices);
+    // println!("h2: {:?}", vectors[hnsw_result[1].index].indices);
+    // println!("n1: {:?}", vectors[nsw_result[0].index].indices);
+    // println!("n2: {:?}", vectors[nsw_result[1].index].indices);
+    // println!("p1: {:?}", vectors[pq_result[0].index].indices);
+    // println!("p2: {:?}", vectors[pq_result[1].index].indices);
+    // println!("s1: {:?}", vectors[simhash_result[0].index].indices);
+    // println!("s2: {:?}", vectors[simhash_result[1].index].indices);
+    // println!("i1: {:?}", vectors[ivfpq_result[0].index].indices);
+    // println!("i2: {:?}", vectors[ivfpq_result[1].index].indices);
+    // println!("a1: {:?}", vectors[annoy_result[0].index].indices);
+    // println!("a2: {:?}", vectors[annoy_result[1].index].indices);
+    // println!("m1: {:?}", vectors[minhash_result[0].index].indices);
+    // println!("m2: {:?}", vectors[minhash_result[1].index].indices);
+    // println!("gt: {:?}", groundtruth[0][0].indices);
 
     // for (i, res) in r.iter().enumerate() {
     /*let gt_index = groundtruth.0[0][i];
