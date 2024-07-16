@@ -134,13 +134,27 @@ impl SparseIndex for IndexType {
         }
     }
 
-    fn save(&self, _: &mut File) {
-        // This implementation is a bit tricky since we need to determine which type to load.
-        unimplemented!("Saving for IndexType is not needed")
+    fn save(&self, file: &mut File) {
+        match self {
+            IndexType::LSH(index) => index.save(file),
+            IndexType::Annoy(index) => index.save(file),
+            IndexType::PQ(index) => index.save(file),
+            IndexType::IVFPQ(index) => index.save(file),
+            IndexType::HNSW(index) => index.save(file),
+            IndexType::NSW(index) => index.save(file),
+            IndexType::LinScan(index) => index.save(file),
+        }
     }
 
-    fn load(&self, _: &File) -> Self {
-        // This implementation is a bit tricky since we need to determine which type to load.
-        unimplemented!("Loading for IndexType is not needed")
+    fn load(&self, file: &File) -> Self {
+        match self {
+            IndexType::LSH(index) => IndexType::LSH(index.load(file)),
+            IndexType::Annoy(index) => IndexType::Annoy(index.load(file)),
+            IndexType::PQ(index) => IndexType::PQ(index.load(file)),
+            IndexType::IVFPQ(index) => IndexType::IVFPQ(index.load(file)),
+            IndexType::HNSW(index) => IndexType::HNSW(index.load(file)),
+            IndexType::NSW(index) => IndexType::NSW(index.load(file)),
+            IndexType::LinScan(index) => IndexType::LinScan(index.load(file)),
+        }
     }
 }
