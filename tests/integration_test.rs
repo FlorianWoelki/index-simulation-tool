@@ -12,7 +12,7 @@ mod tests {
             lsh::{LSHHashType, LSHIndex},
             nsw::NSWIndex,
             pq::PQIndex,
-            DistanceMetric, SparseIndex,
+            DistanceMetric, IndexType, SparseIndex,
         },
     };
     use ordered_float::OrderedFloat;
@@ -20,7 +20,7 @@ mod tests {
 
     const SEED: u64 = 42;
 
-    fn test_index(index: &mut dyn SparseIndex) {
+    fn test_index(index: &mut IndexType) {
         let num_vectors = 1000;
         let num_dimensions = 100;
         let sparsity = 0.1;
@@ -65,20 +65,20 @@ mod tests {
     fn test_lsh_index() {
         let num_buckets = 10;
         let num_hash_functions = 10;
-        let mut index = LSHIndex::new(
+        let mut index = IndexType::LSH(LSHIndex::new(
             num_buckets,
             num_hash_functions,
             LSHHashType::SimHash,
             DistanceMetric::Cosine,
-        );
+        ));
         test_index(&mut index);
 
-        let mut index = LSHIndex::new(
+        let mut index = IndexType::LSH(LSHIndex::new(
             num_buckets,
             num_hash_functions,
             LSHHashType::MinHash,
             DistanceMetric::Cosine,
-        );
+        ));
         test_index(&mut index);
     }
 
@@ -87,7 +87,12 @@ mod tests {
         let n_trees = 10;
         let max_points = 10;
         let search_k = 20;
-        let mut index = AnnoyIndex::new(n_trees, max_points, search_k, DistanceMetric::Cosine);
+        let mut index = IndexType::Annoy(AnnoyIndex::new(
+            n_trees,
+            max_points,
+            search_k,
+            DistanceMetric::Cosine,
+        ));
         test_index(&mut index);
     }
 
@@ -97,14 +102,14 @@ mod tests {
         let num_clusters = 50;
         let iterations = 256;
         let tolerance = 0.01;
-        let mut index = PQIndex::new(
+        let mut index = IndexType::PQ(PQIndex::new(
             num_subvectors,
             num_clusters,
             iterations,
             tolerance,
             DistanceMetric::Cosine,
             SEED,
-        );
+        ));
         test_index(&mut index);
     }
 
@@ -115,7 +120,7 @@ mod tests {
         let num_coarse_clusters = 100;
         let iterations = 256;
         let tolerance = 0.01;
-        let mut index = IVFPQIndex::new(
+        let mut index = IndexType::IVFPQ(IVFPQIndex::new(
             num_subvectors,
             num_clusters,
             num_coarse_clusters,
@@ -123,7 +128,7 @@ mod tests {
             tolerance,
             DistanceMetric::Cosine,
             SEED,
-        );
+        ));
         test_index(&mut index);
     }
 
@@ -134,14 +139,14 @@ mod tests {
         let ef_construction = 50;
         let ef_search = 50;
 
-        let mut index = HNSWIndex::new(
+        let mut index = IndexType::HNSW(HNSWIndex::new(
             level_distribution_factor,
             max_layers,
             ef_construction,
             ef_search,
             DistanceMetric::Cosine,
             SEED,
-        );
+        ));
         test_index(&mut index);
     }
 
@@ -150,13 +155,18 @@ mod tests {
         let ef_construction = 50;
         let ef_search = 50;
 
-        let mut index = NSWIndex::new(ef_construction, ef_search, DistanceMetric::Cosine, SEED);
+        let mut index = IndexType::NSW(NSWIndex::new(
+            ef_construction,
+            ef_search,
+            DistanceMetric::Cosine,
+            SEED,
+        ));
         test_index(&mut index);
     }
 
     #[test]
     fn test_linscan_index() {
-        let mut index = LinScanIndex::new(DistanceMetric::Cosine);
+        let mut index = IndexType::LinScan(LinScanIndex::new(DistanceMetric::Cosine));
         test_index(&mut index);
     }
 }

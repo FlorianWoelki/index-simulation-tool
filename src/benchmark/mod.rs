@@ -2,7 +2,10 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
-use crate::{data::SparseVector, index::SparseIndex};
+use crate::{
+    data::SparseVector,
+    index::{IndexType, SparseIndex},
+};
 
 pub mod logger;
 pub mod measure_macro;
@@ -80,14 +83,14 @@ pub struct BenchmarkResult {
 }
 
 pub struct Benchmark {
-    index_type: Box<dyn SparseIndex>,
+    index_type: Box<IndexType>,
     query_vector: SparseVector,
     previous_benchmark_result: Option<BenchmarkResult>,
 }
 
 impl Benchmark {
     pub fn new(
-        index_type: Box<dyn SparseIndex>,
+        index_type: Box<IndexType>,
         query_vector: SparseVector,
         previous_benchmark_result: Option<BenchmarkResult>,
     ) -> Self {

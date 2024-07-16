@@ -1,8 +1,14 @@
-use std::{collections::HashSet, sync::Mutex};
+use std::{
+    collections::HashSet,
+    fs::File,
+    io::{BufReader, BufWriter},
+    sync::Mutex,
+};
 
 use ordered_float::OrderedFloat;
 use rand::Rng;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     data::{QueryResult, SparseVector},
@@ -11,6 +17,7 @@ use crate::{
 
 use super::{DistanceMetric, SparseIndex};
 
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct Node {
     left: Option<Box<Node>>,
     right: Option<Box<Node>>,
@@ -86,11 +93,13 @@ impl Node {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct Tree {
     root: Node,
     n_dims: usize,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct AnnoyIndex {
     trees: Vec<Tree>,
     vectors: Vec<SparseVector>,
@@ -295,6 +304,16 @@ impl SparseIndex for AnnoyIndex {
             })
             .collect()
     }
+
+    fn save(&self, file: &mut File) {
+        let writer = BufWriter::new(file);
+        bincode::serialize_into(writer, &self).expect("Failed to serialize");
+    }
+
+    fn load(&self, file: &File) -> Self {
+        let reader = BufReader::new(file);
+        bincode::deserialize_from(reader).unwrap()
+    }
 }
 
 #[cfg(test)]
@@ -302,6 +321,25 @@ mod tests {
     use crate::test_utils::{get_complex_vectors, get_simple_vectors, is_in_actual_result};
 
     use super::*;
+
+    #[test]
+    fn test_serde() {
+        let (data, query_vectors) = get_simple_vectors();
+        let mut index = AnnoyIndex::new(3, 2, 10, DistanceMetric::Cosine);
+        for vector in &data {
+            index.add_vector(vector);
+        }
+
+        let bytes = bincode::serialize(&index).unwrap();
+        let reconstructed: AnnoyIndex = bincode::deserialize(&bytes).unwrap();
+
+        assert_eq!(index.vectors, reconstructed.vectors);
+        assert_eq!(index.metric, reconstructed.metric);
+        assert_eq!(index.trees, reconstructed.trees);
+        assert_eq!(index.n_trees, reconstructed.n_trees);
+        assert_eq!(index.search_k, reconstructed.search_k);
+        assert_eq!(index.max_points, reconstructed.max_points);
+    }
 
     #[test]
     fn test_search_parallel() {

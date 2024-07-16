@@ -7,10 +7,17 @@ use ordered_float::OrderedFloat;
 use rayon::iter::{
     IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
 };
-use std::{sync::Arc, vec};
+use serde::{Deserialize, Serialize};
+use std::{
+    fs::File,
+    io::{BufReader, BufWriter},
+    sync::Arc,
+    vec,
+};
 
 use super::{DistanceMetric, SparseIndex};
 
+#[derive(Serialize, Deserialize)]
 pub struct PQIndex {
     /// Number of subvectors to divide each vector into for quantization.
     num_subvectors: usize,
@@ -332,6 +339,16 @@ impl SparseIndex for PQIndex {
                 score: -query_result.score,
             })
             .collect()
+    }
+
+    fn save(&self, file: &mut File) {
+        let writer = BufWriter::new(file);
+        bincode::serialize_into(writer, &self).expect("Failed to serialize");
+    }
+
+    fn load(&self, file: &File) -> Self {
+        let reader = BufReader::new(file);
+        bincode::deserialize_from(reader).unwrap()
     }
 }
 

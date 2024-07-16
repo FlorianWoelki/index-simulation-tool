@@ -1,4 +1,13 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, fs::File};
+
+use annoy::AnnoyIndex;
+use hnsw::HNSWIndex;
+use ivfpq::IVFPQIndex;
+use linscan::LinScanIndex;
+use lsh::LSHIndex;
+use nsw::NSWIndex;
+use pq::PQIndex;
+use serde::{Deserialize, Serialize};
 
 use crate::data::{QueryResult, SparseVector};
 
@@ -11,7 +20,7 @@ pub mod neighbor;
 pub mod nsw;
 pub mod pq;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Serialize, Deserialize)]
 pub enum DistanceMetric {
     Euclidean,
     Cosine,
@@ -37,4 +46,101 @@ pub trait SparseIndex {
     fn build_parallel(&mut self);
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult>;
     fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult>;
+
+    fn save(&self, file: &mut File);
+    fn load(&self, file: &File) -> Self;
+}
+
+pub enum IndexType {
+    LSH(LSHIndex),
+    Annoy(AnnoyIndex),
+    PQ(PQIndex),
+    IVFPQ(IVFPQIndex),
+    HNSW(HNSWIndex),
+    NSW(NSWIndex),
+    LinScan(LinScanIndex),
+}
+
+impl SparseIndex for IndexType {
+    fn add_vector(&mut self, vector: &SparseVector) {
+        match self {
+            IndexType::LSH(index) => index.add_vector(vector),
+            IndexType::Annoy(index) => index.add_vector(vector),
+            IndexType::PQ(index) => index.add_vector(vector),
+            IndexType::IVFPQ(index) => index.add_vector(vector),
+            IndexType::HNSW(index) => index.add_vector(vector),
+            IndexType::NSW(index) => index.add_vector(vector),
+            IndexType::LinScan(index) => index.add_vector(vector),
+        }
+    }
+
+    fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
+        match self {
+            IndexType::LSH(index) => index.remove_vector(id),
+            IndexType::Annoy(index) => index.remove_vector(id),
+            IndexType::PQ(index) => index.remove_vector(id),
+            IndexType::IVFPQ(index) => index.remove_vector(id),
+            IndexType::HNSW(index) => index.remove_vector(id),
+            IndexType::NSW(index) => index.remove_vector(id),
+            IndexType::LinScan(index) => index.remove_vector(id),
+        }
+    }
+
+    fn build(&mut self) {
+        match self {
+            IndexType::LSH(index) => index.build(),
+            IndexType::Annoy(index) => index.build(),
+            IndexType::PQ(index) => index.build(),
+            IndexType::IVFPQ(index) => index.build(),
+            IndexType::HNSW(index) => index.build(),
+            IndexType::NSW(index) => index.build(),
+            IndexType::LinScan(index) => index.build(),
+        }
+    }
+
+    fn build_parallel(&mut self) {
+        match self {
+            IndexType::LSH(index) => index.build_parallel(),
+            IndexType::Annoy(index) => index.build_parallel(),
+            IndexType::PQ(index) => index.build_parallel(),
+            IndexType::IVFPQ(index) => index.build_parallel(),
+            IndexType::HNSW(index) => index.build_parallel(),
+            IndexType::NSW(index) => index.build_parallel(),
+            IndexType::LinScan(index) => index.build_parallel(),
+        }
+    }
+
+    fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+        match self {
+            IndexType::LSH(index) => index.search(query_vector, k),
+            IndexType::Annoy(index) => index.search(query_vector, k),
+            IndexType::PQ(index) => index.search(query_vector, k),
+            IndexType::IVFPQ(index) => index.search(query_vector, k),
+            IndexType::HNSW(index) => index.search(query_vector, k),
+            IndexType::NSW(index) => index.search(query_vector, k),
+            IndexType::LinScan(index) => index.search(query_vector, k),
+        }
+    }
+
+    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+        match self {
+            IndexType::LSH(index) => index.search_parallel(query_vector, k),
+            IndexType::Annoy(index) => index.search_parallel(query_vector, k),
+            IndexType::PQ(index) => index.search_parallel(query_vector, k),
+            IndexType::IVFPQ(index) => index.search_parallel(query_vector, k),
+            IndexType::HNSW(index) => index.search_parallel(query_vector, k),
+            IndexType::NSW(index) => index.search_parallel(query_vector, k),
+            IndexType::LinScan(index) => index.search_parallel(query_vector, k),
+        }
+    }
+
+    fn save(&self, _: &mut File) {
+        // This implementation is a bit tricky since we need to determine which type to load.
+        unimplemented!("Saving for IndexType is not needed")
+    }
+
+    fn load(&self, _: &File) -> Self {
+        // This implementation is a bit tricky since we need to determine which type to load.
+        unimplemented!("Loading for IndexType is not needed")
+    }
 }

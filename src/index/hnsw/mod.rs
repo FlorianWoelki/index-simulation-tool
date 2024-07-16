@@ -1,5 +1,7 @@
 use std::{
     collections::{BinaryHeap, HashMap, HashSet},
+    fs::File,
+    io::{BufReader, BufWriter},
     sync::{Arc, Mutex},
 };
 
@@ -7,6 +9,7 @@ use node::Node;
 use ordered_float::OrderedFloat;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
 
 use crate::data::{QueryResult, SparseVector};
 
@@ -14,6 +17,7 @@ use super::{neighbor::NeighborNode, DistanceMetric, SparseIndex};
 
 mod node;
 
+#[derive(Serialize, Deserialize)]
 pub struct HNSWIndex {
     vectors: Vec<SparseVector>,
     nodes: HashMap<usize, Node>,
@@ -388,6 +392,16 @@ impl SparseIndex for HNSWIndex {
         }
 
         self.knn_search_parallel(query_vector, current_node, k)
+    }
+
+    fn save(&self, file: &mut File) {
+        let writer = BufWriter::new(file);
+        bincode::serialize_into(writer, &self).expect("Failed to serialize");
+    }
+
+    fn load(&self, file: &File) -> Self {
+        let reader = BufReader::new(file);
+        bincode::deserialize_from(reader).unwrap()
     }
 }
 

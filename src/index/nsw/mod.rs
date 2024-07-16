@@ -1,16 +1,20 @@
 use std::{
     collections::{HashMap, HashSet},
+    fs::File,
+    io::{BufReader, BufWriter},
     sync::{Arc, Mutex},
 };
 
 use ordered_float::OrderedFloat;
 use rand::{rngs::StdRng, seq::IteratorRandom, SeedableRng};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
 
 use crate::data::{QueryResult, SparseVector};
 
 use super::{DistanceMetric, SparseIndex};
 
+#[derive(Serialize, Deserialize)]
 pub struct NSWIndex {
     vectors: Vec<SparseVector>,
     graph: HashMap<usize, HashSet<usize>>,
@@ -291,6 +295,16 @@ impl SparseIndex for NSWIndex {
                 score: OrderedFloat(query_vector.distance(&self.vectors[idx], &self.metric)),
             })
             .collect()
+    }
+
+    fn save(&self, file: &mut File) {
+        let writer = BufWriter::new(file);
+        bincode::serialize_into(writer, &self).expect("Failed to serialize");
+    }
+
+    fn load(&self, file: &File) -> Self {
+        let reader = BufReader::new(file);
+        bincode::deserialize_from(reader).unwrap()
     }
 }
 

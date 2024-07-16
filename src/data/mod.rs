@@ -1,4 +1,5 @@
 use ordered_float::OrderedFloat;
+use serde::{Deserialize, Serialize};
 
 use crate::index::DistanceMetric;
 
@@ -8,7 +9,7 @@ pub mod pca;
 pub mod plot;
 pub mod tsne;
 
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone)]
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct SparseVector {
     pub indices: Vec<usize>,
     pub values: Vec<OrderedFloat<f32>>,

@@ -1,7 +1,13 @@
-use std::{collections::HashMap, sync::Mutex};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufReader, BufWriter},
+    sync::Mutex,
+};
 
 use ordered_float::OrderedFloat;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     data::{QueryResult, SparseVector},
@@ -11,7 +17,7 @@ use crate::{
 
 use super::SparseIndex;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LinScanIndex {
     vectors: Vec<SparseVector>,
     inverted_index: HashMap<usize, Vec<(usize, OrderedFloat<f32>)>>,
@@ -148,6 +154,16 @@ impl SparseIndex for LinScanIndex {
 
         heap.into_sorted_vec()
     }
+
+    fn save(&self, file: &mut File) {
+        let writer = BufWriter::new(file);
+        bincode::serialize_into(writer, &self).expect("Failed to serialize");
+    }
+
+    fn load(&self, file: &File) -> Self {
+        let reader = BufReader::new(file);
+        bincode::deserialize_from(reader).unwrap()
+    }
 }
 
 #[cfg(test)]
@@ -155,6 +171,22 @@ mod tests {
     use crate::test_utils::{get_complex_vectors, get_simple_vectors, is_in_actual_result};
 
     use super::*;
+
+    #[test]
+    fn test_serde() {
+        let mut index = LinScanIndex::new(DistanceMetric::Cosine);
+        let (data, _) = get_simple_vectors();
+        for vector in &data {
+            index.add_vector(vector);
+        }
+
+        let bytes = bincode::serialize(&index).unwrap();
+        let reconstructed: LinScanIndex = bincode::deserialize(&bytes).unwrap();
+
+        assert_eq!(index.vectors, reconstructed.vectors);
+        assert_eq!(index.metric, reconstructed.metric);
+        assert_eq!(index.inverted_index, reconstructed.inverted_index);
+    }
 
     #[test]
     fn test_linscan_parallel() {

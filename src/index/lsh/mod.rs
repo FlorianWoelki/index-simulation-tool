@@ -1,8 +1,14 @@
-use std::{collections::HashSet, sync::Mutex};
+use std::{
+    collections::HashSet,
+    fs::File,
+    io::{BufReader, BufWriter},
+    sync::Mutex,
+};
 
 use minhash::minhash;
 use ordered_float::OrderedFloat;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
 use simhash::simhash;
 
 use crate::{
@@ -15,11 +21,13 @@ use super::{DistanceMetric, SparseIndex};
 mod minhash;
 mod simhash;
 
+#[derive(Serialize, Deserialize)]
 pub enum LSHHashType {
     MinHash,
     SimHash,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct LSHIndex {
     num_buckets: usize,
     num_hash_functions: usize,
@@ -236,6 +244,16 @@ impl SparseIndex for LSHIndex {
                 score: OrderedFloat(-query_result.score.into_inner()),
             })
             .collect()
+    }
+
+    fn save(&self, file: &mut File) {
+        let writer = BufWriter::new(file);
+        bincode::serialize_into(writer, &self).expect("Failed to serialize");
+    }
+
+    fn load(&self, file: &File) -> Self {
+        let reader = BufReader::new(file);
+        bincode::deserialize_from(reader).unwrap()
     }
 }
 
