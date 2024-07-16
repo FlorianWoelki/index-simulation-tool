@@ -14,7 +14,7 @@
   - [x] PCA
   - [x] t-SNE
     - [x] Remove nalgebra and use pure ndarray for PCA
-- [ ] Implement saving/loading functionality
+- [x] Implement saving/loading functionality
 - [ ] Cleanup repository
   - [ ] Use similar functionalities for multi threaded and single threaded functionality
 
