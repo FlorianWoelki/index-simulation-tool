@@ -1,8 +1,10 @@
+use ordered_float::OrderedFloat;
 use plotly::{
     common::{DashType, Font, Marker, Title},
     layout::{Annotation, Axis, Legend, Shape, ShapeLine, ShapeType},
     Histogram, Layout, Plot,
 };
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{data::SparseVector, index::DistanceMetric};
 
@@ -99,14 +101,20 @@ pub fn plot_sparsity_distribution(data: &[SparseVector]) -> Plot {
 /// searches.
 pub fn plot_nearest_neighbor_distances(
     query_vectors: &[SparseVector],
-    groundtruth: &[Vec<SparseVector>],
+    groundtruth: &[SparseVector],
     metric: &DistanceMetric,
 ) -> Plot {
-    let distances: Vec<f32> = query_vectors
-        .iter()
-        .zip(groundtruth.iter())
-        .map(|(q, gt)| q.distance(&gt[0], metric))
-        .collect();
+    let distances = query_vectors
+        .par_iter()
+        .map(|v| {
+            groundtruth
+                .par_iter()
+                .map(|gt| OrderedFloat(v.distance(gt, metric)))
+                .min()
+                .unwrap()
+        })
+        .map(|v| v.into_inner())
+        .collect::<Vec<f32>>();
 
     let trace = Histogram::new(distances.clone())
         .marker(Marker::new().color("lightgray"))

@@ -17,9 +17,9 @@ use index::{
 };
 
 use clap::Parser;
-use ordered_float::Float;
+use ordered_float::{Float, OrderedFloat};
 use rand::{rngs::StdRng, thread_rng, Rng, SeedableRng};
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use sysinfo::Pid;
 
 mod benchmark;
@@ -39,31 +39,50 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
-    // let (groundtruth, vectors, query_vectors) = data::ms_marco::load_msmarco_dataset().unwrap();
-    // let mut query_sparse_vectors = vec![];
-    // let mut vectors_sparse_vectors = vec![];
-    // for query_vector in query_vectors.iter() {
-    //     let sparse_vector = SparseVector {
-    //         indices: query_vector.0.clone(),
-    //         values: query_vector
-    //             .1
-    //             .iter()
-    //             .map(|&v| ordered_float::OrderedFloat(v))
-    //             .collect(),
-    //     };
-    //     query_sparse_vectors.push(sparse_vector);
-    // }
-    // for vector in vectors.iter().take(5000) {
-    //     let sparse_vector = SparseVector {
-    //         indices: vector.0.clone(),
-    //         values: vector
-    //             .1
-    //             .iter()
-    //             .map(|&v| ordered_float::OrderedFloat(v))
-    //             .collect(),
-    //     };
-    //     vectors_sparse_vectors.push(sparse_vector);
-    // }
+    let (groundtruth, vectors, query_vectors) = data::ms_marco::load_msmarco_dataset().unwrap();
+    let mut query_sparse_vectors = vec![];
+    let mut groundtruth_sparse_vectors = vec![];
+
+    // TODO: Parallelize this in the future.
+    for (indices, values) in groundtruth.0.iter().zip(groundtruth.1.iter()) {
+        let vector = SparseVector {
+            indices: indices.iter().map(|i| *i as usize).collect(),
+            values: values.iter().map(|v| OrderedFloat(*v)).collect(),
+        };
+        groundtruth_sparse_vectors.push(vector);
+    }
+    for (indices, values) in query_vectors.iter() {
+        let sparse_vector = SparseVector {
+            indices: indices.clone(),
+            values: values
+                .iter()
+                .map(|&v| ordered_float::OrderedFloat(v))
+                .collect(),
+        };
+        query_sparse_vectors.push(sparse_vector);
+    }
+
+    let vectors_sparse_vectors = vectors
+        .par_iter()
+        .map(|(indices, values)| {
+            let sparse_vector = SparseVector {
+                indices: indices.clone(),
+                values: values
+                    .iter()
+                    .map(|&v| ordered_float::OrderedFloat(v))
+                    .collect(),
+            };
+            sparse_vector
+        })
+        .collect::<Vec<SparseVector>>();
+
+    plot_sparsity_distribution(&vectors_sparse_vectors).show();
+    plot_nearest_neighbor_distances(
+        &query_sparse_vectors,
+        &groundtruth_sparse_vectors,
+        &DistanceMetric::Cosine,
+    )
+    .show();
 
     // Dimensionality:
     // - Text data: 10,000 - 100,000 features
@@ -85,13 +104,20 @@ async fn main() {
     // - Text data: Cosine distance
     // - Binary sparse data: Jaccard distance
     // - High-dimensional sparse data: Manhattan distance
-    let amount = 1000;
-    let mut generator =
-        SparseDataGenerator::new(10000, amount, (0.0, 1.0), 0.95, DistanceMetric::Cosine, 42);
-    let (vectors, query_vectors, groundtruth) = generator.generate().await;
+    // let amount = 1000;
+    // let mut generator =
+    //     SparseDataGenerator::new(10000, amount, (0.0, 1.0), 0.95, DistanceMetric::Cosine, 42);
+    // let (vectors, query_vectors, groundtruth) = generator.generate().await;
 
-    plot_sparsity_distribution(&vectors).show();
-    plot_nearest_neighbor_distances(&query_vectors, &groundtruth, &DistanceMetric::Cosine).show();
+    // // Get the first element of the groundtruth data
+    // let groundtruth_flat = groundtruth
+    //     .iter()
+    //     .map(|nn| nn[0].clone())
+    //     .collect::<Vec<SparseVector>>();
+
+    // plot_sparsity_distribution(&vectors).show();
+    // plot_nearest_neighbor_distances(&query_vectors, &groundtruth_flat, &DistanceMetric::Cosine)
+    //     .show();
 
     // let seed = thread_rng().gen_range(0..10000);
     // let mut annoy_index = AnnoyIndex::new(20, 20, 40, DistanceMetric::Cosine);
