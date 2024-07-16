@@ -21,7 +21,7 @@ use super::{DistanceMetric, SparseIndex};
 mod minhash;
 mod simhash;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub enum LSHHashType {
     MinHash,
     SimHash,
@@ -262,6 +262,30 @@ mod tests {
     use crate::test_utils::{get_complex_vectors, get_simple_vectors, is_in_actual_result};
 
     use super::*;
+
+    #[test]
+    fn test_serde() {
+        let (data, _) = get_simple_vectors();
+        let random_seed = 42;
+        let num_subvectors = 2;
+        let num_clusters = 3;
+        let num_coarse_clusters = 2;
+        let iterations = 10;
+        let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash, DistanceMetric::Cosine);
+        for vector in &data {
+            index.add_vector(vector);
+        }
+
+        let bytes = bincode::serialize(&index).unwrap();
+        let reconstructed: LSHIndex = bincode::deserialize(&bytes).unwrap();
+
+        assert_eq!(index.vectors, reconstructed.vectors);
+        assert_eq!(index.metric, reconstructed.metric);
+        assert_eq!(index.num_buckets, reconstructed.num_buckets);
+        assert_eq!(index.num_hash_functions, reconstructed.num_hash_functions);
+        assert_eq!(index.buckets, reconstructed.buckets);
+        assert_eq!(index.hash_type, reconstructed.hash_type);
+    }
 
     #[test]
     fn test_search_parallel() {

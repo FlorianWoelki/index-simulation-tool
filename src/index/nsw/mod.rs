@@ -317,6 +317,26 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_serde() {
+        let (data, _) = get_simple_vectors();
+        let random_seed = 42;
+        let mut index = NSWIndex::new(5, 3, DistanceMetric::Euclidean, random_seed);
+        for vector in &data {
+            index.add_vector(vector);
+        }
+
+        let bytes = bincode::serialize(&index).unwrap();
+        let reconstructed: NSWIndex = bincode::deserialize(&bytes).unwrap();
+
+        assert_eq!(index.vectors, reconstructed.vectors);
+        assert_eq!(index.metric, reconstructed.metric);
+        assert_eq!(index.graph, reconstructed.graph);
+        assert_eq!(index.ef_construction, reconstructed.ef_construction);
+        assert_eq!(index.ef_search, reconstructed.ef_search);
+        assert_eq!(index.random_seed, reconstructed.random_seed);
+    }
+
+    #[test]
     fn test_search_parallel() {
         let random_seed = 42;
         let mut index = NSWIndex::new(5, 3, DistanceMetric::Euclidean, random_seed);

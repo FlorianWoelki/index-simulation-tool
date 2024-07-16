@@ -415,6 +415,38 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_serde() {
+        let (data, _) = get_simple_vectors();
+        let random_seed = 42;
+        let mut index = HNSWIndex::new(
+            1.0 / 3.0,
+            16,
+            200,
+            200,
+            DistanceMetric::Euclidean,
+            random_seed,
+        );
+        for vector in &data {
+            index.add_vector(vector);
+        }
+
+        let bytes = bincode::serialize(&index).unwrap();
+        let reconstructed: HNSWIndex = bincode::deserialize(&bytes).unwrap();
+
+        assert_eq!(index.vectors, reconstructed.vectors);
+        assert_eq!(index.metric, reconstructed.metric);
+        assert_eq!(index.nodes, reconstructed.nodes);
+        assert_eq!(
+            index.level_distribution_factor,
+            reconstructed.level_distribution_factor
+        );
+        assert_eq!(index.max_layers, reconstructed.max_layers);
+        assert_eq!(index.ef_construction, reconstructed.ef_construction);
+        assert_eq!(index.ef_search, reconstructed.ef_search);
+        assert_eq!(index.random_seed, reconstructed.random_seed);
+    }
+
+    #[test]
     fn test_search_parallel() {
         let random_seed = 42;
         let mut index = HNSWIndex::new(

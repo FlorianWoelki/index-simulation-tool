@@ -361,6 +361,38 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_serde() {
+        let (data, _) = get_simple_vectors();
+        let num_subvectors = 4;
+        let num_clusters = 4;
+        let iterations = 10;
+        let mut index = PQIndex::new(
+            num_subvectors,
+            num_clusters,
+            iterations,
+            0.01,
+            DistanceMetric::Euclidean,
+            42,
+        );
+        for vector in &data {
+            index.add_vector(vector);
+        }
+
+        let bytes = bincode::serialize(&index).unwrap();
+        let reconstructed: PQIndex = bincode::deserialize(&bytes).unwrap();
+
+        assert_eq!(index.vectors, reconstructed.vectors);
+        assert_eq!(index.metric, reconstructed.metric);
+        assert_eq!(index.random_seed, reconstructed.random_seed);
+        assert_eq!(index.num_subvectors, reconstructed.num_subvectors);
+        assert_eq!(index.num_clusters, reconstructed.num_clusters);
+        assert_eq!(index.codewords, reconstructed.codewords);
+        assert_eq!(index.encoded_codes, reconstructed.encoded_codes);
+        assert_eq!(index.iterations, reconstructed.iterations);
+        assert_eq!(index.tolerance, reconstructed.tolerance);
+    }
+
+    #[test]
     fn test_search_parallel() {
         let num_subvectors = 4;
         let num_clusters = 4;

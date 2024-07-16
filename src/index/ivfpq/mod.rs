@@ -418,6 +418,44 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_serde() {
+        let (data, _) = get_simple_vectors();
+        let random_seed = 42;
+        let num_subvectors = 2;
+        let num_clusters = 3;
+        let num_coarse_clusters = 2;
+        let iterations = 10;
+        let mut index = IVFPQIndex::new(
+            num_subvectors,
+            num_clusters,
+            num_coarse_clusters,
+            iterations,
+            0.01,
+            DistanceMetric::Euclidean,
+            random_seed,
+        );
+        for vector in &data {
+            index.add_vector(vector);
+        }
+
+        let bytes = bincode::serialize(&index).unwrap();
+        let reconstructed: IVFPQIndex = bincode::deserialize(&bytes).unwrap();
+
+        assert_eq!(index.vectors, reconstructed.vectors);
+        assert_eq!(index.metric, reconstructed.metric);
+        assert_eq!(index.random_seed, reconstructed.random_seed);
+        assert_eq!(index.num_subvectors, reconstructed.num_subvectors);
+        assert_eq!(index.num_clusters, reconstructed.num_clusters);
+        assert_eq!(index.num_coarse_clusters, reconstructed.num_coarse_clusters);
+        assert_eq!(index.coarse_centroids, reconstructed.coarse_centroids);
+        assert_eq!(index.sub_quantizers, reconstructed.sub_quantizers);
+        assert_eq!(index.coarse_centroids, reconstructed.coarse_centroids);
+        assert_eq!(index.pq_codes, reconstructed.pq_codes);
+        assert_eq!(index.iterations, reconstructed.iterations);
+        assert_eq!(index.tolerance, reconstructed.tolerance);
+    }
+
+    #[test]
     fn test_search_parallel() {
         let random_seed = 42;
         let num_subvectors = 2;

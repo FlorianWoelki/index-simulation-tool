@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::data::SparseVector;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub(super) struct Node {
     pub(super) id: usize,
     pub(super) connections: Vec<Vec<usize>>,
