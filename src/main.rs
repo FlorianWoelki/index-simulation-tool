@@ -37,8 +37,7 @@ struct Args {
     num_images: Option<usize>,
 }
 
-#[tokio::main]
-async fn main() {
+async fn plot_msmarco_dataset() {
     let (groundtruth, vectors, query_vectors) = data::ms_marco::load_msmarco_dataset().unwrap();
     let mut query_sparse_vectors = vec![];
     let mut groundtruth_sparse_vectors = vec![];
@@ -83,7 +82,9 @@ async fn main() {
         &DistanceMetric::Cosine,
     )
     .show();
+}
 
+async fn plot_artificially_generated_data() {
     // Dimensionality:
     // - Text data: 10,000 - 100,000 features
     // - Image data: 1,000 - 1,000,000 pixels
@@ -104,21 +105,24 @@ async fn main() {
     // - Text data: Cosine distance
     // - Binary sparse data: Jaccard distance
     // - High-dimensional sparse data: Manhattan distance
-    // let amount = 1000;
-    // let mut generator =
-    //     SparseDataGenerator::new(10000, amount, (0.0, 1.0), 0.95, DistanceMetric::Cosine, 42);
-    // let (vectors, query_vectors, groundtruth) = generator.generate().await;
+    let amount = 1000;
+    let mut generator =
+        SparseDataGenerator::new(10000, amount, (0.0, 1.0), 0.95, DistanceMetric::Cosine, 42);
+    let (vectors, query_vectors, groundtruth) = generator.generate().await;
 
-    // // Get the first element of the groundtruth data
-    // let groundtruth_flat = groundtruth
-    //     .iter()
-    //     .map(|nn| nn[0].clone())
-    //     .collect::<Vec<SparseVector>>();
+    // Get the first element of the groundtruth data
+    let groundtruth_flat = groundtruth
+        .iter()
+        .map(|nn| nn[0].clone())
+        .collect::<Vec<SparseVector>>();
 
-    // plot_sparsity_distribution(&vectors).show();
-    // plot_nearest_neighbor_distances(&query_vectors, &groundtruth_flat, &DistanceMetric::Cosine)
-    //     .show();
+    plot_sparsity_distribution(&vectors).show();
+    plot_nearest_neighbor_distances(&query_vectors, &groundtruth_flat, &DistanceMetric::Cosine)
+        .show();
+}
 
+#[tokio::main]
+async fn main() {
     // let seed = thread_rng().gen_range(0..10000);
     // let mut annoy_index = AnnoyIndex::new(20, 20, 40, DistanceMetric::Cosine);
     // let mut simhash_index = LSHIndex::new(20, 4, LSHHashType::SimHash, DistanceMetric::Cosine);
