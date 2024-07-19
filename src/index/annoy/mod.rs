@@ -28,7 +28,6 @@ impl Node {
     fn build(
         vectors: &Vec<SparseVector>,
         indices: &[usize],
-        n_dims: usize,
         max_points: usize,
         metric: &DistanceMetric,
     ) -> Self {
@@ -65,7 +64,6 @@ impl Node {
             Some(Box::new(Node::build(
                 vectors,
                 &left_indices,
-                n_dims,
                 max_points,
                 metric,
             )))
@@ -77,7 +75,6 @@ impl Node {
             Some(Box::new(Node::build(
                 vectors,
                 &right_indices,
-                n_dims,
                 max_points,
                 metric,
             )))
@@ -96,16 +93,15 @@ impl Node {
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct Tree {
     root: Node,
-    n_dims: usize,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct AnnoyIndex {
     trees: Vec<Tree>,
     vectors: Vec<SparseVector>,
-    n_trees: usize,    // Larger values means larger index but better accuracy
-    max_points: usize, // Maximum number of points in a leaf node
-    search_k: usize, // Larger value will give more accurate results, but will take longer to run (k * n_trees where k is the amount of ANN)
+    n_trees: usize,
+    max_points: usize,
+    search_k: usize,
     metric: DistanceMetric,
 }
 
@@ -138,49 +134,24 @@ impl SparseIndex for AnnoyIndex {
     }
 
     fn build(&mut self) {
-        let n_dims = self
-            .vectors
-            .iter()
-            .map(|v| v.indices.len())
-            .max()
-            .unwrap_or(0);
         let mut trees = Vec::with_capacity(self.n_trees);
 
         for _ in 0..self.n_trees {
             let indices: Vec<usize> = (0..self.vectors.len()).collect();
-            let root = Node::build(
-                &self.vectors,
-                &indices,
-                n_dims,
-                self.max_points,
-                &self.metric,
-            );
-            trees.push(Tree { root, n_dims });
+            let root = Node::build(&self.vectors, &indices, self.max_points, &self.metric);
+            trees.push(Tree { root });
         }
 
         self.trees = trees;
     }
 
     fn build_parallel(&mut self) {
-        let n_dims = self
-            .vectors
-            .iter()
-            .map(|v| v.indices.len())
-            .max()
-            .unwrap_or(0);
-
         let trees: Vec<Tree> = (0..self.n_trees)
             .into_par_iter()
             .map(|_| {
                 let indices: Vec<usize> = (0..self.vectors.len()).collect();
-                let root = Node::build(
-                    &self.vectors,
-                    &indices,
-                    n_dims,
-                    self.max_points,
-                    &self.metric,
-                );
-                Tree { root, n_dims }
+                let root = Node::build(&self.vectors, &indices, self.max_points, &self.metric);
+                Tree { root }
             })
             .collect();
 
@@ -324,7 +295,7 @@ mod tests {
 
     #[test]
     fn test_serde() {
-        let (data, query_vectors) = get_simple_vectors();
+        let (data, _) = get_simple_vectors();
         let mut index = AnnoyIndex::new(3, 2, 10, DistanceMetric::Cosine);
         for vector in &data {
             index.add_vector(vector);
