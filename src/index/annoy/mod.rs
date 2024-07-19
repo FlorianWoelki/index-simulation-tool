@@ -99,8 +99,19 @@ struct Tree {
 pub struct AnnoyIndex {
     trees: Vec<Tree>,
     vectors: Vec<SparseVector>,
+    /// Controls the number of trees to be constructed in the index.
+    /// Increasing this value improves search accuracy at the cost of longer
+    /// build times and more memory usage.
     n_trees: usize,
+    /// The maximum number of points allowed in a leaf node.
+    /// Lower values create deeper trees, potentially improving accuracy
+    /// but increasing search time.
+    /// Higher values create shallower trees, which can be faster to search
+    /// but may reduce accuracy.
     max_points: usize,
+    /// The number of nodes to explore during the search phase.
+    /// Higher values increase search accuracy but also increase query time.
+    /// Lower values result in faster searches but may reduce accuracy.
     search_k: usize,
     metric: DistanceMetric,
 }
