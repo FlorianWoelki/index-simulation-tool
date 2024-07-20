@@ -18,9 +18,11 @@ use super::{DistanceMetric, SparseIndex};
 pub struct NSWIndex {
     vectors: Vec<SparseVector>,
     graph: HashMap<usize, HashSet<usize>>,
-    /// Controls the number of neighbors considered during the construction phase.
+    /// Number of nearest neighbors to consider during index construction.
+    /// Higher values improve recall but increase build time and memory usage.
     ef_construction: usize,
-    /// Controls the number of neighbors considered during the search phase.
+    /// Number of nearest neighbors to consider during search.
+    /// Higher values improve recall but increase search time.
     ef_search: usize,
     metric: DistanceMetric,
     random_seed: u64,

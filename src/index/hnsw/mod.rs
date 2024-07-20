@@ -21,13 +21,19 @@ mod node;
 pub struct HNSWIndex {
     vectors: Vec<SparseVector>,
     nodes: HashMap<usize, Node>,
-    /// Controls the probability distribution for assigning the layer of each node in the graph.
+    /// Controls the probability of a vector being inserted at higher layers
+    /// Higher values create more layers, improve search speed but increasing
+    /// memory usage.
     level_distribution_factor: f32,
-    /// Determines the maximum layer that a node can have in the graph.
+    /// Maximum number of layers in the graph.
+    /// Higher values can improve search speed for large datasets, but increase
+    /// memory usage.
     max_layers: usize,
-    /// Controls the number of neighbors considered during the construction phase.
+    /// Number of nearest neighbors to consider during index construction.
+    /// Higher values improve recall but increase build time and memory usage.
     ef_construction: usize,
-    /// Controls the number of neighbors considered during the search phase.
+    /// Number of nearest neighbors to consider during search.
+    /// Higher values improve recall but increase search time.
     ef_search: usize,
     metric: DistanceMetric,
     random_seed: u64,
