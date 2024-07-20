@@ -19,23 +19,21 @@ use super::{DistanceMetric, SparseIndex};
 
 #[derive(Serialize, Deserialize)]
 pub struct PQIndex {
-    /// Number of subvectors to divide each vector into for quantization.
+    /// Number of subvectors to divide the original vector into.
+    /// Higher values increase compression but may reduce accuracy.
     num_subvectors: usize,
-    /// Number of clusters (codewords) per subvector for quantization.
+    /// Number of centroids per subvector.
+    /// Higher values improve accuracy but increase memory usage and search
+    /// time.
     num_clusters: usize,
-    /// Collection of sparse vectors to be indexed.
     vectors: Vec<SparseVector>,
-    /// Codewords for each subvector, used for encoding and search.
-    codewords: Vec<Vec<SparseVector>>,
-    /// Encoded codes for each vector, representing the closest codeword for each subvector
+    codebooks: Vec<Vec<SparseVector>>,
     encoded_codes: Vec<Vec<usize>>,
-    /// Number of iterations for k-means clustering during codeword generation.
-    iterations: usize,
-    /// Tolerance for k-means convergence.
+    /// Number of iterations for k-means clustering when building codebooks.
+    /// Higher values may improve codebook quality but increase build time.
+    kmeans_iterations: usize,
     tolerance: f32,
-    /// Distance metric for similarity measurement between codewords and vectors.
     metric: DistanceMetric,
-    /// Random seed for reproducibility.
     random_seed: u64,
 }
 
@@ -43,7 +41,7 @@ impl PQIndex {
     pub fn new(
         num_subvectors: usize,
         num_clusters: usize,
-        iterations: usize,
+        kmeans_iterations: usize,
         tolerance: f32,
         metric: DistanceMetric,
         random_seed: u64,
@@ -52,11 +50,11 @@ impl PQIndex {
             num_subvectors,
             num_clusters,
             random_seed,
-            iterations,
+            kmeans_iterations,
             tolerance,
             metric,
             vectors: Vec::new(),
-            codewords: Vec::new(),
+            codebooks: Vec::new(),
             encoded_codes: Vec::new(),
         }
     }
@@ -89,7 +87,7 @@ impl PQIndex {
             let mut min_distance = f32::MAX;
             let mut min_distance_code_index = 0;
 
-            for (k, code) in self.codewords[m].iter().enumerate() {
+            for (k, code) in self.codebooks[m].iter().enumerate() {
                 // Finds the closest codeword to the subvector based on the distance metric.
                 let distance = subvector.distance(&code, &self.metric);
                 if distance < min_distance {
@@ -109,7 +107,7 @@ impl PQIndex {
             .par_iter()
             .enumerate()
             .map(|(m, subvector)| {
-                self.codewords[m]
+                self.codebooks[m]
                     .par_iter()
                     .enumerate()
                     .map(|(k, code)| (k, subvector.distance(code, &self.metric)))
@@ -137,7 +135,7 @@ impl SparseIndex for PQIndex {
         self.encoded_codes.remove(id);
 
         if self.vectors.is_empty() {
-            self.codewords.clear();
+            self.codebooks.clear();
         } else {
             // Optionally: rebuild the index here (`self.build()`).
             // Can be computationally expensive, depending on the dataset.
@@ -147,7 +145,7 @@ impl SparseIndex for PQIndex {
     }
 
     fn build(&mut self) {
-        self.codewords = Vec::new();
+        self.codebooks = Vec::new();
         for m in 0..self.num_subvectors {
             let mut sub_vectors_m: Vec<SparseVector> = Vec::new();
             for vec in &self.vectors {
@@ -162,15 +160,15 @@ impl SparseIndex for PQIndex {
                 sub_vectors_m.push(SparseVector { indices, values });
             }
 
-            let codewords_m = kmeans(
+            let codebooks_m = kmeans(
                 &sub_vectors_m,
                 self.num_clusters,
-                self.iterations,
+                self.kmeans_iterations,
                 self.tolerance,
                 self.random_seed,
                 &self.metric,
             );
-            self.codewords.push(codewords_m);
+            self.codebooks.push(codebooks_m);
         }
 
         self.encoded_codes = self.encode(&self.vectors);
@@ -178,7 +176,7 @@ impl SparseIndex for PQIndex {
 
     fn build_parallel(&mut self) {
         let vectors = Arc::new(self.vectors.clone());
-        self.codewords = (0..self.num_subvectors)
+        self.codebooks = (0..self.num_subvectors)
             .into_par_iter()
             .map(|m| {
                 let sub_vectors_m: Vec<SparseVector> = vectors
@@ -197,7 +195,7 @@ impl SparseIndex for PQIndex {
                 kmeans_parallel(
                     &sub_vectors_m,
                     self.num_clusters,
-                    self.iterations,
+                    self.kmeans_iterations,
                     self.tolerance,
                     self.random_seed + m as u64, // Use different seeds for each subvector
                     &self.metric,
@@ -234,7 +232,7 @@ impl SparseIndex for PQIndex {
             let mut distance = 0.0;
             for m in 0..self.num_subvectors {
                 // Divides the query vector into subvectors to compute distances between query
-                // subvectors and codewords.
+                // subvectors and codebooks.
                 let start_idx = m * sub_vec_dims + m.min(remaining_dims);
                 let end_idx = start_idx + sub_vec_dims + (m < remaining_dims) as usize;
                 let query_sub_indices = query_vector.indices[start_idx..end_idx].to_vec();
@@ -245,7 +243,7 @@ impl SparseIndex for PQIndex {
                     values: query_sub_values,
                 };
                 // Computes the distance between the query subvector and the corresponding codeword.
-                let sub_distance = &query_sub.distance(&self.codewords[m][code[m]], &self.metric);
+                let sub_distance = &query_sub.distance(&self.codebooks[m][code[m]], &self.metric);
                 distance += sub_distance;
             }
 
@@ -294,7 +292,7 @@ impl SparseIndex for PQIndex {
                     values: query_sub_values,
                 };
 
-                self.codewords[m]
+                self.codebooks[m]
                     .iter()
                     .map(|codeword| query_sub.distance(codeword, &self.metric))
                     .collect()
@@ -365,11 +363,11 @@ mod tests {
         let (data, _) = get_simple_vectors();
         let num_subvectors = 4;
         let num_clusters = 4;
-        let iterations = 10;
+        let kmeans_iterations = 10;
         let mut index = PQIndex::new(
             num_subvectors,
             num_clusters,
-            iterations,
+            kmeans_iterations,
             0.01,
             DistanceMetric::Euclidean,
             42,
@@ -386,9 +384,9 @@ mod tests {
         assert_eq!(index.random_seed, reconstructed.random_seed);
         assert_eq!(index.num_subvectors, reconstructed.num_subvectors);
         assert_eq!(index.num_clusters, reconstructed.num_clusters);
-        assert_eq!(index.codewords, reconstructed.codewords);
+        assert_eq!(index.codebooks, reconstructed.codebooks);
         assert_eq!(index.encoded_codes, reconstructed.encoded_codes);
-        assert_eq!(index.iterations, reconstructed.iterations);
+        assert_eq!(index.kmeans_iterations, reconstructed.kmeans_iterations);
         assert_eq!(index.tolerance, reconstructed.tolerance);
     }
 
@@ -396,11 +394,11 @@ mod tests {
     fn test_search_parallel() {
         let num_subvectors = 4;
         let num_clusters = 4;
-        let iterations = 10;
+        let kmeans_iterations = 10;
         let mut pq_index = PQIndex::new(
             num_subvectors,
             num_clusters,
-            iterations,
+            kmeans_iterations,
             0.01,
             DistanceMetric::Euclidean,
             42,
@@ -422,11 +420,11 @@ mod tests {
     fn test_build_parallel() {
         let num_subvectors = 4;
         let num_clusters = 4;
-        let iterations = 20;
+        let kmeans_iterations = 20;
         let mut pq_index = PQIndex::new(
             num_subvectors,
             num_clusters,
-            iterations,
+            kmeans_iterations,
             0.01,
             DistanceMetric::Euclidean,
             42,
@@ -488,11 +486,11 @@ mod tests {
     fn test_pq_index_simple() {
         let num_subvectors = 2;
         let num_clusters = 3;
-        let iterations = 10;
+        let kmeans_iterations = 10;
         let mut pq_index = PQIndex::new(
             num_subvectors,
             num_clusters,
-            iterations,
+            kmeans_iterations,
             0.01,
             DistanceMetric::Euclidean,
             42,
@@ -513,17 +511,17 @@ mod tests {
     fn test_encode() {
         let num_subvectors = 2;
         let num_clusters = 2;
-        let iterations = 10;
+        let kmeans_iterations = 10;
         let mut pq_index = PQIndex::new(
             num_subvectors,
             num_clusters,
-            iterations,
+            kmeans_iterations,
             0.01,
             DistanceMetric::Euclidean,
             42,
         );
 
-        pq_index.codewords = vec![
+        pq_index.codebooks = vec![
             vec![
                 SparseVector {
                     indices: vec![0, 1],
@@ -577,12 +575,12 @@ mod tests {
     fn test_pq_index_complex() {
         let num_subvectors = 2;
         let num_clusters = 20;
-        let iterations = 256;
+        let kmeans_iterations = 256;
         let random_seed = 42;
         let mut index = PQIndex::new(
             num_subvectors,
             num_clusters,
-            iterations,
+            kmeans_iterations,
             0.01,
             DistanceMetric::Cosine,
             random_seed,

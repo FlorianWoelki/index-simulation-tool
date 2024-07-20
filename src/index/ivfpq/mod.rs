@@ -21,15 +21,32 @@ use super::{DistanceMetric, SparseIndex};
 
 #[derive(Serialize, Deserialize)]
 pub struct IVFPQIndex {
+    /// Number of subvectors for PQ.
+    /// Higher values increase granularity of vector encoding, potentially
+    /// improving accuracy but increasing memory usage and computational cost.
+    /// Lower values result in more compact representations but may reduce
+    /// accuracy.
     num_subvectors: usize,
+    /// Number of clusters for each subquantizer in PQ.
+    /// Higher values increase precision of vector encoding, improving accuracy
+    /// but increasing memory usage and computational cost.
     num_clusters: usize,
+    /// Number of clusters for the coarse quantizer (IVF part).
+    /// Higher values increase granularity of the first-level clustering,
+    /// potentially improving search accuracy but increasing memory usage and
+    /// search time.
+    /// Lower values result in fewer, larger clusters, which can speed up
+    /// searches but may reduce accuracy.
     num_coarse_clusters: usize,
     vectors: Vec<SparseVector>,
     coarse_centroids: Vec<SparseVector>,
     sub_quantizers: Vec<Vec<Vec<SparseVector>>>,
     coarse_codes: Vec<usize>,
     pq_codes: Vec<Vec<usize>>,
-    iterations: usize,
+    /// Number of iterations for k-means clustering.
+    /// Lower values speed up index construction but may result in suboptimal
+    /// clustering.
+    kmeans_iterations: usize,
     tolerance: f32,
     metric: DistanceMetric,
     random_seed: u64,
@@ -40,7 +57,7 @@ impl IVFPQIndex {
         num_subvectors: usize,
         num_clusters: usize,
         num_coarse_clusters: usize,
-        iterations: usize,
+        kmeans_iterations: usize,
         tolerance: f32,
         metric: DistanceMetric,
         random_seed: u64,
@@ -50,7 +67,7 @@ impl IVFPQIndex {
             num_clusters,
             num_coarse_clusters,
             random_seed,
-            iterations,
+            kmeans_iterations,
             tolerance,
             metric,
             vectors: Vec::new(),
@@ -153,7 +170,7 @@ impl SparseIndex for IVFPQIndex {
         self.coarse_centroids = kmeans(
             &self.vectors,
             self.num_coarse_clusters,
-            self.iterations,
+            self.kmeans_iterations,
             self.tolerance,
             self.random_seed,
             &self.metric,
@@ -190,7 +207,7 @@ impl SparseIndex for IVFPQIndex {
                 let codewords_m = kmeans(
                     &sub_vectors_m,
                     self.num_clusters,
-                    self.iterations,
+                    self.kmeans_iterations,
                     self.tolerance,
                     self.random_seed,
                     &self.metric,
@@ -207,7 +224,7 @@ impl SparseIndex for IVFPQIndex {
         self.coarse_centroids = kmeans_parallel(
             &self.vectors,
             self.num_coarse_clusters,
-            self.iterations,
+            self.kmeans_iterations,
             self.tolerance,
             self.random_seed,
             &self.metric,
@@ -252,7 +269,7 @@ impl SparseIndex for IVFPQIndex {
                         kmeans_parallel(
                             &sub_vectors_m,
                             self.num_clusters,
-                            self.iterations,
+                            self.kmeans_iterations,
                             self.tolerance,
                             self.random_seed + c as u64 + m as u64,
                             &self.metric,
@@ -424,12 +441,12 @@ mod tests {
         let num_subvectors = 2;
         let num_clusters = 3;
         let num_coarse_clusters = 2;
-        let iterations = 10;
+        let kmeans_iterations = 10;
         let mut index = IVFPQIndex::new(
             num_subvectors,
             num_clusters,
             num_coarse_clusters,
-            iterations,
+            kmeans_iterations,
             0.01,
             DistanceMetric::Euclidean,
             random_seed,
@@ -451,7 +468,7 @@ mod tests {
         assert_eq!(index.sub_quantizers, reconstructed.sub_quantizers);
         assert_eq!(index.coarse_centroids, reconstructed.coarse_centroids);
         assert_eq!(index.pq_codes, reconstructed.pq_codes);
-        assert_eq!(index.iterations, reconstructed.iterations);
+        assert_eq!(index.kmeans_iterations, reconstructed.kmeans_iterations);
         assert_eq!(index.tolerance, reconstructed.tolerance);
     }
 
@@ -461,12 +478,12 @@ mod tests {
         let num_subvectors = 2;
         let num_clusters = 3;
         let num_coarse_clusters = 2;
-        let iterations = 10;
+        let kmeans_iterations = 10;
         let mut index = IVFPQIndex::new(
             num_subvectors,
             num_clusters,
             num_coarse_clusters,
-            iterations,
+            kmeans_iterations,
             0.01,
             DistanceMetric::Euclidean,
             random_seed,
@@ -489,12 +506,12 @@ mod tests {
         let num_subvectors = 2;
         let num_clusters = 3;
         let num_coarse_clusters = 2;
-        let iterations = 10;
+        let kmeans_iterations = 10;
         let mut index = IVFPQIndex::new(
             num_subvectors,
             num_clusters,
             num_coarse_clusters,
-            iterations,
+            kmeans_iterations,
             0.01,
             DistanceMetric::Euclidean,
             random_seed,
@@ -557,12 +574,12 @@ mod tests {
         let num_subvectors = 2;
         let num_clusters = 3;
         let num_coarse_clusters = 2;
-        let iterations = 10;
+        let kmeans_iterations = 10;
         let mut index = IVFPQIndex::new(
             num_subvectors,
             num_clusters,
             num_coarse_clusters,
-            iterations,
+            kmeans_iterations,
             0.01,
             DistanceMetric::Euclidean,
             random_seed,
@@ -585,12 +602,12 @@ mod tests {
         let num_subvectors = 2;
         let num_clusters = 10;
         let num_coarse_clusters = 40;
-        let iterations = 256;
+        let kmeans_iterations = 256;
         let mut index = IVFPQIndex::new(
             num_subvectors,
             num_clusters,
             num_coarse_clusters,
-            iterations,
+            kmeans_iterations,
             0.01,
             DistanceMetric::Euclidean,
             random_seed,

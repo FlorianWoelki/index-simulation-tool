@@ -29,7 +29,12 @@ pub enum LSHHashType {
 
 #[derive(Serialize, Deserialize)]
 pub struct LSHIndex {
+    /// Number of buckets in the hash table.
+    /// Higher values can improve search speed but increase memory usage.
     num_buckets: usize,
+    /// Number of hash functions used for each vector.
+    /// Higher values increase accuracy but also increase computational cost
+    /// and memory usage.
     num_hash_functions: usize,
     buckets: Vec<Vec<(usize, SparseVector)>>,
     vectors: Vec<SparseVector>,
