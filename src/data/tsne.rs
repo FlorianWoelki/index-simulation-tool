@@ -27,7 +27,7 @@ fn generate_structured_sparse_data(
     let cluster_centers = [0.0, 5.0, 10.0];
     let std_dev = 0.5;
 
-    for (i, &center) in cluster_centers.iter().enumerate() {
+    for &center in cluster_centers.iter() {
         for _ in 0..cluster_size {
             let mut indices = Vec::new();
             let mut values = Vec::new();

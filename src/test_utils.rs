@@ -4,6 +4,7 @@ use crate::data::{QueryResult, SparseVector};
 
 /// Returns a tuple where the first entry is easy to index vector data
 /// and the second entry are possible query vectors to use.
+#[allow(dead_code)]
 pub fn get_simple_vectors() -> (Vec<SparseVector>, Vec<SparseVector>) {
     return (
         vec![
@@ -41,6 +42,7 @@ pub fn get_simple_vectors() -> (Vec<SparseVector>, Vec<SparseVector>) {
     );
 }
 
+#[allow(dead_code)]
 pub fn get_complex_vectors() -> (Vec<SparseVector>, SparseVector) {
     let mut vectors = vec![];
     for i in 0..100 {
@@ -59,6 +61,7 @@ pub fn get_complex_vectors() -> (Vec<SparseVector>, SparseVector) {
     )
 }
 
+#[allow(dead_code)]
 pub fn is_in_actual_result(
     data: &[SparseVector],
     expected: &SparseVector,

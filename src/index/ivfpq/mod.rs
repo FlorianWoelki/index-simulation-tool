@@ -353,7 +353,7 @@ impl SparseIndex for IVFPQIndex {
         coarse_distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
         let sub_vec_dims = query_vector.indices.len() / self.num_subvectors;
-        let mut scores = Mutex::new(Vec::with_capacity(self.vectors.len()));
+        let scores = Mutex::new(Vec::with_capacity(self.vectors.len()));
 
         coarse_distances
             .par_iter()

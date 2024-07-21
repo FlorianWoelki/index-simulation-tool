@@ -37,6 +37,7 @@ struct Args {
     num_images: Option<usize>,
 }
 
+#[allow(dead_code)]
 async fn plot_msmarco_dataset() {
     let (groundtruth, vectors, query_vectors) = data::ms_marco::load_msmarco_dataset().unwrap();
     let mut query_sparse_vectors = vec![];
@@ -84,6 +85,7 @@ async fn plot_msmarco_dataset() {
     .show();
 }
 
+#[allow(dead_code)]
 async fn plot_artificially_generated_data() {
     // Dimensionality:
     // - Text data: 10,000 - 100,000 features
