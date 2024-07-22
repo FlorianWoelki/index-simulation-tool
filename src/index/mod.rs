@@ -40,6 +40,7 @@ impl Debug for DistanceMetric {
 }
 
 pub trait SparseIndex {
+    fn add_vector_before_build(&mut self, vector: &SparseVector);
     fn add_vector(&mut self, vector: &SparseVector);
     fn remove_vector(&mut self, id: usize) -> Option<SparseVector>;
     fn build(&mut self);
@@ -62,6 +63,18 @@ pub enum IndexType {
 }
 
 impl SparseIndex for IndexType {
+    fn add_vector_before_build(&mut self, vector: &SparseVector) {
+        match self {
+            IndexType::LSH(index) => index.add_vector_before_build(vector),
+            IndexType::Annoy(index) => index.add_vector_before_build(vector),
+            IndexType::PQ(index) => index.add_vector_before_build(vector),
+            IndexType::IVFPQ(index) => index.add_vector_before_build(vector),
+            IndexType::HNSW(index) => index.add_vector_before_build(vector),
+            IndexType::NSW(index) => index.add_vector_before_build(vector),
+            IndexType::LinScan(index) => index.add_vector_before_build(vector),
+        }
+    }
+
     fn add_vector(&mut self, vector: &SparseVector) {
         match self {
             IndexType::LSH(index) => index.add_vector(vector),

@@ -88,13 +88,39 @@ impl LSHIndex {
 }
 
 impl SparseIndex for LSHIndex {
-    fn add_vector(&mut self, vector: &SparseVector) {
+    fn add_vector_before_build(&mut self, vector: &SparseVector) {
         self.vectors.push(vector.clone());
     }
 
+    fn add_vector(&mut self, vector: &SparseVector) {
+        let id = self.vectors.len();
+        self.vectors.push(vector.clone());
+        for i in 0..self.num_hash_functions {
+            let hash = self.hash(&vector, i);
+            let bucket_index = self.hash_bucket(hash);
+            self.buckets[bucket_index].push((id, vector.clone()));
+        }
+    }
+
     fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
-        // TODO: Needs implementation
-        None
+        if id >= self.vectors.len() {
+            return None;
+        }
+
+        let vector = self.vectors.remove(id);
+        for bucket in &mut self.buckets {
+            bucket.retain(|&(vec_id, _)| vec_id != id);
+        }
+
+        for bucket in &mut self.buckets {
+            for (vec_id, _) in bucket.iter_mut() {
+                if *vec_id > id {
+                    *vec_id -= 1;
+                }
+            }
+        }
+
+        Some(vector)
     }
 
     fn build(&mut self) {
@@ -269,16 +295,63 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_add_vector() {
+        let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash, DistanceMetric::Cosine);
+
+        let (vectors, _) = get_simple_vectors();
+        for vector in &vectors {
+            index.add_vector_before_build(vector);
+        }
+        index.build();
+
+        assert_eq!(index.vectors.len(), vectors.len());
+
+        let new_vector = SparseVector {
+            indices: vec![1, 3],
+            values: vec![OrderedFloat(4.0), OrderedFloat(5.0)],
+        };
+        index.add_vector(&new_vector);
+
+        assert_eq!(index.vectors.len(), vectors.len() + 1);
+        assert_eq!(index.vectors[index.vectors.len() - 1], new_vector);
+
+        let results = index.search(&new_vector, 2);
+
+        assert_eq!(results[0].index, vectors.len());
+        assert_eq!(results[1].index, 1);
+    }
+
+    #[test]
+    fn test_remove_vector() {
+        let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash, DistanceMetric::Cosine);
+
+        let (vectors, query_vectors) = get_simple_vectors();
+        for vector in &vectors {
+            index.add_vector_before_build(vector);
+        }
+        index.build();
+
+        assert_eq!(index.vectors.len(), vectors.len());
+
+        index.remove_vector(2);
+
+        assert_eq!(index.vectors.len(), vectors.len() - 1);
+        assert_eq!(index.vectors[0], vectors[0]);
+        assert_eq!(index.vectors[2], vectors[3]);
+
+        index.build();
+
+        let results = index.search(&query_vectors[0], 2);
+        assert_eq!(results[0].index, 3);
+        assert_eq!(results[1].index, 0);
+    }
+
+    #[test]
     fn test_serde() {
         let (data, _) = get_simple_vectors();
-        let random_seed = 42;
-        let num_subvectors = 2;
-        let num_clusters = 3;
-        let num_coarse_clusters = 2;
-        let iterations = 10;
         let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash, DistanceMetric::Cosine);
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
 
         let bytes = bincode::serialize(&index).unwrap();
@@ -298,7 +371,7 @@ mod tests {
 
         let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash, DistanceMetric::Cosine);
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
         index.build();
 
@@ -312,7 +385,7 @@ mod tests {
 
         let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash, DistanceMetric::Cosine);
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
         index.build_parallel();
 
@@ -326,7 +399,7 @@ mod tests {
 
         let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash, DistanceMetric::Cosine);
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
         index.build();
 
@@ -341,15 +414,13 @@ mod tests {
         let (data, query_vector) = get_complex_vectors();
 
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
 
         index.build();
 
         let results = index.search(&query_vector, 10);
         assert!(is_in_actual_result(&data, &query_vector, &results));
-
-        assert!(true);
     }
 
     #[test]
@@ -358,7 +429,7 @@ mod tests {
 
         let mut index = LSHIndex::new(4, 4, LSHHashType::SimHash, DistanceMetric::Cosine);
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
         index.build();
 
@@ -373,7 +444,7 @@ mod tests {
         let mut index = LSHIndex::new(10, 4, LSHHashType::SimHash, DistanceMetric::Cosine);
 
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
 
         index.build();
