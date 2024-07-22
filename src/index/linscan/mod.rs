@@ -35,6 +35,10 @@ impl LinScanIndex {
 }
 
 impl SparseIndex for LinScanIndex {
+    fn add_vector_before_build(&mut self, vector: &SparseVector) {
+        self.vectors.push(vector.clone());
+    }
+
     fn add_vector(&mut self, vector: &SparseVector) {
         for (index, value) in vector.indices.iter().zip(vector.values.iter()) {
             self.inverted_index

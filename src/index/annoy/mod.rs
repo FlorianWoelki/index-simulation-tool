@@ -130,8 +130,13 @@ impl AnnoyIndex {
 }
 
 impl SparseIndex for AnnoyIndex {
+    fn add_vector_before_build(&mut self, vector: &SparseVector) {
+        self.vectors.push(vector.clone());
+    }
+
     fn add_vector(&mut self, vector: &SparseVector) {
         self.vectors.push(vector.clone());
+        self.build();
     }
 
     /// Needs rebuilding after removing vector.
@@ -309,7 +314,7 @@ mod tests {
         let (data, _) = get_simple_vectors();
         let mut index = AnnoyIndex::new(3, 2, 10, DistanceMetric::Cosine);
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
 
         let bytes = bincode::serialize(&index).unwrap();
@@ -328,7 +333,7 @@ mod tests {
         let (data, query_vectors) = get_simple_vectors();
         let mut index = AnnoyIndex::new(3, 2, 10, DistanceMetric::Cosine);
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
         index.build();
 
@@ -341,7 +346,7 @@ mod tests {
         let (data, query_vectors) = get_simple_vectors();
         let mut index = AnnoyIndex::new(3, 2, 10, DistanceMetric::Cosine);
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
         index.build_parallel();
 
@@ -355,7 +360,7 @@ mod tests {
 
         let (vectors, query_vectors) = get_simple_vectors();
         for vector in &vectors {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
 
         index.build();
@@ -380,7 +385,7 @@ mod tests {
         let (data, query_vectors) = get_simple_vectors();
         let mut index = AnnoyIndex::new(10, 10, 10, DistanceMetric::Cosine);
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
         index.build();
 
@@ -394,7 +399,7 @@ mod tests {
 
         let (data, query_vector) = get_complex_vectors();
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
 
         index.build();

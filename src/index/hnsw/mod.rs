@@ -255,6 +255,10 @@ impl HNSWIndex {
 }
 
 impl SparseIndex for HNSWIndex {
+    fn add_vector_before_build(&mut self, vector: &SparseVector) {
+        self.vectors.push(vector.clone());
+    }
+
     fn add_vector(&mut self, item: &SparseVector) {
         self.vectors.push(item.clone());
     }
@@ -433,7 +437,7 @@ mod tests {
             random_seed,
         );
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
 
         let bytes = bincode::serialize(&index).unwrap();
@@ -467,7 +471,7 @@ mod tests {
         let (data, query_vectors) = get_simple_vectors();
 
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
 
         index.build();
@@ -491,7 +495,7 @@ mod tests {
         let (data, query_vectors) = get_simple_vectors();
 
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
 
         index.build_parallel();
@@ -514,7 +518,7 @@ mod tests {
         }
 
         for vector in &vectors {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
 
         index.build();
@@ -548,7 +552,7 @@ mod tests {
 
         let (data, query_vectors) = get_simple_vectors();
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
 
         index.build();
@@ -572,7 +576,7 @@ mod tests {
         let (data, query_vector) = get_complex_vectors();
 
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
 
         index.build();
