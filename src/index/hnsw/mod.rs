@@ -259,9 +259,29 @@ impl SparseIndex for HNSWIndex {
         self.vectors.push(vector.clone());
     }
 
-    fn add_vector(&mut self, item: &SparseVector) {
-        self.vectors.push(item.clone());
-        self.build();
+    fn add_vector(&mut self, vector: &SparseVector) {
+        let vector_index = self.vectors.len();
+        self.vectors.push(vector.clone());
+
+        let mut rng = StdRng::seed_from_u64(self.random_seed);
+        let mut layer = 0;
+        while rng.gen::<f32>() < self.level_distribution_factor.powi(layer as i32)
+            && layer < self.max_layers
+        {
+            layer += 1;
+        }
+
+        let new_node = Node {
+            id: vector_index,
+            connections: vec![Vec::new(); self.max_layers + 1],
+            vector: vector.clone(),
+            layer,
+        };
+
+        self.nodes.insert(vector_index, new_node.clone());
+        for l in (0..=layer).rev() {
+            self.connect_new_node(&new_node, l);
+        }
     }
 
     fn remove_vector(&mut self, index: usize) -> Option<SparseVector> {
@@ -455,6 +475,41 @@ mod tests {
         assert_eq!(index.ef_construction, reconstructed.ef_construction);
         assert_eq!(index.ef_search, reconstructed.ef_search);
         assert_eq!(index.random_seed, reconstructed.random_seed);
+    }
+
+    #[test]
+    fn test_add_vector() {
+        let random_seed = 42;
+        let mut index = HNSWIndex::new(
+            1.0 / 3.0,
+            16,
+            200,
+            200,
+            DistanceMetric::Euclidean,
+            random_seed,
+        );
+
+        let (vectors, _) = get_simple_vectors();
+        for vector in &vectors {
+            index.add_vector_before_build(vector);
+        }
+        index.build();
+
+        assert_eq!(index.vectors.len(), vectors.len());
+
+        let new_vector = SparseVector {
+            indices: vec![1, 3],
+            values: vec![OrderedFloat(4.0), OrderedFloat(5.0)],
+        };
+        index.add_vector(&new_vector);
+
+        assert_eq!(index.vectors.len(), vectors.len() + 1);
+        assert_eq!(index.vectors[index.vectors.len() - 1], new_vector);
+
+        let results = index.search(&new_vector, 2);
+
+        assert_eq!(results[0].index, vectors.len());
+        assert_eq!(results[1].index, 1);
     }
 
     #[test]

@@ -201,9 +201,23 @@ impl SparseIndex for NSWIndex {
         self.vectors.push(vector.clone());
     }
 
-    fn add_vector(&mut self, item: &SparseVector) {
-        self.vectors.push(item.clone());
-        self.build();
+    fn add_vector(&mut self, vector: &SparseVector) {
+        let vector_index = self.vectors.len();
+        self.vectors.push(vector.clone());
+
+        let new_node_neighbors = if self.graph.is_empty() {
+            HashSet::new()
+        } else {
+            let neighbors =
+                self.knn_search(vector, self.ef_construction, self.ef_search, &self.graph);
+            neighbors.iter().cloned().collect()
+        };
+
+        self.graph.insert(vector_index, new_node_neighbors.clone());
+
+        for &neighbor in &new_node_neighbors {
+            self.graph.get_mut(&neighbor).unwrap().insert(vector_index);
+        }
     }
 
     fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
@@ -357,6 +371,34 @@ mod tests {
 
         let results = index.search_parallel(&query_vectors[0], 2);
         assert!(is_in_actual_result(&data, &query_vectors[0], &results));
+    }
+
+    #[test]
+    fn test_add_vector() {
+        let random_seed = 42;
+        let mut index = NSWIndex::new(5, 3, DistanceMetric::Euclidean, random_seed);
+
+        let (vectors, _) = get_simple_vectors();
+        for vector in &vectors {
+            index.add_vector_before_build(vector);
+        }
+        index.build();
+
+        assert_eq!(index.vectors.len(), vectors.len());
+
+        let new_vector = SparseVector {
+            indices: vec![1, 3],
+            values: vec![OrderedFloat(4.0), OrderedFloat(5.0)],
+        };
+        index.add_vector(&new_vector);
+
+        assert_eq!(index.vectors.len(), vectors.len() + 1);
+        assert_eq!(index.vectors[index.vectors.len() - 1], new_vector);
+
+        let results = index.search(&new_vector, 2);
+
+        assert_eq!(results[0].index, vectors.len());
+        assert_eq!(results[1].index, 1);
     }
 
     #[test]
