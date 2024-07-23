@@ -42,7 +42,7 @@ mod tests {
             };
 
             vectors.push(vector.clone());
-            index.add_vector(&vector);
+            index.add_vector_before_build(&vector);
         }
 
         index.build_parallel();
