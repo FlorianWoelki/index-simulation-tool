@@ -261,6 +261,7 @@ impl SparseIndex for HNSWIndex {
 
     fn add_vector(&mut self, item: &SparseVector) {
         self.vectors.push(item.clone());
+        self.build();
     }
 
     fn remove_vector(&mut self, index: usize) -> Option<SparseVector> {

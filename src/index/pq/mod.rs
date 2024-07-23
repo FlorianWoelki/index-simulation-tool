@@ -128,24 +128,31 @@ impl SparseIndex for PQIndex {
 
     fn add_vector(&mut self, vector: &SparseVector) {
         self.vectors.push(vector.clone());
+
+        let sub_vec_dims = vector.indices.len() / self.num_subvectors;
+        let remaining_dims = vector.indices.len() % self.num_subvectors;
+        let mut subvectors: Vec<SparseVector> = Vec::new();
+
+        for m in 0..self.num_subvectors {
+            let start_idx = m * sub_vec_dims + m.min(remaining_dims);
+            let end_idx = start_idx + sub_vec_dims + (m < remaining_dims) as usize;
+            let indices = vector.indices[start_idx..end_idx].to_vec();
+            let values = vector.values[start_idx..end_idx].to_vec();
+            subvectors.push(SparseVector { indices, values });
+        }
+
+        let encoded_code = self.vector_quantize(&subvectors);
+        self.encoded_codes.push(encoded_code);
     }
 
     fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
-        if id >= self.vectors.len() {
-            return None;
-        }
-
-        let removed_vector = self.vectors.remove(id);
-        self.encoded_codes.remove(id);
-
-        if self.vectors.is_empty() {
-            self.codebooks.clear();
+        if id < self.vectors.len() {
+            let removed_vector = self.vectors.remove(id);
+            self.encoded_codes.remove(id);
+            Some(removed_vector)
         } else {
-            // Optionally: rebuild the index here (`self.build()`).
-            // Can be computationally expensive, depending on the dataset.
+            None
         }
-
-        Some(removed_vector)
     }
 
     fn build(&mut self) {
@@ -392,6 +399,43 @@ mod tests {
         assert_eq!(index.encoded_codes, reconstructed.encoded_codes);
         assert_eq!(index.kmeans_iterations, reconstructed.kmeans_iterations);
         assert_eq!(index.tolerance, reconstructed.tolerance);
+    }
+
+    #[test]
+    fn test_add_vector() {
+        let num_subvectors = 4;
+        let num_clusters = 4;
+        let kmeans_iterations = 10;
+        let mut index = PQIndex::new(
+            num_subvectors,
+            num_clusters,
+            kmeans_iterations,
+            0.01,
+            DistanceMetric::Euclidean,
+            42,
+        );
+
+        let (vectors, _) = get_simple_vectors();
+        for vector in &vectors {
+            index.add_vector_before_build(vector);
+        }
+        index.build();
+
+        assert_eq!(index.vectors.len(), vectors.len());
+
+        let new_vector = SparseVector {
+            indices: vec![1, 3],
+            values: vec![OrderedFloat(4.0), OrderedFloat(5.0)],
+        };
+        index.add_vector(&new_vector);
+
+        assert_eq!(index.vectors.len(), vectors.len() + 1);
+        assert_eq!(index.vectors[index.vectors.len() - 1], new_vector);
+
+        let results = index.search(&new_vector, 2);
+
+        assert_eq!(results[0].index, vectors.len());
+        assert_eq!(results[1].index, 1);
     }
 
     #[test]

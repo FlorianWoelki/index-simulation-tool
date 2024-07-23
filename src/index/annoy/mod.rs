@@ -139,13 +139,13 @@ impl SparseIndex for AnnoyIndex {
         self.build();
     }
 
-    /// Needs rebuilding after removing vector.
     fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
         if id >= self.vectors.len() {
             return None;
         }
 
         let removed_vector = self.vectors.remove(id);
+        self.build();
         Some(removed_vector)
     }
 
@@ -372,8 +372,6 @@ mod tests {
         assert_eq!(index.vectors.len(), vectors.len() - 1);
         assert_eq!(index.vectors[0], vectors[0]);
         assert_eq!(index.vectors[2], vectors[3]);
-
-        index.build();
 
         let results = index.search(&query_vectors[0], 2);
         assert_eq!(results[0].index, 3);
