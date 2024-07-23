@@ -146,26 +146,45 @@ impl SparseIndex for IVFPQIndex {
 
     fn add_vector(&mut self, vector: &SparseVector) {
         self.vectors.push(vector.clone());
+
+        let mut min_distance = f32::MAX;
+        let mut min_distance_code_index = 0;
+        for (i, coarse_codeword) in self.coarse_centroids.iter().enumerate() {
+            let distance = vector.distance(&coarse_codeword, &self.metric);
+            if distance < min_distance {
+                min_distance = distance;
+                min_distance_code_index = i;
+            }
+        }
+        self.coarse_codes.push(min_distance_code_index);
+
+        let sub_vec_dims = vector.indices.len() / self.num_subvectors;
+        let remaining_dims = vector.indices.len() % self.num_subvectors;
+        let mut subvectors: Vec<SparseVector> = Vec::new();
+
+        for m in 0..self.num_subvectors {
+            let start_idx = m * sub_vec_dims + m.min(remaining_dims);
+            let end_idx = start_idx + sub_vec_dims + (m < remaining_dims) as usize;
+            let indices = vector.indices[start_idx..end_idx].to_vec();
+            let values = vector.values[start_idx..end_idx].to_vec();
+            subvectors.push(SparseVector { indices, values });
+        }
+
+        let pq_code = self.vector_quantize(&subvectors, min_distance_code_index);
+        self.pq_codes.push(pq_code);
     }
 
     fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
-        if id >= self.vectors.len() {
-            return None;
-        }
+        if id < self.vectors.len() {
+            let removed_vector = self.vectors.remove(id);
 
-        let removed_vector = self.vectors.remove(id);
-        self.coarse_codes.remove(id);
-        self.pq_codes.remove(id);
+            self.coarse_codes.remove(id);
+            self.pq_codes.remove(id);
 
-        if self.vectors.is_empty() {
-            self.coarse_centroids.clear();
-            self.sub_quantizers.clear();
+            Some(removed_vector)
         } else {
-            // Optionally: rebuild the index here (`self.build()`).
-            // Can be computationally expensive, depending on the dataset.
+            None
         }
-
-        Some(removed_vector)
     }
 
     fn build(&mut self) {
@@ -474,6 +493,47 @@ mod tests {
         assert_eq!(index.pq_codes, reconstructed.pq_codes);
         assert_eq!(index.kmeans_iterations, reconstructed.kmeans_iterations);
         assert_eq!(index.tolerance, reconstructed.tolerance);
+    }
+
+    #[test]
+    fn test_add_vector() {
+        let random_seed = 42;
+        let num_subvectors = 2;
+        let num_clusters = 3;
+        let num_coarse_clusters = 2;
+        let kmeans_iterations = 10;
+        let mut index = IVFPQIndex::new(
+            num_subvectors,
+            num_clusters,
+            num_coarse_clusters,
+            kmeans_iterations,
+            0.01,
+            DistanceMetric::Euclidean,
+            random_seed,
+        );
+
+        let (vectors, _) = get_simple_vectors();
+        for vector in &vectors {
+            index.add_vector_before_build(vector);
+        }
+        index.build();
+
+        assert_eq!(index.vectors.len(), vectors.len());
+
+        let new_vector = SparseVector {
+            indices: vec![1, 3],
+            values: vec![OrderedFloat(4.0), OrderedFloat(5.0)],
+        };
+        index.add_vector(&new_vector);
+
+        assert_eq!(index.vectors.len(), vectors.len() + 1);
+        assert_eq!(index.vectors[index.vectors.len() - 1], new_vector);
+
+        let results = index.search(&new_vector, 2);
+
+        println!("{:?}", results);
+        assert_eq!(results[0].index, vectors.len());
+        assert_eq!(results[1].index, 1);
     }
 
     #[test]
