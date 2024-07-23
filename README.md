@@ -17,7 +17,6 @@
 - [x] Implement saving/loading functionality
 - [ ] Cleanup repository
   - [ ] Use similar functionalities for multi threaded and single threaded functionality
-- [ ] Adjust LinScan algorithm to have build function
 
 ## Experiments
 
