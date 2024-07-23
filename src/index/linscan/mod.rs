@@ -6,7 +6,7 @@ use std::{
 };
 
 use ordered_float::OrderedFloat;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -90,11 +90,33 @@ impl SparseIndex for LinScanIndex {
     }
 
     fn build(&mut self) {
-        // LinScan does not need to build an index
+        self.inverted_index.clear();
+
+        for (vec_id, vector) in self.vectors.iter().enumerate() {
+            for (index, value) in vector.indices.iter().zip(vector.values.iter()) {
+                self.inverted_index
+                    .entry(*index)
+                    .or_default()
+                    .push((vec_id, *value));
+            }
+        }
     }
 
     fn build_parallel(&mut self) {
-        // LinScan does not need to build an index
+        self.inverted_index.clear();
+        let inverted_index = Mutex::new(HashMap::<usize, Vec<(usize, OrderedFloat<f32>)>>::new());
+
+        self.vectors
+            .par_iter()
+            .enumerate()
+            .for_each(|(vec_id, vector)| {
+                for (index, value) in vector.indices.iter().zip(vector.values.iter()) {
+                    let mut map = inverted_index.lock().unwrap();
+                    map.entry(*index).or_default().push((vec_id, *value));
+                }
+            });
+
+        self.inverted_index = inverted_index.into_inner().unwrap();
     }
 
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
@@ -181,8 +203,9 @@ mod tests {
         let mut index = LinScanIndex::new(DistanceMetric::Cosine);
         let (data, _) = get_simple_vectors();
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
+        index.build();
 
         let bytes = bincode::serialize(&index).unwrap();
         let reconstructed: LinScanIndex = bincode::deserialize(&bytes).unwrap();
@@ -198,7 +221,7 @@ mod tests {
 
         let mut index = LinScanIndex::new(DistanceMetric::Cosine);
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
         index.build();
 
@@ -319,7 +342,7 @@ mod tests {
 
         let mut index = LinScanIndex::new(DistanceMetric::Cosine);
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
         index.build();
 
@@ -333,7 +356,7 @@ mod tests {
 
         let mut index = LinScanIndex::new(DistanceMetric::Cosine);
         for vector in &data {
-            index.add_vector(vector);
+            index.add_vector_before_build(vector);
         }
         index.build();
 
