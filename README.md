@@ -18,8 +18,6 @@
 - [ ] Cleanup repository
   - [ ] Use similar functionalities for multi threaded and single threaded functionality
 - [ ] Adjust LinScan algorithm to have build function
-- [ ] Adjust HNSW & NSW add_vector
-- [ ] Adjust IVFPQ add_vector and remove_vector
 
 ## Experiments
 
