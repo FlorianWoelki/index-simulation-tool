@@ -17,6 +17,15 @@
 - [x] Implement saving/loading functionality
 - [ ] Cleanup repository
   - [ ] Use similar functionalities for multi threaded and single threaded functionality
+   -> maybe use something like:
+
+   ```rust
+   // Initialize global pool with number of threads.
+   rayon::ThreadPoolBuilder::new()
+       .num_threads(1)
+       .build_global()
+       .unwrap();
+   ```
 
 ## Experiments
 
