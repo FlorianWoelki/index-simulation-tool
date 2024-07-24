@@ -13,6 +13,17 @@ use rand::{rngs::StdRng, SeedableRng};
 
 use crate::{data::SparseVector, index::DistanceMetric};
 
+fn initialize_centers(
+    vectors: &[SparseVector],
+    num_clusters: usize,
+    rng: &mut StdRng,
+) -> Vec<SparseVector> {
+    vectors
+        .choose_multiple(rng, num_clusters)
+        .cloned()
+        .collect()
+}
+
 pub fn kmeans(
     vectors: &Vec<SparseVector>,
     num_clusters: usize,
@@ -27,10 +38,7 @@ pub fn kmeans(
     }
 
     // Initializes the cluster centers by randomly selecting `k` nodes from the input vector.
-    let mut centers: Vec<SparseVector> = vectors
-        .choose_multiple(&mut rng, num_clusters)
-        .cloned()
-        .collect();
+    let mut centers = initialize_centers(vectors, num_clusters, &mut rng);
     let mut assignments = vec![0; vectors.len()];
 
     for _ in 0..iterations {
@@ -39,7 +47,7 @@ pub fn kmeans(
             let mut closest_distance = f32::MAX;
 
             for (j, center) in centers.iter().enumerate() {
-                let distance = node.distance(center, &metric);
+                let distance = node.distance(center, metric);
 
                 if distance < closest_distance {
                     closest = j;
@@ -82,7 +90,7 @@ pub fn kmeans(
                 values: new_values,
             };
 
-            let change = center.distance(&new_center, &metric);
+            let change = center.distance(&new_center, metric);
             max_change = max_change.max(change);
 
             *center = new_center;
@@ -93,7 +101,7 @@ pub fn kmeans(
         }
     }
 
-    return centers;
+    centers
 }
 
 pub fn kmeans_parallel(
@@ -110,10 +118,7 @@ pub fn kmeans_parallel(
     }
 
     // Initializes the cluster centers by randomly selecting `k` nodes from the input vector.
-    let mut centers: Vec<SparseVector> = vectors
-        .choose_multiple(&mut rng, num_clusters)
-        .cloned()
-        .collect();
+    let mut centers = initialize_centers(vectors, num_clusters, &mut rng);
     let assignments = Mutex::new(vec![0; vectors.len()]);
 
     for _ in 0..iterations {
@@ -122,7 +127,7 @@ pub fn kmeans_parallel(
                 .par_iter()
                 .enumerate()
                 .map(|(j, center)| {
-                    let distance = node.distance(center, &metric);
+                    let distance = node.distance(center, metric);
                     (j, distance)
                 })
                 .reduce(
@@ -186,7 +191,7 @@ pub fn kmeans_parallel(
                 values: new_values,
             };
 
-            let change = center.distance(&new_center, &metric);
+            let change = center.distance(&new_center, metric);
             {
                 let mut max_change = max_change.lock().unwrap();
                 if change > *max_change {
@@ -203,7 +208,7 @@ pub fn kmeans_parallel(
         }
     }
 
-    return centers;
+    centers
 }
 
 #[cfg(test)]
