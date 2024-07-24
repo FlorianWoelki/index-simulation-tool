@@ -8,7 +8,7 @@ use crate::{
 };
 
 pub mod logger;
-pub mod measure_macro;
+pub mod macros;
 pub mod metrics;
 
 /// Configuration for running benchmark on different dataset configurations.
