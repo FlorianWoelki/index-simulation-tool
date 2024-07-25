@@ -1,5 +1,6 @@
 use std::{collections::HashMap, time::Instant};
 
+use benchmark::macros::measure_time;
 use data::{
     generator_sparse::SparseDataGenerator,
     plot::{plot_nearest_neighbor_distances, plot_sparsity_distribution},
@@ -17,10 +18,12 @@ use index::{
 };
 
 use clap::Parser;
+use kmeans::kmeans;
 use ordered_float::{Float, OrderedFloat};
 use rand::{rngs::StdRng, thread_rng, Rng, SeedableRng};
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use sysinfo::Pid;
+use test_utils::{get_complex_vectors, get_simple_vectors};
 
 mod benchmark;
 mod data;
@@ -141,6 +144,21 @@ async fn main() {
     );
     let is_parallel = num_threads == None;
     println!("Executing in serial? {}", !is_parallel);
+
+    let start = Instant::now();
+
+    kmeans(
+        &get_complex_vectors().0,
+        10,
+        100,
+        0.1,
+        42,
+        &DistanceMetric::Euclidean,
+    );
+
+    let end = Instant::now();
+    let duration = end.duration_since(start);
+    println!("{:?}", duration);
 
     // let seed = thread_rng().gen_range(0..10000);
     // let mut annoy_index = AnnoyIndex::new(20, 20, 40, DistanceMetric::Cosine);

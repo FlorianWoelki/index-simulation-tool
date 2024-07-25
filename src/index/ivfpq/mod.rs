@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     data::{QueryResult, SparseVector},
     data_structures::min_heap::MinHeap,
-    kmeans::{kmeans, kmeans_parallel},
+    kmeans::kmeans,
 };
 
 use super::{DistanceMetric, SparseIndex};
@@ -244,7 +244,7 @@ impl SparseIndex for IVFPQIndex {
     }
 
     fn build_parallel(&mut self) {
-        self.coarse_centroids = kmeans_parallel(
+        self.coarse_centroids = kmeans(
             &self.vectors,
             self.num_coarse_clusters,
             self.kmeans_iterations,
@@ -289,7 +289,7 @@ impl SparseIndex for IVFPQIndex {
                             })
                             .collect();
 
-                        kmeans_parallel(
+                        kmeans(
                             &sub_vectors_m,
                             self.num_clusters,
                             self.kmeans_iterations,
