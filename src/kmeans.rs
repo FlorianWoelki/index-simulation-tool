@@ -5,7 +5,7 @@ use rayon::iter::{
 
 use std::{
     collections::BTreeMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
 };
 
 use ordered_float::OrderedFloat;
@@ -39,7 +39,7 @@ pub fn kmeans(
 
     // Initializes the cluster centers by randomly selecting `k` nodes from the input vector.
     let mut centers = initialize_centers(vectors, num_clusters, &mut rng);
-    let assignments = Mutex::new(vec![0; vectors.len()]);
+    let assignments = Arc::new(RwLock::new(vec![0; vectors.len()]));
 
     for _ in 0..iterations {
         vectors.par_iter().enumerate().for_each(|(i, node)| {
@@ -61,18 +61,18 @@ pub fn kmeans(
                     },
                 );
 
-            assignments.lock().unwrap()[i] = closest;
+            assignments.write().unwrap()[i] = closest;
         });
 
         // Recalculate the cluster centers based on the new assignments.
         let new_centers: Vec<Mutex<BTreeMap<usize, f32>>> = (0..num_clusters)
             .map(|_| Mutex::new(BTreeMap::new()))
             .collect();
-        let counts = Mutex::new(vec![0; num_clusters]);
+        let counts = Arc::new(Mutex::new(vec![0; num_clusters]));
 
         vectors
             .par_iter()
-            .zip(assignments.lock().unwrap().par_iter())
+            .zip(assignments.read().unwrap().par_iter())
             .for_each(|(node, &cluster)| {
                 let mut center = new_centers[cluster].lock().unwrap();
                 for (index, &value) in node.indices.iter().zip(node.values.iter()) {
@@ -102,9 +102,6 @@ pub fn kmeans(
                 new_indices.push(index);
                 new_values.push(OrderedFloat(sum_value / counts[i] as f32));
             }
-
-            drop(counts);
-            drop(new_center);
 
             let new_center = SparseVector {
                 indices: new_indices,
