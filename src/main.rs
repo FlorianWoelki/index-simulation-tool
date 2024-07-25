@@ -125,6 +125,23 @@ async fn plot_artificially_generated_data() {
 
 #[tokio::main]
 async fn main() {
+    // Initialize global pool with number of threads.
+    let num_threads: Option<usize> = Some(1);
+    num_threads.map(|nt| {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(nt)
+            .build_global()
+            .unwrap();
+    });
+
+    println!(
+        "Using {}/{} threads",
+        rayon::current_num_threads(),
+        rayon::max_num_threads()
+    );
+    let is_parallel = num_threads == None;
+    println!("Executing in serial? {}", !is_parallel);
+
     // let seed = thread_rng().gen_range(0..10000);
     // let mut annoy_index = AnnoyIndex::new(20, 20, 40, DistanceMetric::Cosine);
     // let mut simhash_index = LSHIndex::new(20, 4, LSHHashType::SimHash, DistanceMetric::Cosine);
