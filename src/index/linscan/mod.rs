@@ -91,19 +91,6 @@ impl SparseIndex for LinScanIndex {
 
     fn build(&mut self) {
         self.inverted_index.clear();
-
-        for (vec_id, vector) in self.vectors.iter().enumerate() {
-            for (index, value) in vector.indices.iter().zip(vector.values.iter()) {
-                self.inverted_index
-                    .entry(*index)
-                    .or_default()
-                    .push((vec_id, *value));
-            }
-        }
-    }
-
-    fn build_parallel(&mut self) {
-        self.inverted_index.clear();
         let inverted_index = Mutex::new(HashMap::<usize, Vec<(usize, OrderedFloat<f32>)>>::new());
 
         self.vectors
@@ -119,38 +106,10 @@ impl SparseIndex for LinScanIndex {
         self.inverted_index = inverted_index.into_inner().unwrap();
     }
 
+    // TODO: Can be removed
+    fn build_parallel(&mut self) {}
+
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        let mut scores = vec![0.0; self.vectors.len()];
-
-        for (index, value) in query_vector.indices.iter().zip(query_vector.values.iter()) {
-            if let Some(vectors) = self.inverted_index.get(index) {
-                vectors.iter().for_each(|(vec_id, vec_value)| {
-                    scores[*vec_id] += value.into_inner() * vec_value.into_inner();
-                });
-            }
-        }
-
-        let mut heap: MinHeap<QueryResult> = MinHeap::new();
-        for (index, &score) in scores.iter().enumerate() {
-            if heap.len() < k || score > heap.peek().unwrap().score.into_inner() {
-                heap.push(
-                    QueryResult {
-                        //vector: self.vectors[index].clone(),
-                        index,
-                        score: OrderedFloat(score),
-                    },
-                    OrderedFloat(score),
-                );
-                if heap.len() > k {
-                    heap.pop();
-                }
-            }
-        }
-
-        heap.into_sorted_vec()
-    }
-
-    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let scores = Mutex::new(vec![0.0; self.vectors.len()]);
 
         for (index, value) in query_vector.indices.iter().zip(query_vector.values.iter()) {
@@ -179,6 +138,11 @@ impl SparseIndex for LinScanIndex {
         }
 
         heap.into_sorted_vec()
+    }
+
+    // TODO: Can be removed
+    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+        vec![]
     }
 
     fn save(&self, file: &mut File) {
@@ -213,22 +177,6 @@ mod tests {
         assert_eq!(index.vectors, reconstructed.vectors);
         assert_eq!(index.metric, reconstructed.metric);
         assert_eq!(index.inverted_index, reconstructed.inverted_index);
-    }
-
-    #[test]
-    fn test_linscan_parallel() {
-        let (data, query_vectors) = get_simple_vectors();
-
-        let mut index = LinScanIndex::new(DistanceMetric::Cosine);
-        for vector in &data {
-            index.add_vector_before_build(vector);
-        }
-        index.build();
-
-        let neighbors = index.search_parallel(&query_vectors[0], 2);
-        println!("Nearest neighbors: {:?}", neighbors);
-
-        assert!(true);
     }
 
     #[test]

@@ -119,7 +119,7 @@ impl SparseIndex for IndexType {
             IndexType::IVFPQ(index) => index.build_parallel(),
             IndexType::HNSW(index) => index.build_parallel(),
             IndexType::NSW(index) => index.build_parallel(),
-            IndexType::LinScan(index) => index.build_parallel(),
+            IndexType::LinScan(index) => index.build(),
         }
     }
 
@@ -143,7 +143,7 @@ impl SparseIndex for IndexType {
             IndexType::IVFPQ(index) => index.search_parallel(query_vector, k),
             IndexType::HNSW(index) => index.search_parallel(query_vector, k),
             IndexType::NSW(index) => index.search_parallel(query_vector, k),
-            IndexType::LinScan(index) => index.search_parallel(query_vector, k),
+            IndexType::LinScan(index) => index.search(query_vector, k),
         }
     }
 
