@@ -126,17 +126,20 @@ async fn plot_artificially_generated_data() {
         .show();
 }
 
-#[tokio::main]
-async fn main() {
+fn set_num_threads(num_threads: Option<usize>) {
     // Initialize global pool with number of threads.
-    let num_threads: Option<usize> = Some(1);
     num_threads.map(|nt| {
         rayon::ThreadPoolBuilder::new()
             .num_threads(nt)
             .build_global()
             .unwrap();
     });
+}
 
+#[tokio::main]
+async fn main() {
+    let num_threads = Some(1);
+    set_num_threads(num_threads);
     println!(
         "Using {}/{} threads",
         rayon::current_num_threads(),
