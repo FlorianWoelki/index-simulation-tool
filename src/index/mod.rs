@@ -115,7 +115,7 @@ impl SparseIndex for IndexType {
         match self {
             IndexType::LSH(index) => index.build_parallel(),
             IndexType::Annoy(index) => index.build_parallel(),
-            IndexType::PQ(index) => index.build_parallel(),
+            IndexType::PQ(index) => index.build(),
             IndexType::IVFPQ(index) => index.build_parallel(),
             IndexType::HNSW(index) => index.build_parallel(),
             IndexType::NSW(index) => index.build_parallel(),
@@ -139,7 +139,7 @@ impl SparseIndex for IndexType {
         match self {
             IndexType::LSH(index) => index.search_parallel(query_vector, k),
             IndexType::Annoy(index) => index.search_parallel(query_vector, k),
-            IndexType::PQ(index) => index.search_parallel(query_vector, k),
+            IndexType::PQ(index) => index.search(query_vector, k),
             IndexType::IVFPQ(index) => index.search_parallel(query_vector, k),
             IndexType::HNSW(index) => index.search_parallel(query_vector, k),
             IndexType::NSW(index) => index.search_parallel(query_vector, k),
