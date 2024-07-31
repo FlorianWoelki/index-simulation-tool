@@ -188,62 +188,6 @@ impl SparseIndex for IVFPQIndex {
     }
 
     fn build(&mut self) {
-        // Perform coarse quantization using k-means clustering while assigning
-        // each vector to the nearest centroid.
-        self.coarse_centroids = kmeans(
-            &self.vectors,
-            self.num_coarse_clusters,
-            self.kmeans_iterations,
-            self.tolerance,
-            self.random_seed,
-            &self.metric,
-        );
-        self.coarse_codes = self.encode_coarse(&self.vectors);
-
-        // Perform product quantization within each Voronoi cell where each sub-vector
-        // is quantized separately.
-        self.sub_quantizers = vec![Vec::new(); self.num_coarse_clusters];
-        for c in 0..self.num_coarse_clusters {
-            let mut cluster_vectors: Vec<SparseVector> = Vec::new();
-            for (i, &code) in self.coarse_codes.iter().enumerate() {
-                if code == c {
-                    cluster_vectors.push(self.vectors[i].clone());
-                }
-            }
-
-            if cluster_vectors.is_empty() {
-                continue;
-            }
-
-            let mut cluster_codewords = Vec::new();
-            for m in 0..self.num_subvectors {
-                let mut sub_vectors_m: Vec<SparseVector> = Vec::new();
-                for vec in &cluster_vectors {
-                    let sub_vec_dims = vec.indices.len() / self.num_subvectors;
-                    let start_idx = m * sub_vec_dims;
-                    let end_idx = ((m + 1) * sub_vec_dims).min(vec.indices.len());
-                    let indices = vec.indices[start_idx..end_idx].to_vec();
-                    let values = vec.values[start_idx..end_idx].to_vec();
-                    sub_vectors_m.push(SparseVector { indices, values });
-                }
-
-                let codewords_m = kmeans(
-                    &sub_vectors_m,
-                    self.num_clusters,
-                    self.kmeans_iterations,
-                    self.tolerance,
-                    self.random_seed,
-                    &self.metric,
-                );
-                cluster_codewords.push(codewords_m);
-            }
-            self.sub_quantizers[c] = cluster_codewords;
-        }
-
-        self.pq_codes = self.encode(&self.vectors);
-    }
-
-    fn build_parallel(&mut self) {
         self.coarse_centroids = kmeans(
             &self.vectors,
             self.num_coarse_clusters,
@@ -305,68 +249,6 @@ impl SparseIndex for IVFPQIndex {
     }
 
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        let mut coarse_distances: Vec<(usize, f32)> = self
-            .coarse_centroids
-            .iter()
-            .enumerate()
-            .map(|(i, coarse_codeword)| (i, query_vector.distance(coarse_codeword, &self.metric)))
-            .collect();
-        coarse_distances.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-
-        let sub_vec_dims = query_vector.indices.len() / self.num_subvectors;
-        let mut scores: Vec<(f32, usize)> = Vec::with_capacity(self.vectors.len());
-
-        for &(coarse_index, _) in coarse_distances.iter().take(k) {
-            for (n, &coarse_code) in self.coarse_codes.iter().enumerate() {
-                if coarse_code != coarse_index {
-                    continue;
-                }
-
-                let distance: f32 = (0..self.num_subvectors)
-                    .map(|m| {
-                        let start_idx = m * sub_vec_dims;
-                        let end_idx = ((m + 1) * sub_vec_dims).min(query_vector.indices.len());
-                        let query_sub = SparseVector {
-                            indices: query_vector.indices[start_idx..end_idx].to_vec(),
-                            values: query_vector.values[start_idx..end_idx].to_vec(),
-                        };
-                        query_sub.distance(
-                            &self.sub_quantizers[coarse_index][m][self.pq_codes[n][m]],
-                            &self.metric,
-                        )
-                    })
-                    .sum();
-
-                scores.push((distance, n));
-            }
-        }
-
-        let mut heap: MinHeap<QueryResult> = MinHeap::new();
-        for (score, index) in scores.iter() {
-            if heap.len() < k || *score > heap.peek().unwrap().score.into_inner() {
-                heap.push(
-                    QueryResult {
-                        index: *index,
-                        score: OrderedFloat(-score),
-                    },
-                    OrderedFloat(-score),
-                );
-                if heap.len() > k {
-                    heap.pop();
-                }
-            }
-        }
-
-        heap.into_sorted_vec()
-            .iter()
-            .map(|query_result| QueryResult {
-                index: query_result.index,
-                score: OrderedFloat(-query_result.score.into_inner()),
-            })
-            .collect()
-    }
-
-    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let mut coarse_distances: Vec<(usize, f32)> = self
             .coarse_centroids
             .par_iter()
@@ -435,6 +317,14 @@ impl SparseIndex for IVFPQIndex {
                 score: OrderedFloat(-query_result.score.into_inner()),
             })
             .collect()
+    }
+
+    // TODO: Remove this
+    fn build_parallel(&mut self) {}
+
+    // TODO: Remove this
+    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+        vec![]
     }
 
     fn save(&self, file: &mut File) {
@@ -534,62 +424,6 @@ mod tests {
         println!("{:?}", results);
         assert_eq!(results[0].index, vectors.len());
         assert_eq!(results[1].index, 1);
-    }
-
-    #[test]
-    fn test_search_parallel() {
-        let random_seed = 42;
-        let num_subvectors = 2;
-        let num_clusters = 3;
-        let num_coarse_clusters = 2;
-        let kmeans_iterations = 10;
-        let mut index = IVFPQIndex::new(
-            num_subvectors,
-            num_clusters,
-            num_coarse_clusters,
-            kmeans_iterations,
-            0.01,
-            DistanceMetric::Euclidean,
-            random_seed,
-        );
-
-        let (data, query_vectors) = get_simple_vectors();
-
-        for vector in &data {
-            index.add_vector_before_build(vector);
-        }
-        index.build();
-
-        let results = index.search_parallel(&query_vectors[0], 2);
-        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
-    }
-
-    #[test]
-    fn test_build_parallel() {
-        let random_seed = 42;
-        let num_subvectors = 2;
-        let num_clusters = 3;
-        let num_coarse_clusters = 2;
-        let kmeans_iterations = 10;
-        let mut index = IVFPQIndex::new(
-            num_subvectors,
-            num_clusters,
-            num_coarse_clusters,
-            kmeans_iterations,
-            0.01,
-            DistanceMetric::Euclidean,
-            random_seed,
-        );
-
-        let (data, query_vectors) = get_simple_vectors();
-
-        for vector in &data {
-            index.add_vector_before_build(vector);
-        }
-        index.build_parallel();
-
-        let results = index.search(&query_vectors[0], 2);
-        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
     }
 
     #[test]
