@@ -27,6 +27,8 @@
        .unwrap();
    ```
 
+- [ ] Investigate why IVFPQ is so slow
+
 ## Experiments
 
 - [ ] Define experiments that are going to be created
