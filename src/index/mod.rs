@@ -114,7 +114,7 @@ impl SparseIndex for IndexType {
     fn build_parallel(&mut self) {
         match self {
             IndexType::LSH(index) => index.build_parallel(),
-            IndexType::Annoy(index) => index.build_parallel(),
+            IndexType::Annoy(index) => index.build(),
             IndexType::PQ(index) => index.build(),
             IndexType::IVFPQ(index) => index.build(),
             IndexType::HNSW(index) => index.build_parallel(),
@@ -138,7 +138,7 @@ impl SparseIndex for IndexType {
     fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         match self {
             IndexType::LSH(index) => index.search_parallel(query_vector, k),
-            IndexType::Annoy(index) => index.search_parallel(query_vector, k),
+            IndexType::Annoy(index) => index.search(query_vector, k),
             IndexType::PQ(index) => index.search(query_vector, k),
             IndexType::IVFPQ(index) => index.search(query_vector, k),
             IndexType::HNSW(index) => index.search_parallel(query_vector, k),

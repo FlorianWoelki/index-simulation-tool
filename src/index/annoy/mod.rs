@@ -149,19 +149,9 @@ impl SparseIndex for AnnoyIndex {
         Some(removed_vector)
     }
 
+    fn build_parallel(&mut self) {}
+
     fn build(&mut self) {
-        let mut trees = Vec::with_capacity(self.n_trees);
-
-        for _ in 0..self.n_trees {
-            let indices: Vec<usize> = (0..self.vectors.len()).collect();
-            let root = Node::build(&self.vectors, &indices, self.max_points, &self.metric);
-            trees.push(Tree { root });
-        }
-
-        self.trees = trees;
-    }
-
-    fn build_parallel(&mut self) {
         let trees: Vec<Tree> = (0..self.n_trees)
             .into_par_iter()
             .map(|_| {
@@ -175,6 +165,10 @@ impl SparseIndex for AnnoyIndex {
     }
 
     fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+        vec![]
+    }
+
+    fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let candidates = Mutex::new(HashSet::new());
 
         self.trees.par_iter().for_each(|tree| {
@@ -239,59 +233,6 @@ impl SparseIndex for AnnoyIndex {
             .collect()
     }
 
-    fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        let mut candidates = HashSet::new();
-
-        // Traverse each tree to collect candidate points.
-        for tree in &self.trees {
-            let mut nodes = vec![(0.0, &tree.root)];
-            let mut visited = 0;
-
-            while let Some((_, node)) = nodes.pop() {
-                visited += 1;
-                if visited > self.search_k {
-                    break;
-                }
-                candidates.extend(&node.indices);
-
-                if let Some(ref left) = node.left {
-                    nodes.push((0.0, left));
-                }
-                if let Some(ref right) = node.right {
-                    nodes.push((0.0, right));
-                }
-            }
-        }
-
-        let candidates: Vec<_> = candidates.into_iter().collect();
-
-        let mut heap: MinHeap<QueryResult> = MinHeap::new();
-        // Evaluate distance for each candidate and maintain max-heap.
-        for point in candidates {
-            let distance = OrderedFloat(query_vector.distance(&self.vectors[point], &self.metric));
-            if heap.len() < k || distance > heap.peek().unwrap().score {
-                heap.push(
-                    QueryResult {
-                        index: point,
-                        score: -distance,
-                    },
-                    -distance,
-                );
-                if heap.len() > k {
-                    heap.pop();
-                }
-            }
-        }
-
-        heap.into_sorted_vec()
-            .iter()
-            .map(|query_result| QueryResult {
-                index: query_result.index,
-                score: OrderedFloat(-query_result.score.into_inner()),
-            })
-            .collect()
-    }
-
     fn save(&self, file: &mut File) {
         let writer = BufWriter::new(file);
         bincode::serialize_into(writer, &self).expect("Failed to serialize");
@@ -326,32 +267,6 @@ mod tests {
         assert_eq!(index.n_trees, reconstructed.n_trees);
         assert_eq!(index.search_k, reconstructed.search_k);
         assert_eq!(index.max_points, reconstructed.max_points);
-    }
-
-    #[test]
-    fn test_search_parallel() {
-        let (data, query_vectors) = get_simple_vectors();
-        let mut index = AnnoyIndex::new(3, 2, 10, DistanceMetric::Cosine);
-        for vector in &data {
-            index.add_vector_before_build(vector);
-        }
-        index.build();
-
-        let results = index.search_parallel(&query_vectors[0], 2);
-        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
-    }
-
-    #[test]
-    fn test_build_parallel() {
-        let (data, query_vectors) = get_simple_vectors();
-        let mut index = AnnoyIndex::new(3, 2, 10, DistanceMetric::Cosine);
-        for vector in &data {
-            index.add_vector_before_build(vector);
-        }
-        index.build_parallel();
-
-        let results = index.search(&query_vectors[0], 2);
-        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
     }
 
     #[test]
