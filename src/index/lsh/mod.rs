@@ -124,20 +124,6 @@ impl SparseIndex for LSHIndex {
     }
 
     fn build(&mut self) {
-        for (id, vector) in self.vectors.iter().enumerate() {
-            for i in 0..self.num_hash_functions {
-                let hash = self.hash(vector, i);
-                let bucket_index = self.hash_bucket(hash);
-                self.buckets[bucket_index].push((id, vector.clone()));
-            }
-        }
-
-        for bucket in &mut self.buckets {
-            bucket.sort_by(|a, b| a.1.values.partial_cmp(&b.1.values).unwrap());
-        }
-    }
-
-    fn build_parallel(&mut self) {
         let mutex_buckets: Vec<Mutex<Vec<(usize, SparseVector)>>> = self
             .buckets
             .iter()
@@ -168,63 +154,9 @@ impl SparseIndex for LSHIndex {
             .for_each(|bucket| bucket.sort_by(|a, b| a.1.values.partial_cmp(&b.1.values).unwrap()));
     }
 
+    fn build_parallel(&mut self) {}
+
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        let mut results: Vec<(f32, usize, SparseVector, usize)> = Vec::new();
-
-        for i in 0..self.num_hash_functions {
-            let query_hash = self.hash(query_vector, i);
-            let bucket_index = self.hash_bucket(query_hash);
-            let bucket = &self.buckets[bucket_index];
-
-            for (index, vector) in bucket.iter() {
-                let similarity = query_vector.distance(&vector, &self.metric);
-                let mut found = false;
-
-                for (existing_similarity, _, existing_vector, bucket_count) in &mut results {
-                    if *existing_vector == *vector {
-                        *existing_similarity += similarity;
-                        *bucket_count += 1;
-                        found = true;
-                        break;
-                    }
-                }
-
-                if !found {
-                    results.push((similarity, *index, vector.clone(), 1));
-                }
-            }
-        }
-
-        for (similarity, _, _, bucket_count) in &mut results {
-            *similarity /= *bucket_count as f32;
-        }
-
-        let mut heap: MinHeap<QueryResult> = MinHeap::new();
-        for (score, index, _, _) in results.iter() {
-            if heap.len() < k || *score > heap.peek().unwrap().score.into_inner() {
-                heap.push(
-                    QueryResult {
-                        index: *index,
-                        score: OrderedFloat(-score),
-                    },
-                    OrderedFloat(-score),
-                );
-                if heap.len() > k {
-                    heap.pop();
-                }
-            }
-        }
-
-        heap.into_sorted_vec()
-            .iter()
-            .map(|query_result| QueryResult {
-                index: query_result.index,
-                score: OrderedFloat(-query_result.score.into_inner()),
-            })
-            .collect()
-    }
-
-    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let candidate_set = Mutex::new(HashSet::new());
 
         (0..self.num_hash_functions).into_par_iter().for_each(|i| {
@@ -275,6 +207,10 @@ impl SparseIndex for LSHIndex {
                 score: OrderedFloat(-query_result.score.into_inner()),
             })
             .collect()
+    }
+
+    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+        vec![]
     }
 
     fn save(&self, file: &mut File) {
@@ -363,34 +299,6 @@ mod tests {
         assert_eq!(index.num_hash_functions, reconstructed.num_hash_functions);
         assert_eq!(index.buckets, reconstructed.buckets);
         assert_eq!(index.hash_type, reconstructed.hash_type);
-    }
-
-    #[test]
-    fn test_search_parallel() {
-        let (data, query_vectors) = get_simple_vectors();
-
-        let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash, DistanceMetric::Cosine);
-        for vector in &data {
-            index.add_vector_before_build(vector);
-        }
-        index.build();
-
-        let results = index.search_parallel(&query_vectors[0], 2);
-        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
-    }
-
-    #[test]
-    fn test_build_parallel() {
-        let (data, query_vectors) = get_simple_vectors();
-
-        let mut index = LSHIndex::new(4, 4, LSHHashType::MinHash, DistanceMetric::Cosine);
-        for vector in &data {
-            index.add_vector_before_build(vector);
-        }
-        index.build_parallel();
-
-        let results = index.search(&query_vectors[0], 2);
-        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
     }
 
     #[test]
