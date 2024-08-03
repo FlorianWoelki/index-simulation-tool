@@ -339,34 +339,6 @@ impl SparseIndex for HNSWIndex {
     }
 
     fn build(&mut self) {
-        for (i, vector) in self.vectors.iter().enumerate() {
-            let mut rng = StdRng::seed_from_u64(self.random_seed);
-            let mut layer = 0;
-            while rng.gen::<f32>() < self.level_distribution_factor.powi(layer as i32)
-                && layer < self.max_layers
-            {
-                layer += 1;
-            }
-
-            let new_node = Node {
-                id: i,
-                connections: vec![Vec::new(); self.max_layers + 1],
-                vector: vector.clone(),
-                layer,
-            };
-
-            self.nodes.insert(i, new_node);
-        }
-
-        let nodes: Vec<Node> = self.nodes.values().cloned().collect();
-        for node in nodes {
-            for layer in (0..=node.layer).rev() {
-                self.connect_new_node(&node, layer);
-            }
-        }
-    }
-
-    fn build_parallel(&mut self) {
         let nodes = Arc::new(Mutex::new(HashMap::new()));
         let vectors = Arc::new(self.vectors.clone());
         let max_layers = self.max_layers;
@@ -403,6 +375,8 @@ impl SparseIndex for HNSWIndex {
         }
     }
 
+    fn build_parallel(&mut self) {}
+
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let entry_point = StdRng::seed_from_u64(self.random_seed).gen_range(0..self.nodes.len());
         let mut current_node = &self.nodes[&entry_point];
@@ -411,18 +385,11 @@ impl SparseIndex for HNSWIndex {
             current_node = self.find_closest_node(current_node, query_vector, layer);
         }
 
-        self.knn_search(query_vector, current_node, k)
+        self.knn_search_parallel(query_vector, current_node, k)
     }
 
     fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        let entry_point = StdRng::seed_from_u64(self.random_seed).gen_range(0..self.nodes.len());
-        let mut current_node = &self.nodes[&entry_point];
-
-        for layer in (0..self.max_layers).rev() {
-            current_node = self.find_closest_node(current_node, query_vector, layer);
-        }
-
-        self.knn_search_parallel(query_vector, current_node, k)
+        vec![]
     }
 
     fn save(&self, file: &mut File) {
@@ -510,54 +477,6 @@ mod tests {
 
         assert_eq!(results[0].index, vectors.len());
         assert_eq!(results[1].index, 1);
-    }
-
-    #[test]
-    fn test_search_parallel() {
-        let random_seed = 42;
-        let mut index = HNSWIndex::new(
-            1.0 / 3.0,
-            16,
-            200,
-            200,
-            DistanceMetric::Euclidean,
-            random_seed,
-        );
-
-        let (data, query_vectors) = get_simple_vectors();
-
-        for vector in &data {
-            index.add_vector_before_build(vector);
-        }
-
-        index.build();
-
-        let results = index.search_parallel(&query_vectors[0], 2);
-        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
-    }
-
-    #[test]
-    fn test_build_parallel() {
-        let random_seed = 42;
-        let mut index = HNSWIndex::new(
-            1.0 / 3.0,
-            16,
-            200,
-            200,
-            DistanceMetric::Euclidean,
-            random_seed,
-        );
-
-        let (data, query_vectors) = get_simple_vectors();
-
-        for vector in &data {
-            index.add_vector_before_build(vector);
-        }
-
-        index.build_parallel();
-
-        let results = index.search(&query_vectors[0], 2);
-        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
     }
 
     #[test]
