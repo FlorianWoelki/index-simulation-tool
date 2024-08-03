@@ -44,9 +44,7 @@ pub trait SparseIndex {
     fn add_vector(&mut self, vector: &SparseVector);
     fn remove_vector(&mut self, id: usize) -> Option<SparseVector>;
     fn build(&mut self);
-    fn build_parallel(&mut self);
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult>;
-    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult>;
 
     fn save(&self, file: &mut File);
     fn load(&self, file: &File) -> Self;
@@ -111,31 +109,7 @@ impl SparseIndex for IndexType {
         }
     }
 
-    fn build_parallel(&mut self) {
-        match self {
-            IndexType::LSH(index) => index.build(),
-            IndexType::Annoy(index) => index.build(),
-            IndexType::PQ(index) => index.build(),
-            IndexType::IVFPQ(index) => index.build(),
-            IndexType::HNSW(index) => index.build(),
-            IndexType::NSW(index) => index.build(),
-            IndexType::LinScan(index) => index.build(),
-        }
-    }
-
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        match self {
-            IndexType::LSH(index) => index.search(query_vector, k),
-            IndexType::Annoy(index) => index.search(query_vector, k),
-            IndexType::PQ(index) => index.search(query_vector, k),
-            IndexType::IVFPQ(index) => index.search(query_vector, k),
-            IndexType::HNSW(index) => index.search(query_vector, k),
-            IndexType::NSW(index) => index.search(query_vector, k),
-            IndexType::LinScan(index) => index.search(query_vector, k),
-        }
-    }
-
-    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         match self {
             IndexType::LSH(index) => index.search(query_vector, k),
             IndexType::Annoy(index) => index.search(query_vector, k),

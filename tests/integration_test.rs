@@ -45,11 +45,11 @@ mod tests {
             index.add_vector_before_build(&vector);
         }
 
-        index.build_parallel();
+        index.build();
 
         let query_vector = vectors[500].clone();
 
-        let results = index.search_parallel(&query_vector, 10);
+        let results = index.search(&query_vector, 10);
 
         assert_eq!(results.len(), 10);
         assert_eq!(results[0].index, 500);

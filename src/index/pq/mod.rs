@@ -204,9 +204,6 @@ impl SparseIndex for PQIndex {
             .collect();
     }
 
-    // TODO: Remove this
-    fn build_parallel(&mut self) {}
-
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let sub_vec_dims = query_vector.indices.len() / self.num_subvectors;
         let remaining_dims = query_vector.indices.len() % self.num_subvectors;
@@ -269,11 +266,6 @@ impl SparseIndex for PQIndex {
                 score: -query_result.score,
             })
             .collect()
-    }
-
-    // TODO: Remove this
-    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        vec![]
     }
 
     fn save(&self, file: &mut File) {

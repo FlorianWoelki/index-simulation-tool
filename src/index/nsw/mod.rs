@@ -279,8 +279,6 @@ impl SparseIndex for NSWIndex {
         self.graph = Arc::try_unwrap(graph).unwrap().into_inner().unwrap();
     }
 
-    fn build_parallel(&mut self) {}
-
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let nearest_neighbors =
             self.knn_search_parallel(query_vector, self.graph.len(), k, &self.graph);
@@ -291,10 +289,6 @@ impl SparseIndex for NSWIndex {
                 score: OrderedFloat(query_vector.distance(&self.vectors[idx], &self.metric)),
             })
             .collect()
-    }
-
-    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        vec![]
     }
 
     fn save(&self, file: &mut File) {

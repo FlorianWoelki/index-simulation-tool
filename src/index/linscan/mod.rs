@@ -106,9 +106,6 @@ impl SparseIndex for LinScanIndex {
         self.inverted_index = inverted_index.into_inner().unwrap();
     }
 
-    // TODO: Can be removed
-    fn build_parallel(&mut self) {}
-
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let scores = Mutex::new(vec![0.0; self.vectors.len()]);
 
@@ -138,11 +135,6 @@ impl SparseIndex for LinScanIndex {
         }
 
         heap.into_sorted_vec()
-    }
-
-    // TODO: Can be removed
-    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        vec![]
     }
 
     fn save(&self, file: &mut File) {

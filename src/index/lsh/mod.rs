@@ -154,8 +154,6 @@ impl SparseIndex for LSHIndex {
             .for_each(|bucket| bucket.sort_by(|a, b| a.1.values.partial_cmp(&b.1.values).unwrap()));
     }
 
-    fn build_parallel(&mut self) {}
-
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let candidate_set = Mutex::new(HashSet::new());
 
@@ -207,10 +205,6 @@ impl SparseIndex for LSHIndex {
                 score: OrderedFloat(-query_result.score.into_inner()),
             })
             .collect()
-    }
-
-    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        vec![]
     }
 
     fn save(&self, file: &mut File) {

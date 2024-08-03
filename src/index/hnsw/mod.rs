@@ -375,8 +375,6 @@ impl SparseIndex for HNSWIndex {
         }
     }
 
-    fn build_parallel(&mut self) {}
-
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let entry_point = StdRng::seed_from_u64(self.random_seed).gen_range(0..self.nodes.len());
         let mut current_node = &self.nodes[&entry_point];
@@ -386,10 +384,6 @@ impl SparseIndex for HNSWIndex {
         }
 
         self.knn_search_parallel(query_vector, current_node, k)
-    }
-
-    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        vec![]
     }
 
     fn save(&self, file: &mut File) {

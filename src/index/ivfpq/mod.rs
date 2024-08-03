@@ -319,14 +319,6 @@ impl SparseIndex for IVFPQIndex {
             .collect()
     }
 
-    // TODO: Remove this
-    fn build_parallel(&mut self) {}
-
-    // TODO: Remove this
-    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        vec![]
-    }
-
     fn save(&self, file: &mut File) {
         let writer = BufWriter::new(file);
         bincode::serialize_into(writer, &self).expect("Failed to serialize");

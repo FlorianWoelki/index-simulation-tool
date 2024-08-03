@@ -149,8 +149,6 @@ impl SparseIndex for AnnoyIndex {
         Some(removed_vector)
     }
 
-    fn build_parallel(&mut self) {}
-
     fn build(&mut self) {
         let trees: Vec<Tree> = (0..self.n_trees)
             .into_par_iter()
@@ -162,10 +160,6 @@ impl SparseIndex for AnnoyIndex {
             .collect();
 
         self.trees = trees;
-    }
-
-    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        vec![]
     }
 
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
