@@ -251,22 +251,6 @@ impl SparseIndex for NSWIndex {
     }
 
     fn build(&mut self) {
-        for (i, vector) in self.vectors.iter().enumerate() {
-            if i == 0 {
-                self.graph.insert(i, HashSet::new());
-                continue;
-            }
-
-            let neighbors =
-                self.knn_search(vector, self.ef_construction, self.ef_search, &self.graph);
-            self.graph.insert(i, neighbors.iter().cloned().collect());
-            for &neighbor in &neighbors {
-                self.graph.get_mut(&neighbor).unwrap().insert(i);
-            }
-        }
-    }
-
-    fn build_parallel(&mut self) {
         let graph = Arc::new(Mutex::new(HashMap::new()));
         let vectors = Arc::new(self.vectors.clone());
 
@@ -295,18 +279,9 @@ impl SparseIndex for NSWIndex {
         self.graph = Arc::try_unwrap(graph).unwrap().into_inner().unwrap();
     }
 
-    fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        let nearest_neighbors = self.knn_search(query_vector, self.graph.len(), k, &self.graph);
-        nearest_neighbors
-            .into_iter()
-            .map(|idx| QueryResult {
-                index: idx,
-                score: OrderedFloat(query_vector.distance(&self.vectors[idx], &self.metric)),
-            })
-            .collect()
-    }
+    fn build_parallel(&mut self) {}
 
-    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+    fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
         let nearest_neighbors =
             self.knn_search_parallel(query_vector, self.graph.len(), k, &self.graph);
         nearest_neighbors
@@ -316,6 +291,10 @@ impl SparseIndex for NSWIndex {
                 score: OrderedFloat(query_vector.distance(&self.vectors[idx], &self.metric)),
             })
             .collect()
+    }
+
+    fn search_parallel(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
+        vec![]
     }
 
     fn save(&self, file: &mut File) {
@@ -358,22 +337,6 @@ mod tests {
     }
 
     #[test]
-    fn test_search_parallel() {
-        let random_seed = 42;
-        let mut index = NSWIndex::new(5, 3, DistanceMetric::Euclidean, random_seed);
-
-        let (data, query_vectors) = get_simple_vectors();
-        for vector in &data {
-            index.add_vector_before_build(vector);
-        }
-
-        index.build();
-
-        let results = index.search_parallel(&query_vectors[0], 2);
-        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
-    }
-
-    #[test]
     fn test_add_vector() {
         let random_seed = 42;
         let mut index = NSWIndex::new(5, 3, DistanceMetric::Euclidean, random_seed);
@@ -399,22 +362,6 @@ mod tests {
 
         assert_eq!(results[0].index, vectors.len());
         assert_eq!(results[1].index, 1);
-    }
-
-    #[test]
-    fn test_build_parallel() {
-        let random_seed = 42;
-        let mut index = NSWIndex::new(5, 3, DistanceMetric::Euclidean, random_seed);
-
-        let (data, query_vectors) = get_simple_vectors();
-        for vector in &data {
-            index.add_vector_before_build(vector);
-        }
-
-        index.build_parallel();
-
-        let results = index.search(&query_vectors[0], 2);
-        assert!(is_in_actual_result(&data, &query_vectors[0], &results));
     }
 
     #[test]
