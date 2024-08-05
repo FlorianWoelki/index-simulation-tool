@@ -79,63 +79,56 @@ impl IVFPQIndex {
     }
 
     fn encode_coarse(&self, vectors: &Vec<SparseVector>) -> Vec<usize> {
-        let mut coarse_codes: Vec<usize> = Vec::new();
-        for vec in vectors {
-            let mut min_distance = f32::MAX;
-            let mut min_distance_code_index = 0;
-
-            for (i, coarse_codeword) in self.coarse_centroids.iter().enumerate() {
-                let distance = vec.distance(&coarse_codeword, &self.metric);
-                if distance < min_distance {
-                    min_distance = distance;
-                    min_distance_code_index = i;
-                }
-            }
-
-            coarse_codes.push(min_distance_code_index);
-        }
-
-        coarse_codes
+        vectors
+            .par_iter()
+            .map(|vec| {
+                self.coarse_centroids
+                    .iter()
+                    .enumerate()
+                    .map(|(i, coarse_codeword)| (i, vec.distance(coarse_codeword, &self.metric)))
+                    .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+                    .map(|(i, _)| i)
+                    .unwrap_or(0)
+            })
+            .collect()
     }
 
     fn encode(&self, vectors: &Vec<SparseVector>) -> Vec<Vec<usize>> {
-        let mut vector_codes: Vec<Vec<usize>> = Vec::new();
-        for (i, vec) in vectors.iter().enumerate() {
-            let coarse_code = self.coarse_codes[i];
-            let sub_vec_dims: usize = vec.indices.len() / self.num_subvectors;
-            let mut subvectors: Vec<SparseVector> = Vec::new();
-            for m in 0..self.num_subvectors {
-                let start_idx = m * sub_vec_dims;
-                let end_idx = ((m + 1) * sub_vec_dims).min(vec.indices.len());
-                let indices = vec.indices[start_idx..end_idx].to_vec();
-                let values = vec.values[start_idx..end_idx].to_vec();
-                subvectors.push(SparseVector { indices, values });
-            }
-            vector_codes.push(self.vector_quantize(&subvectors, coarse_code));
-        }
-
-        vector_codes
+        vectors
+            .par_iter()
+            .enumerate()
+            .map(|(i, vec)| {
+                let coarse_code = self.coarse_codes[i];
+                let sub_vec_dims = vec.indices.len() / self.num_subvectors;
+                let subvectors: Vec<SparseVector> = (0..self.num_subvectors)
+                    .map(|m| {
+                        let start_idx = m * sub_vec_dims;
+                        let end_idx = ((m + 1) * sub_vec_dims).min(vec.indices.len());
+                        SparseVector {
+                            indices: vec.indices[start_idx..end_idx].to_vec(),
+                            values: vec.values[start_idx..end_idx].to_vec(),
+                        }
+                    })
+                    .collect();
+                self.vector_quantize(&subvectors, coarse_code)
+            })
+            .collect()
     }
 
     fn vector_quantize(&self, vectors: &[SparseVector], coarse_code: usize) -> Vec<usize> {
-        let mut codes: Vec<usize> = Vec::new();
-
-        for (m, subvector) in vectors.iter().enumerate() {
-            let mut min_distance = f32::MAX;
-            let mut min_distance_code_index = 0;
-
-            for (k, code) in self.sub_quantizers[coarse_code][m].iter().enumerate() {
-                let distance = subvector.distance(&code, &self.metric);
-                if distance < min_distance {
-                    min_distance = distance;
-                    min_distance_code_index = k;
-                }
-            }
-
-            codes.push(min_distance_code_index);
-        }
-
-        codes
+        vectors
+            .par_iter()
+            .enumerate()
+            .map(|(m, subvector)| {
+                self.sub_quantizers[coarse_code][m]
+                    .iter()
+                    .enumerate()
+                    .map(|(k, code)| (k, subvector.distance(code, &self.metric)))
+                    .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+                    .map(|(k, _)| k)
+                    .unwrap_or(0)
+            })
+            .collect()
     }
 }
 
@@ -198,8 +191,6 @@ impl SparseIndex for IVFPQIndex {
         );
         self.coarse_codes = self.encode_coarse(&self.vectors);
 
-        self.sub_quantizers = vec![Vec::new(); self.num_coarse_clusters];
-
         let cluster_vectors: Vec<Mutex<Vec<SparseVector>>> = (0..self.num_coarse_clusters)
             .map(|_| Mutex::new(Vec::new()))
             .collect();
@@ -209,16 +200,15 @@ impl SparseIndex for IVFPQIndex {
             cluster_vectors[code].lock().unwrap().push(vec.clone());
         });
 
-        self.sub_quantizers
-            .par_iter_mut()
-            .enumerate()
-            .for_each(|(c, cluster_codewords)| {
+        self.sub_quantizers = (0..self.num_coarse_clusters)
+            .into_par_iter()
+            .map(|c| {
                 let cluster_vecs = cluster_vectors[c].lock().unwrap();
                 if cluster_vecs.is_empty() {
-                    return;
+                    return vec![];
                 }
 
-                *cluster_codewords = (0..self.num_subvectors)
+                (0..self.num_subvectors)
                     .into_par_iter()
                     .map(|m| {
                         let sub_vectors_m: Vec<SparseVector> = cluster_vecs
@@ -227,12 +217,12 @@ impl SparseIndex for IVFPQIndex {
                                 let sub_vec_dims = vec.indices.len() / self.num_subvectors;
                                 let start_idx = m * sub_vec_dims;
                                 let end_idx = ((m + 1) * sub_vec_dims).min(vec.indices.len());
-                                let indices = vec.indices[start_idx..end_idx].to_vec();
-                                let values = vec.values[start_idx..end_idx].to_vec();
-                                SparseVector { indices, values }
+                                SparseVector {
+                                    indices: vec.indices[start_idx..end_idx].to_vec(),
+                                    values: vec.values[start_idx..end_idx].to_vec(),
+                                }
                             })
                             .collect();
-
                         kmeans(
                             &sub_vectors_m,
                             self.num_clusters,
@@ -242,8 +232,9 @@ impl SparseIndex for IVFPQIndex {
                             &self.metric,
                         )
                     })
-                    .collect();
-            });
+                    .collect()
+            })
+            .collect();
 
         self.pq_codes = self.encode(&self.vectors);
     }
