@@ -50,6 +50,7 @@ pub trait SparseIndex {
     fn load(&self, file: &File) -> Self;
 }
 
+#[allow(dead_code)]
 pub enum IndexType {
     LSH(LSHIndex),
     Annoy(AnnoyIndex),

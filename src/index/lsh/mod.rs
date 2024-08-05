@@ -343,7 +343,7 @@ mod tests {
     fn test_lsh_index_sim_hash_complex() {
         let (data, query_vector) = get_complex_vectors();
 
-        let mut index = LSHIndex::new(10, 4, LSHHashType::SimHash, DistanceMetric::Cosine);
+        let mut index = LSHIndex::new(16, 8, LSHHashType::SimHash, DistanceMetric::Cosine);
 
         for vector in &data {
             index.add_vector_before_build(vector);
