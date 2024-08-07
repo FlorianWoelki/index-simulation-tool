@@ -168,3 +168,32 @@ pub fn plot_nearest_neighbor_distances(
     );
     plot
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mean_empty() {
+        let data: Vec<f32> = vec![];
+        assert_eq!(mean(&data), None);
+    }
+
+    #[test]
+    fn test_mean() {
+        let data = vec![1.0, 2.0, 3.0, 4.0, 5.0];
+        assert_eq!(mean(&data), Some(3.0));
+    }
+
+    #[test]
+    fn test_median_empty() {
+        let data: Vec<f32> = vec![];
+        assert_eq!(median(&data), None);
+    }
+
+    #[test]
+    fn test_median() {
+        let data = vec![4.0, 1.0, 3.0, 2.0];
+        assert_eq!(median(&data), Some(2.5));
+    }
+}
