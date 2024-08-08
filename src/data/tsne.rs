@@ -207,7 +207,7 @@ fn plot_tsne_result(data: &[SparseVector]) {
     let mut plot = Plot::new();
 
     let cluster_size = data.len() / 3;
-    let colors = vec!["red", "green", "blue"];
+    let colors = ["red", "green", "blue"];
 
     for (i, color) in colors.iter().enumerate() {
         let start = i * cluster_size;
@@ -240,8 +240,6 @@ fn plot_tsne_result(data: &[SparseVector]) {
 
 #[cfg(test)]
 mod tests {
-    use rand::SeedableRng;
-
     use super::*;
 
     #[test]

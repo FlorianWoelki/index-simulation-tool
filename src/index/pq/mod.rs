@@ -12,7 +12,6 @@ use std::{
     fs::File,
     io::{BufReader, BufWriter},
     sync::Arc,
-    vec,
 };
 
 use super::{DistanceMetric, SparseIndex};

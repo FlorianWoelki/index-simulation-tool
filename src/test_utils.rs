@@ -6,7 +6,7 @@ use crate::data::{QueryResult, SparseVector};
 /// and the second entry are possible query vectors to use.
 #[allow(dead_code)]
 pub fn get_simple_vectors() -> (Vec<SparseVector>, Vec<SparseVector>) {
-    return (
+    (
         vec![
             SparseVector {
                 indices: vec![0, 2],
@@ -39,7 +39,7 @@ pub fn get_simple_vectors() -> (Vec<SparseVector>, Vec<SparseVector>) {
                 values: vec![OrderedFloat(5.0), OrderedFloat(6.0)],
             },
         ],
-    );
+    )
 }
 
 #[allow(dead_code)]
