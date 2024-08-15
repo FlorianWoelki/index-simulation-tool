@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::{
     data::SparseVector,
-    index::{IndexType, SparseIndex},
+    index::{DistanceMetric, IndexType, SparseIndex},
 };
 
 pub mod logger;
@@ -41,6 +41,8 @@ pub struct BenchmarkConfig {
     /// any single element in the data vectors can take. This is crucial for
     /// generating test data with realistic variability.
     pub value_range: (f32, f32),
+    pub sparsity: f32,
+    pub distance_metric: DistanceMetric,
 }
 
 impl BenchmarkConfig {
@@ -48,6 +50,8 @@ impl BenchmarkConfig {
         dimensions_range: (usize, usize, usize),
         num_images_range: (usize, usize, usize),
         value_range: (f32, f32),
+        sparsity: f32,
+        distance_metric: DistanceMetric,
     ) -> Self {
         BenchmarkConfig {
             start_dimensions: dimensions_range.0,
@@ -57,6 +61,8 @@ impl BenchmarkConfig {
             end_num_images: num_images_range.1,
             step_num_images: num_images_range.2,
             value_range,
+            sparsity,
+            distance_metric,
         }
     }
 
@@ -82,58 +88,42 @@ pub struct BenchmarkResult {
     pub scalability_factor: Option<f32>, // Optional because the first benchmark doesn't have a previous result to compare to.
 }
 
-pub struct Benchmark {
-    index_type: Box<IndexType>,
-    query_vector: SparseVector,
-    previous_benchmark_result: Option<BenchmarkResult>,
-}
+pub fn measure_benchmark(
+    index_type: &mut IndexType,
+    query_vector: &SparseVector,
+    previous_result: Option<BenchmarkResult>,
+    dataset_size: usize,
+    dimensions: usize,
+    k: usize,
+) -> BenchmarkResult {
+    let start_time = Instant::now();
 
-impl Benchmark {
-    pub fn new(
-        index_type: Box<IndexType>,
-        query_vector: SparseVector,
-        previous_benchmark_result: Option<BenchmarkResult>,
-    ) -> Self {
-        Benchmark {
-            index_type,
-            query_vector,
-            previous_benchmark_result,
-        }
-    }
+    // Builds the index.
+    index_type.build();
+    let index_execution_time = start_time.elapsed();
 
-    pub fn run(&mut self, dataset_size: usize, dimensions: usize, k: usize) -> BenchmarkResult {
-        let start_time = Instant::now();
+    // Perform the query.
+    let _query_results = index_type.search(&query_vector, k);
+    let query_execution_time = start_time.elapsed() - index_execution_time;
 
-        // Builds the index.
-        self.index_type.build();
-        let index_execution_time = start_time.elapsed();
+    let total_execution_time = start_time.elapsed();
 
-        // Perform the query.
-        let _query_results = self.index_type.search(&self.query_vector, k);
-        let query_execution_time = start_time.elapsed() - index_execution_time;
+    let queries_per_second = metrics::calculate_queries_per_second(query_execution_time);
 
-        let total_execution_time = start_time.elapsed();
+    let scalability_factor = previous_result.as_ref().map(|previous_result| {
+        metrics::calculate_scalability_factor(
+            (queries_per_second, dataset_size, dimensions),
+            previous_result,
+        )
+    });
 
-        let queries_per_second = metrics::calculate_queries_per_second(query_execution_time);
-
-        let scalability_factor = self
-            .previous_benchmark_result
-            .as_ref()
-            .map(|previous_result| {
-                metrics::calculate_scalability_factor(
-                    (queries_per_second, dataset_size, dimensions),
-                    previous_result,
-                )
-            });
-
-        BenchmarkResult {
-            total_execution_time,
-            index_execution_time,
-            query_execution_time,
-            queries_per_second,
-            scalability_factor,
-            dataset_size,
-            dataset_dimensionality: dimensions,
-        }
+    BenchmarkResult {
+        total_execution_time,
+        index_execution_time,
+        query_execution_time,
+        queries_per_second,
+        scalability_factor,
+        dataset_size,
+        dataset_dimensionality: dimensions,
     }
 }

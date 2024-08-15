@@ -1,29 +1,17 @@
-use std::{collections::HashMap, time::Instant};
-
-use benchmark::macros::measure_time;
+use benchmark::{logger::BenchmarkLogger, measure_benchmark, BenchmarkConfig};
 use data::{
     generator_sparse::SparseDataGenerator,
     plot::{plot_nearest_neighbor_distances, plot_sparsity_distribution},
     SparseVector,
 };
-use index::{
-    annoy::AnnoyIndex,
-    hnsw::HNSWIndex,
-    ivfpq::IVFPQIndex,
-    linscan::LinScanIndex,
-    lsh::{LSHHashType, LSHIndex},
-    nsw::NSWIndex,
-    pq::PQIndex,
-    DistanceMetric, SparseIndex,
-};
+
+use rand::{thread_rng, Rng};
+use sysinfo::{Pid, System};
 
 use clap::Parser;
-use kmeans::kmeans;
-use ordered_float::{Float, OrderedFloat};
-use rand::{rngs::StdRng, thread_rng, Rng, SeedableRng};
-use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
-use sysinfo::Pid;
-use test_utils::{get_complex_vectors, get_simple_vectors};
+use index::{annoy::AnnoyIndex, DistanceMetric, SparseIndex};
+use ordered_float::OrderedFloat;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 mod benchmark;
 mod data;
@@ -37,7 +25,7 @@ struct Args {
     #[clap(long, short, action)]
     dimensions: Option<usize>,
     #[clap(long, short, action)]
-    num_images: Option<usize>,
+    features: Option<usize>,
 }
 
 #[allow(dead_code)]
@@ -138,7 +126,7 @@ fn set_num_threads(num_threads: Option<usize>) {
 
 #[tokio::main]
 async fn main() {
-    let num_threads = Some(1);
+    let num_threads = None; // Some(1) for serial
     set_num_threads(num_threads);
     println!(
         "Using {}/{} threads",
@@ -148,20 +136,47 @@ async fn main() {
     let is_parallel = num_threads == None;
     println!("Executing in serial? {}", !is_parallel);
 
-    let start = Instant::now();
+    let args = Args::parse();
+    let dimensions = args.dimensions.unwrap_or(100);
+    let amount = args.features.unwrap_or(1000);
 
-    kmeans(
-        &get_complex_vectors().0,
-        10,
-        100,
-        0.1,
-        42,
-        &DistanceMetric::Euclidean,
+    let distance_metric = DistanceMetric::Cosine;
+    let benchmark_config = BenchmarkConfig::new(
+        (dimensions, 100, dimensions),
+        (amount, 1000, amount),
+        (0.0, 1.0),
+        0.90,
+        distance_metric,
     );
+    let mut logger = BenchmarkLogger::new();
 
-    let end = Instant::now();
-    let duration = end.duration_since(start);
-    println!("{:?}", duration);
+    // let mut previous_benchmark_result = None;
+    for (dimensions, amount) in benchmark_config.dataset_configurations() {
+        println!("Generating data...");
+        let (vectors, query_vectors, groundtruth) =
+            generate_data(&benchmark_config, dimensions, amount).await;
+        println!("...finished generating data");
+        let mut index = AnnoyIndex::new(20, 20, 40, distance_metric);
+
+        for vector in &vectors {
+            index.add_vector_before_build(&vector);
+        }
+        index.build();
+
+        // Benchmark for measuring building of the index.
+        measure_resources!({
+            let result = index.search(&query_vectors[0], 5);
+
+            println!("{:?}", vectors[result[0].index]);
+            println!("{:?}", groundtruth[0][0]);
+        });
+
+        // TODO: Add benchmark for measuring searching.
+        // TODO: Add benchmark for measuring adding a vector to the index.
+        // TODO: Add benchmark for measuring removing a vector from the index.
+        // TODO: Add benchmark for measuring serial and parallel execution.
+        // TODO: Add benchmark for measuring application of dimensionality reduction techniques to data.
+    }
 
     // let seed = thread_rng().gen_range(0..10000);
     // let mut annoy_index = AnnoyIndex::new(20, 20, 40, DistanceMetric::Cosine);
@@ -176,20 +191,19 @@ async fn main() {
     // println!("Start adding vectors...");
     // for (i, vector) in vectors.iter().enumerate() {
     //     linscan_index.add_vector(vector);
-    //     annoy_index.add_vector(vector);
+    // annoy_index.add_vector(vector);
     //     simhash_index.add_vector(vector);
     //     minhash_index.add_vector(vector);
     //     pq_index.add_vector(vector);
     //     ivfpq_index.add_vector(vector);
     //     hnsw_index.add_vector(vector);
     //     nsw_index.add_vector(vector);
-    //     println!("Vector {}", i)
     // }
     // println!("Done adding vectors...");
 
     // println!("Start building index...");
     // linscan_index.build_parallel();
-    // annoy_index.build_parallel();
+    // annoy_index.build();
     // simhash_index.build_parallel();
     // minhash_index.build_parallel();
     // pq_index.build_parallel();
@@ -205,10 +219,7 @@ async fn main() {
     // let minhash_result = minhash_index.search_parallel(&query_vectors[0], 10);
     // let hnsw_result = hnsw_index.search_parallel(&query_vectors[0], 10);
     // let nsw_result = nsw_index.search_parallel(&query_vectors[0], 10);
-    // let annoy_result = annoy_index.search_parallel(&query_vectors[0], 10);
-    // // println!("{:?}", r);
-    // //let r = index.search_parallel(&vectors[thread_rng().gen_range(0..amount)], 10);
-    // // println!("{:?}", r);
+    // let annoy_result = annoy_index.search(&query_vectors[0], 10);
 
     // println!("l1: {:?}", vectors[linscan_result[0].index].indices);
     // println!("l2: {:?}", vectors[linscan_result[1].index].indices);
@@ -335,80 +346,94 @@ async fn main() {
     run_benchmark::<SSGIndex>(dimensions, num_images).await;*/
 }
 
-/*async fn run_benchmark<I: Index + 'static>(dimensions: usize, num_images: usize) {
-let benchmark_config = BenchmarkConfig::new(
-    (dimensions, 100, dimensions),
-    (num_images, 1_000_000, num_images),
-    (0.0, 255.0),
-);
-let mut logger = BenchmarkLogger::new();
-
-let mut previous_benchmark_result = None;
-for config in benchmark_config.dataset_configurations() {
-    measure_resources!({
-        let result = perform_single_benchmark::<I>(
-            &benchmark_config,
-            &mut logger,
-            previous_benchmark_result,
-            config,
-        )
-        .await;
-        previous_benchmark_result = Some(result);
-    });
-}
-
-// TODO: Change file name to be more generic with a date.
-if let Err(e) = logger.write_to_csv("benchmark_results.csv") {
-    eprintln!("Failed to write benchmark results to CSV: {}", e);
-}
-}*/
-
-/*async fn perform_single_benchmark<I: Index + 'static>(
-    config: &BenchmarkConfig,
-    logger: &mut BenchmarkLogger,
-    previous_benchmark_result: Option<BenchmarkResult>,
-    (dimensions, num_images): (usize, usize),
-) -> BenchmarkResult {
-    println!("------------------------------------");
-    println!(
-        "Benchmarking with dimensions: {}, num_images: {}",
-        dimensions, num_images
-    );
-
-    let generated_data = generate_data(config, dimensions, num_images).await;
-    let index = add_vectors_to_index(&generated_data);
-    let query = create_query_vector(config, dimensions);
-
-    let mut benchmark = Benchmark::new(index, query, previous_benchmark_result);
-    let k = 5;
-    let result = benchmark.run(num_images, dimensions, k);
-
-    logger.add_record(&result);
-
-    print_benchmark_results(&result);
-    println!("------------------------------------");
-    result
-}
-
 async fn generate_data(
     config: &BenchmarkConfig,
     dimensions: usize,
-    num_images: usize,
-) -> Vec<Vec<f32>> {
-    let mut data_generator = DenseDataGenerator::new(dimensions, num_images, config.value_range);
-    data_generator.generate().await
-    }*/
-
-/*fn add_vectors_to_index(data: &[Vec<f32>]) -> Box<dyn Index> {
-let mut index = Box::new(SSGIndex::new(DistanceMetric::Euclidean));
-for (i, d) in data.iter().enumerate() {
-    index.add_vector(HighDimVector::new(i, d.clone()));
+    amount: usize,
+) -> (Vec<SparseVector>, Vec<SparseVector>, Vec<Vec<SparseVector>>) {
+    let seed = thread_rng().gen_range(0..10000);
+    let mut generator = SparseDataGenerator::new(
+        dimensions,
+        amount,
+        config.value_range,
+        config.sparsity,
+        config.distance_metric,
+        seed,
+    );
+    let (vectors, query_vectors, groundtruth) = generator.generate().await;
+    (vectors, query_vectors, groundtruth)
 }
-index
-}*/
 
-// fn create_query_vector(_config: &BenchmarkConfig, dimensions: usize) -> HighDimVector {
-//     HighDimVector::new(999999999, vec![128.0; dimensions])
+// async fn run_benchmark(
+//     index: &mut IndexType,
+//     distance_metric: DistanceMetric,
+//     dimensions: usize,
+//     num_images: usize,
+// ) {
+//     let benchmark_config = BenchmarkConfig::new(
+//         (dimensions, 100, dimensions),
+//         (num_images, 1_000_000, num_images),
+//         (0.0, 255.0),
+//         0.95,
+//         distance_metric,
+//     );
+//     let mut logger = BenchmarkLogger::new();
+
+//     let mut previous_benchmark_result = None;
+//     for (dimensions, amount) in benchmark_config.dataset_configurations() {
+//         let generated_data = generate_data(&benchmark_config, dimensions, amount).await;
+
+//         measure_resources!({
+//             let result = perform_single_benchmark(
+//                 index,
+//                 &benchmark_config,
+//                 &mut logger,
+//                 previous_benchmark_result,
+//                 (dimensions, amount),
+//             )
+//             .await;
+//             previous_benchmark_result = Some(result);
+//         });
+//     }
+
+//     // TODO: Change file name to be more generic with a date.
+//     if let Err(e) = logger.write_to_csv("benchmark_results.csv") {
+//         eprintln!("Failed to write benchmark results to CSV: {}", e);
+//     }
+// }
+
+// async fn perform_single_benchmark(
+//     index: &mut IndexType,
+//     config: &BenchmarkConfig,
+//     logger: &mut BenchmarkLogger,
+//     previous_benchmark_result: Option<BenchmarkResult>,
+//     (dimensions, amount): (usize, usize),
+// ) -> BenchmarkResult {
+//     println!("------------------------------------");
+//     println!(
+//         "Benchmarking with number of vectors: {} and dimensions: {}",
+//         amount, dimensions
+//     );
+
+//     let query_vector = SparseVector {
+//         indices: vec![],
+//         values: vec![],
+//     };
+//     let k = 5;
+//     let result = measure_benchmark(
+//         index,
+//         &query_vector,
+//         previous_benchmark_result,
+//         amount,
+//         dimensions,
+//         k,
+//     );
+
+//     logger.add_record(&result);
+
+//     print_benchmark_results(&result);
+//     println!("------------------------------------");
+//     result
 // }
 
 // fn print_benchmark_results(result: &BenchmarkResult) {

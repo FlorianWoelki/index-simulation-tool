@@ -20,7 +20,7 @@ pub mod neighbor;
 pub mod nsw;
 pub mod pq;
 
-#[derive(PartialEq, Serialize, Deserialize)]
+#[derive(PartialEq, Serialize, Deserialize, Copy, Clone)]
 pub enum DistanceMetric {
     Euclidean,
     Cosine,
