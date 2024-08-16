@@ -1,21 +1,14 @@
 #[macro_export]
 macro_rules! measure_resources {
     ($block:block) => {{
-        fn measure(system: &sysinfo::System, pid: usize) {
-            print!("\n");
-            println!("Measuring resources for process with PID: {}", pid);
-
+        fn measure(system: &sysinfo::System, pid: usize) -> (f32, f32) {
             if let Some(process) = system.process(Pid::from(pid)) {
-                println!("Current process: {}", process.name());
-                let memory_mb = process.memory() as f32 / 1_048_576.0;
-                if memory_mb >= 1024f32 {
-                    println!("Memory usage: {:.2} GB", memory_mb / 1024.0);
-                } else {
-                    println!("Memory usage: {:.2} MB", memory_mb);
-                }
-                println!("CPU usage: {:.2}%", process.cpu_usage());
+                let memory_mb = process.memory() as f32 / (1024.0 * 1024.0);
+                let num_threads = num_cpus::get();
+                let cpu_usage = process.cpu_usage() as f32 / num_threads as f32;
+                return (memory_mb, cpu_usage);
             }
-            print!("\n");
+            (0.0, 0.0)
         }
 
         let mut system = sysinfo::System::new_all();
@@ -26,15 +19,22 @@ macro_rules! measure_resources {
 
         let current_pid = std::process::id() as usize;
         // Measure the resources before running the block.
-        measure(&system, current_pid);
+        let (initial_memory, initial_cpu) = measure(&system, current_pid);
 
         let start = std::time::Instant::now();
         let result = $block;
         let duration = start.elapsed();
 
         system.refresh_all();
-        measure(&system, current_pid);
-        println!("Execution time: {:?}", duration);
+        let (final_memory, final_cpu) = measure(&system, current_pid);
+
+        println!("\n--- Resource Consumption Report ---");
+        println!("Initial Memory Usage: {:.2} MB", initial_memory);
+        println!("Memory Consumed: {:.2} MB", final_memory);
+        println!("Initial CPU Usage: {:.2}%", initial_cpu);
+        println!("CPU Consumed: {:.2}%", final_cpu);
+        println!("Execution Time: {:?}", duration);
+        println!("-----------------------------------\n");
 
         result
     }};

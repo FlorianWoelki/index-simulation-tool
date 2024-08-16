@@ -136,6 +136,16 @@ async fn main() {
     let is_parallel = num_threads == None;
     println!("Executing in serial? {}", !is_parallel);
 
+    // Just for testing the measure_system functionality.
+    // TODO: Remove this
+    measure_resources!({
+        let mut a = vec![];
+        for _ in 0..1_000_000_000 {
+            let b = 2 * 2;
+            a.push(b);
+        }
+    });
+
     let args = Args::parse();
     let dimensions = args.dimensions.unwrap_or(100);
     let amount = args.features.unwrap_or(1000);
