@@ -1,3 +1,5 @@
+use std::fs::{File, OpenOptions};
+
 use benchmark::{logger::BenchmarkLogger, measure_benchmark, BenchmarkConfig};
 use data::{
     generator_sparse::SparseDataGenerator,
@@ -9,7 +11,7 @@ use rand::{thread_rng, Rng};
 use sysinfo::{Pid, System};
 
 use clap::Parser;
-use index::{annoy::AnnoyIndex, DistanceMetric, SparseIndex};
+use index::{annoy::AnnoyIndex, DistanceMetric, IndexType, SparseIndex};
 use ordered_float::OrderedFloat;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
@@ -181,7 +183,10 @@ async fn main() {
             println!("{:?}", groundtruth[0][0]);
         });
 
+        save_index("annoy", IndexType::Annoy(index));
+
         // TODO: Add benchmark for measuring searching.
+        // TODO: Add benchmark for disk space by getting the size of the saved index.
         // TODO: Add benchmark for measuring adding a vector to the index.
         // TODO: Add benchmark for measuring removing a vector from the index.
         // TODO: Add benchmark for measuring serial and parallel execution.
@@ -354,6 +359,15 @@ async fn main() {
 
     //run_benchmark::<NaiveIndex>(dimensions, num_images).await;
     run_benchmark::<SSGIndex>(dimensions, num_images).await;*/
+}
+
+fn save_index(name: &str, index: IndexType) {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .open(format!("{}.ist", name))
+        .expect("Failed to open file");
+    index.save(&mut file);
 }
 
 async fn generate_data(
