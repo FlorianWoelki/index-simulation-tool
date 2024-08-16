@@ -1,6 +1,13 @@
-use std::fs::{File, OpenOptions};
+use std::{
+    fs::{self, OpenOptions},
+    time::Duration,
+};
 
-use benchmark::{logger::BenchmarkLogger, measure_benchmark, BenchmarkConfig};
+use benchmark::{
+    logger::BenchmarkLogger, macros::measure_system::ResourceReport, BenchmarkConfig,
+    GenericBenchmarkResult,
+};
+use chrono::Local;
 use data::{
     generator_sparse::SparseDataGenerator,
     plot::{plot_nearest_neighbor_distances, plot_sparsity_distribution},
@@ -138,16 +145,6 @@ async fn main() {
     let is_parallel = num_threads == None;
     println!("Executing in serial? {}", !is_parallel);
 
-    // Just for testing the measure_system functionality.
-    // TODO: Remove this
-    measure_resources!({
-        let mut a = vec![];
-        for _ in 0..1_000_000_000 {
-            let b = 2 * 2;
-            a.push(b);
-        }
-    });
-
     let args = Args::parse();
     let dimensions = args.dimensions.unwrap_or(100);
     let amount = args.features.unwrap_or(1000);
@@ -160,7 +157,13 @@ async fn main() {
         0.90,
         distance_metric,
     );
-    let mut logger = BenchmarkLogger::new();
+
+    let mut index_logger: BenchmarkLogger<GenericBenchmarkResult> = BenchmarkLogger::new();
+    let mut build_logger: BenchmarkLogger<GenericBenchmarkResult> = BenchmarkLogger::new();
+
+    let current_date = Local::now().format("%Y-%m-%d").to_string();
+    let dir_path = format!("index/{}", &current_date);
+    fs::create_dir_all(&dir_path).expect("Failed to create directory");
 
     // let mut previous_benchmark_result = None;
     for (dimensions, amount) in benchmark_config.dataset_configurations() {
@@ -173,25 +176,46 @@ async fn main() {
         for vector in &vectors {
             index.add_vector_before_build(&vector);
         }
-        index.build();
 
-        // Benchmark for measuring building of the index.
-        measure_resources!({
+        let (_, build_report) = measure_resources!({
+            index.build();
+        });
+
+        build_logger.add_record(GenericBenchmarkResult {
+            execution_time: build_report.execution_time.as_secs_f32(),
+            dataset_dimensionality: dimensions,
+            dataset_size: amount,
+            consumed_cpu: build_report.final_cpu,
+            consumed_memory: build_report.final_memory,
+        });
+        print_measurement_report(&build_report);
+
+        // Benchmark for measuring searching.
+        let (_, search_report) = measure_resources!({
             let result = index.search(&query_vectors[0], 5);
 
             println!("{:?}", vectors[result[0].index]);
             println!("{:?}", groundtruth[0][0]);
         });
 
-        save_index("annoy", IndexType::Annoy(index));
+        print_measurement_report(&search_report);
 
-        // TODO: Add benchmark for measuring searching.
-        // TODO: Add benchmark for disk space by getting the size of the saved index.
+        // Benchmark for saving to disk.
+        save_index(
+            &dir_path,
+            format!("annoy_{}", amount),
+            IndexType::Annoy(index),
+        );
+
         // TODO: Add benchmark for measuring adding a vector to the index.
         // TODO: Add benchmark for measuring removing a vector from the index.
         // TODO: Add benchmark for measuring serial and parallel execution.
         // TODO: Add benchmark for measuring application of dimensionality reduction techniques to data.
     }
+
+    build_logger
+        .write_to_csv(format!("{}/annoy_build.csv", dir_path))
+        .expect("Something went wrong while writing to csv");
 
     // let seed = thread_rng().gen_range(0..10000);
     // let mut annoy_index = AnnoyIndex::new(20, 20, 40, DistanceMetric::Cosine);
@@ -361,11 +385,22 @@ async fn main() {
     run_benchmark::<SSGIndex>(dimensions, num_images).await;*/
 }
 
-fn save_index(name: &str, index: IndexType) {
+fn print_measurement_report(report: &ResourceReport) {
+    println!("\n--- Resource Consumption Report ---");
+    println!("Initial Memory Usage: {:.2} MB", report.initial_memory);
+    println!("Memory Consumed: {:.2} MB", report.final_memory);
+    println!("Initial CPU Usage: {:.2}%", report.initial_cpu);
+    println!("CPU Consumed: {:.2}%", report.final_cpu);
+    println!("Execution Time: {:?}", report.execution_time);
+    println!("-----------------------------------\n");
+}
+
+fn save_index(dir_path: &String, name: String, index: IndexType) {
+    let file_path = format!("{}/{}.ist", dir_path, name);
     let mut file = OpenOptions::new()
         .write(true)
         .create(true)
-        .open(format!("{}.ist", name))
+        .open(&file_path)
         .expect("Failed to open file");
     index.save(&mut file);
 }

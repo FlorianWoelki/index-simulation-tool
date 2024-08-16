@@ -78,52 +78,85 @@ impl BenchmarkConfig {
 }
 
 #[derive(Serialize, Clone, Copy)]
-pub struct BenchmarkResult {
-    pub total_execution_time: Duration,
-    pub index_execution_time: Duration,
-    pub query_execution_time: Duration,
-    pub queries_per_second: f32,
+pub struct GenericBenchmarkResult {
+    pub execution_time: f32, // in ms
     pub dataset_size: usize,
     pub dataset_dimensionality: usize,
+    pub consumed_memory: f32,
+    pub consumed_cpu: f32,
+}
+
+#[derive(Serialize, Clone, Copy)]
+pub struct IndexBenchmarkResult {
+    pub generic_benchmark_result: GenericBenchmarkResult,
+
+    // Quality metrics.
+    pub recall: f32,
+
+    // Scalability metrics.
     pub scalability_factor: Option<f32>, // Optional because the first benchmark doesn't have a previous result to compare to.
+    pub queries_per_second: f32,
+    pub add_vector_performance: Duration,
+    pub remove_vector_performance: Duration,
+    pub build_time: Duration,
+    pub search_time: Duration,
+
+    // Space-based measurements.
+    pub index_disk_space: f32,
+    // Consumed_memory from `GenericBenchmarkResult`.
+
+    // Time-based measurements.
+    pub index_saving_time: Duration,
+    pub index_loading_time: Duration,
+    pub index_restoring_time: Duration,
 }
 
-pub fn measure_benchmark(
-    index_type: &mut IndexType,
-    query_vector: &SparseVector,
-    previous_result: Option<BenchmarkResult>,
-    dataset_size: usize,
-    dimensions: usize,
-    k: usize,
-) -> BenchmarkResult {
-    let start_time = Instant::now();
+pub trait SerializableBenchmark: Serialize {}
 
-    // Builds the index.
-    index_type.build();
-    let index_execution_time = start_time.elapsed();
+impl SerializableBenchmark for GenericBenchmarkResult {}
 
-    // Perform the query.
-    let _query_results = index_type.search(&query_vector, k);
-    let query_execution_time = start_time.elapsed() - index_execution_time;
+impl SerializableBenchmark for IndexBenchmarkResult {}
 
-    let total_execution_time = start_time.elapsed();
+// pub fn measure_benchmark(
+//     index_type: &mut IndexType,
+//     query_vector: &SparseVector,
+//     previous_result: Option<BenchmarkResult>,
+//     dataset_size: usize,
+//     dimensions: usize,
+//     k: usize,
+//     consumed_memory: f32,
+//     consumed_cpu: f32,
+// ) -> BenchmarkResult {
+//     let start_time = Instant::now();
 
-    let queries_per_second = metrics::calculate_queries_per_second(query_execution_time);
+//     // Builds the index.
+//     index_type.build();
+//     let index_construction_time = start_time.elapsed();
 
-    let scalability_factor = previous_result.as_ref().map(|previous_result| {
-        metrics::calculate_scalability_factor(
-            (queries_per_second, dataset_size, dimensions),
-            previous_result,
-        )
-    });
+//     // Perform the query.
+//     let _query_results = index_type.search(&query_vector, k);
+//     let search_time = start_time.elapsed() - index_construction_time;
 
-    BenchmarkResult {
-        total_execution_time,
-        index_execution_time,
-        query_execution_time,
-        queries_per_second,
-        scalability_factor,
-        dataset_size,
-        dataset_dimensionality: dimensions,
-    }
-}
+//     let total_execution_time = start_time.elapsed();
+
+//     let queries_per_second = metrics::calculate_queries_per_second(search_time);
+
+//     let scalability_factor = previous_result.as_ref().map(|previous_result| {
+//         metrics::calculate_scalability_factor(
+//             (queries_per_second, dataset_size, dimensions),
+//             previous_result,
+//         )
+//     });
+
+//     BenchmarkResult {
+//         total_execution_time,
+//         index_construction_time,
+//         search_time,
+//         queries_per_second,
+//         scalability_factor,
+//         dataset_size,
+//         dataset_dimensionality: dimensions,
+//         consumed_cpu,
+//         consumed_memory,
+//     }
+// }

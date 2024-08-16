@@ -1,6 +1,19 @@
+use std::time::Duration;
+
+#[derive(Debug)]
+pub struct ResourceReport {
+    pub initial_memory: f32,
+    pub final_memory: f32,
+    pub initial_cpu: f32,
+    pub final_cpu: f32,
+    pub execution_time: Duration,
+}
+
 #[macro_export]
 macro_rules! measure_resources {
     ($block:block) => {{
+        use benchmark::macros::measure_system::ResourceReport;
+
         fn measure(system: &sysinfo::System, pid: usize) -> (f32, f32) {
             if let Some(process) = system.process(Pid::from(pid)) {
                 let memory_mb = process.memory() as f32 / (1024.0 * 1024.0);
@@ -28,14 +41,14 @@ macro_rules! measure_resources {
         system.refresh_all();
         let (final_memory, final_cpu) = measure(&system, current_pid);
 
-        println!("\n--- Resource Consumption Report ---");
-        println!("Initial Memory Usage: {:.2} MB", initial_memory);
-        println!("Memory Consumed: {:.2} MB", final_memory);
-        println!("Initial CPU Usage: {:.2}%", initial_cpu);
-        println!("CPU Consumed: {:.2}%", final_cpu);
-        println!("Execution Time: {:?}", duration);
-        println!("-----------------------------------\n");
+        let report = ResourceReport {
+            initial_memory,
+            final_memory,
+            initial_cpu,
+            final_cpu,
+            execution_time: duration,
+        };
 
-        result
+        (result, report)
     }};
 }
