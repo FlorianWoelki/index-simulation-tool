@@ -1,6 +1,6 @@
 use std::{
     fs::{self, OpenOptions},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use benchmark::{
@@ -149,6 +149,7 @@ async fn main() {
     let dimensions = args.dimensions.unwrap_or(100);
     let amount = args.features.unwrap_or(1000);
 
+    let mut rng = thread_rng();
     let distance_metric = DistanceMetric::Cosine;
     let benchmark_config = BenchmarkConfig::new(
         (dimensions, 100, dimensions),
@@ -200,17 +201,55 @@ async fn main() {
 
         print_measurement_report(&search_report);
 
+        // Benchmark for measuring adding a vector to the index.
+        let mut added_vectors = vec![
+            SparseVector {
+                indices: vec![],
+                values: vec![]
+            };
+            100
+        ];
+        let mut total_add_duration = Duration::new(0, 0);
+        for vector in &mut added_vectors {
+            let random_vector = &vectors[rng.gen_range(0..vectors.len())];
+
+            vector.indices = random_vector.indices.clone();
+            vector.values = random_vector.values.clone();
+
+            let add_vector_start = Instant::now();
+            index.add_vector(&vector);
+            let add_vector_duration = add_vector_start.elapsed();
+
+            total_add_duration += add_vector_duration;
+            println!("Add vector duration: {:?}", add_vector_duration);
+        }
+
+        let average_add_duration = total_add_duration / added_vectors.len() as u32;
+        println!("Average vector adding time: {:?}", average_add_duration);
+
+        // Benchmark for measuring removing a vector from the index.
+        let mut total_remove_duration = Duration::new(0, 0);
+        for _ in 0..added_vectors.len() {
+            let remove_vector_start = Instant::now();
+            index.remove_vector(vectors.len() + 1); // Always this because the vector gets removed from the array, therefore reducing the length.
+            let remove_vector_duration = remove_vector_start.elapsed();
+
+            total_remove_duration += remove_vector_duration;
+            println!("Remove vector duration: {:?}", remove_vector_duration);
+        }
+
+        let average_remove_duration = total_add_duration / added_vectors.len() as u32;
+        println!("Average vector adding time: {:?}", average_remove_duration);
+
+        // TODO: Add benchmark for measuring serial and parallel execution.
+        // TODO: Add benchmark for measuring application of dimensionality reduction techniques to data.
+
         // Benchmark for saving to disk.
         save_index(
             &dir_path,
             format!("annoy_{}", amount),
             IndexType::Annoy(index),
         );
-
-        // TODO: Add benchmark for measuring adding a vector to the index.
-        // TODO: Add benchmark for measuring removing a vector from the index.
-        // TODO: Add benchmark for measuring serial and parallel execution.
-        // TODO: Add benchmark for measuring application of dimensionality reduction techniques to data.
     }
 
     build_logger
