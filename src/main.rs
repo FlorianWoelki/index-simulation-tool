@@ -172,6 +172,8 @@ async fn main() {
         let (vectors, query_vectors, groundtruth) =
             generate_data(&benchmark_config, dimensions, amount).await;
         println!("...finished generating data");
+
+        let total_index_start = Instant::now();
         let mut index = AnnoyIndex::new(20, 20, 40, distance_metric);
 
         for vector in &vectors {
@@ -198,6 +200,8 @@ async fn main() {
             println!("{:?}", vectors[result[0].index]);
             println!("{:?}", groundtruth[0][0]);
         });
+
+        let total_index_duration = total_index_start.elapsed();
 
         print_measurement_report(&search_report);
 
@@ -241,13 +245,12 @@ async fn main() {
         let average_remove_duration = total_add_duration / added_vectors.len() as u32;
         println!("Average vector adding time: {:?}", average_remove_duration);
 
-        // TODO: Add benchmark for measuring serial and parallel execution.
         // TODO: Add benchmark for measuring application of dimensionality reduction techniques to data.
 
         // Benchmark for saving to disk.
         let saved_file = save_index(
             &dir_path,
-            format!("annoy_{}", amount),
+            format!("annoy_serial_{}", amount), // TODO: Modify to support parallel
             IndexType::Annoy(index),
         );
         let index_disk_space = saved_file
@@ -257,7 +260,7 @@ async fn main() {
             / (1024.0 * 1024.0); // in mb
 
         index_logger.add_record(IndexBenchmarkResult {
-            execution_time: 0.0,       // TODO:
+            execution_time: total_index_duration.as_secs_f32(),
             index_loading_time: 0.0,   // TODO;
             index_restoring_time: 0.0, // TODO;
             index_saving_time: 0.0,    // TODO;
