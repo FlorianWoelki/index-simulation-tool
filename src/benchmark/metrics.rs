@@ -74,12 +74,9 @@ pub fn calculate_scalability_factor(
     (queries_per_second, dataset_size, dataset_dimensionality): (f32, usize, usize),
     previous_result: &IndexBenchmarkResult,
 ) -> f32 {
-    let dataset_size_ratio =
-        (dataset_size as f32) / (previous_result.generic_benchmark_result.dataset_size as f32);
-    let dimensionality_ratio = (dataset_dimensionality as f32)
-        / (previous_result
-            .generic_benchmark_result
-            .dataset_dimensionality as f32);
+    let dataset_size_ratio = (dataset_size as f32) / (previous_result.dataset_size as f32);
+    let dimensionality_ratio =
+        (dataset_dimensionality as f32) / (previous_result.dataset_dimensionality as f32);
 
     let qps_scalability_factor = queries_per_second / previous_result.queries_per_second;
 
@@ -88,8 +85,6 @@ pub fn calculate_scalability_factor(
 
 #[cfg(test)]
 mod tests {
-    use crate::benchmark::GenericBenchmarkResult;
-
     use super::*;
     use std::time::Duration;
 
@@ -117,23 +112,19 @@ mod tests {
     #[test]
     fn test_scalability_factor_improvement() {
         let previous_result = IndexBenchmarkResult {
-            generic_benchmark_result: GenericBenchmarkResult {
-                execution_time: Duration::from_secs(1).as_secs_f32(),
-                dataset_size: 1000,
-                dataset_dimensionality: 10,
-                consumed_cpu: 1.0,
-                consumed_memory: 1.0,
-            },
-            build_time: Duration::from_secs(1),
-            search_time: Duration::from_secs(1),
+            execution_time: Duration::from_secs(1).as_secs_f32(),
+            dataset_size: 1000,
+            dataset_dimensionality: 10,
+            build_time: Duration::from_secs(1).as_secs_f32(),
+            search_time: Duration::from_secs(1).as_secs_f32(),
             queries_per_second: 100.0,
             scalability_factor: None,
-            add_vector_performance: Duration::from_secs(1),
-            remove_vector_performance: Duration::from_secs(1),
+            add_vector_performance: Duration::from_secs(1).as_secs_f32(),
+            remove_vector_performance: Duration::from_secs(1).as_secs_f32(),
             index_disk_space: 0.0,
-            index_loading_time: Duration::from_secs(1),
-            index_restoring_time: Duration::from_secs(1),
-            index_saving_time: Duration::from_secs(1),
+            index_loading_time: Duration::from_secs(1).as_secs_f32(),
+            index_restoring_time: Duration::from_secs(1).as_secs_f32(),
+            index_saving_time: Duration::from_secs(1).as_secs_f32(),
             recall: 0.0,
         };
         let current_qps = 210.0;
@@ -155,23 +146,19 @@ mod tests {
     #[test]
     fn test_scalability_factor_degradation() {
         let previous_result = IndexBenchmarkResult {
-            generic_benchmark_result: GenericBenchmarkResult {
-                execution_time: Duration::from_secs(1).as_secs_f32(),
-                dataset_size: 1000,
-                dataset_dimensionality: 10,
-                consumed_cpu: 1.0,
-                consumed_memory: 1.0,
-            },
-            build_time: Duration::from_secs(1),
-            search_time: Duration::from_secs(1),
+            execution_time: Duration::from_secs(1).as_secs_f32(),
+            dataset_size: 1000,
+            dataset_dimensionality: 10,
+            build_time: Duration::from_secs(1).as_secs_f32(),
+            search_time: Duration::from_secs(1).as_secs_f32(),
             queries_per_second: 200.0,
             scalability_factor: None,
-            add_vector_performance: Duration::from_secs(1),
-            remove_vector_performance: Duration::from_secs(1),
+            add_vector_performance: Duration::from_secs(1).as_secs_f32(),
+            remove_vector_performance: Duration::from_secs(1).as_secs_f32(),
             index_disk_space: 0.0,
-            index_loading_time: Duration::from_secs(1),
-            index_restoring_time: Duration::from_secs(1),
-            index_saving_time: Duration::from_secs(1),
+            index_loading_time: Duration::from_secs(1).as_secs_f32(),
+            index_restoring_time: Duration::from_secs(1).as_secs_f32(),
+            index_saving_time: Duration::from_secs(1).as_secs_f32(),
             recall: 0.0,
         };
         let current_qps = 150.0;
@@ -193,23 +180,19 @@ mod tests {
     #[test]
     fn test_scalability_factor_constant() {
         let previous_result = IndexBenchmarkResult {
-            generic_benchmark_result: GenericBenchmarkResult {
-                execution_time: Duration::from_secs(1).as_secs_f32(),
-                dataset_size: 1000,
-                dataset_dimensionality: 10,
-                consumed_cpu: 1.0,
-                consumed_memory: 1.0,
-            },
-            build_time: Duration::from_secs(1),
-            search_time: Duration::from_secs(1),
+            execution_time: Duration::from_secs(1).as_secs_f32(),
+            dataset_size: 1000,
+            dataset_dimensionality: 10,
+            build_time: Duration::from_secs(1).as_secs_f32(),
+            search_time: Duration::from_secs(1).as_secs_f32(),
             queries_per_second: 100.0,
             scalability_factor: None,
-            add_vector_performance: Duration::from_secs(1),
-            remove_vector_performance: Duration::from_secs(1),
+            add_vector_performance: Duration::from_secs(1).as_secs_f32(),
+            remove_vector_performance: Duration::from_secs(1).as_secs_f32(),
             index_disk_space: 0.0,
-            index_loading_time: Duration::from_secs(1),
-            index_restoring_time: Duration::from_secs(1),
-            index_saving_time: Duration::from_secs(1),
+            index_loading_time: Duration::from_secs(1).as_secs_f32(),
+            index_restoring_time: Duration::from_secs(1).as_secs_f32(),
+            index_saving_time: Duration::from_secs(1).as_secs_f32(),
             recall: 0.0,
         };
         let current_qps = 100.0;

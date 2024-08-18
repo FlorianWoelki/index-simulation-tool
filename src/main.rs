@@ -5,7 +5,7 @@ use std::{
 
 use benchmark::{
     logger::BenchmarkLogger, macros::measure_system::ResourceReport, BenchmarkConfig,
-    GenericBenchmarkResult,
+    GenericBenchmarkResult, IndexBenchmarkResult,
 };
 use chrono::Local;
 use data::{

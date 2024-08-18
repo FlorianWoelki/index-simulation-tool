@@ -88,7 +88,9 @@ pub struct GenericBenchmarkResult {
 
 #[derive(Serialize, Clone, Copy)]
 pub struct IndexBenchmarkResult {
-    pub generic_benchmark_result: GenericBenchmarkResult,
+    pub execution_time: f32, // in ms
+    pub dataset_size: usize,
+    pub dataset_dimensionality: usize,
 
     // Quality metrics.
     pub recall: f32,
@@ -96,19 +98,19 @@ pub struct IndexBenchmarkResult {
     // Scalability metrics.
     pub scalability_factor: Option<f32>, // Optional because the first benchmark doesn't have a previous result to compare to.
     pub queries_per_second: f32,
-    pub add_vector_performance: Duration,
-    pub remove_vector_performance: Duration,
-    pub build_time: Duration,
-    pub search_time: Duration,
+    pub add_vector_performance: f32,    // in ms
+    pub remove_vector_performance: f32, // in ms
+    pub build_time: f32,                // in ms
+    pub search_time: f32,               // in ms
 
     // Space-based measurements.
     pub index_disk_space: f32,
     // Consumed_memory from `GenericBenchmarkResult`.
 
     // Time-based measurements.
-    pub index_saving_time: Duration,
-    pub index_loading_time: Duration,
-    pub index_restoring_time: Duration,
+    pub index_saving_time: f32,    // in ms
+    pub index_loading_time: f32,   // in ms
+    pub index_restoring_time: f32, // in ms
 }
 
 pub trait SerializableBenchmark: Serialize {}
