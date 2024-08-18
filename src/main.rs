@@ -1,5 +1,5 @@
 use std::{
-    fs::{self, OpenOptions},
+    fs::{self, File, OpenOptions},
     time::{Duration, Instant},
 };
 
@@ -159,7 +159,7 @@ async fn main() {
         distance_metric,
     );
 
-    let mut index_logger: BenchmarkLogger<GenericBenchmarkResult> = BenchmarkLogger::new();
+    let mut index_logger: BenchmarkLogger<IndexBenchmarkResult> = BenchmarkLogger::new();
     let mut build_logger: BenchmarkLogger<GenericBenchmarkResult> = BenchmarkLogger::new();
 
     let current_date = Local::now().format("%Y-%m-%d").to_string();
@@ -245,11 +245,33 @@ async fn main() {
         // TODO: Add benchmark for measuring application of dimensionality reduction techniques to data.
 
         // Benchmark for saving to disk.
-        save_index(
+        let saved_file = save_index(
             &dir_path,
             format!("annoy_{}", amount),
             IndexType::Annoy(index),
         );
+        let index_disk_space = saved_file
+            .metadata()
+            .expect("Expected metadata in the file")
+            .len() as f32
+            / (1024.0 * 1024.0); // in mb
+
+        index_logger.add_record(IndexBenchmarkResult {
+            execution_time: 0.0,       // TODO:
+            index_loading_time: 0.0,   // TODO;
+            index_restoring_time: 0.0, // TODO;
+            index_saving_time: 0.0,    // TODO;
+            queries_per_second: 0.0,   // TODO;
+            recall: 0.0,               // TODO;
+            search_time: 0.0,          // TODO;
+            scalability_factor: None,  // TODO:
+            index_disk_space,
+            dataset_dimensionality: dimensions,
+            dataset_size: amount,
+            build_time: build_report.execution_time.as_secs_f32(),
+            add_vector_performance: average_add_duration.as_secs_f32(),
+            remove_vector_performance: average_remove_duration.as_secs_f32(),
+        });
     }
 
     build_logger
@@ -434,7 +456,7 @@ fn print_measurement_report(report: &ResourceReport) {
     println!("-----------------------------------\n");
 }
 
-fn save_index(dir_path: &String, name: String, index: IndexType) {
+fn save_index(dir_path: &String, name: String, index: IndexType) -> File {
     let file_path = format!("{}/{}.ist", dir_path, name);
     let mut file = OpenOptions::new()
         .write(true)
@@ -442,6 +464,7 @@ fn save_index(dir_path: &String, name: String, index: IndexType) {
         .open(&file_path)
         .expect("Failed to open file");
     index.save(&mut file);
+    file
 }
 
 async fn generate_data(

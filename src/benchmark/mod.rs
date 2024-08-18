@@ -1,11 +1,6 @@
-use std::time::{Duration, Instant};
-
 use serde::Serialize;
 
-use crate::{
-    data::SparseVector,
-    index::{DistanceMetric, IndexType, SparseIndex},
-};
+use crate::index::DistanceMetric;
 
 pub mod logger;
 pub mod macros;
