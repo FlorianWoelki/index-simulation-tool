@@ -4,8 +4,9 @@ use std::{
 };
 
 use benchmark::{
-    logger::BenchmarkLogger, macros::measure_system::ResourceReport, BenchmarkConfig,
-    GenericBenchmarkResult, IndexBenchmarkResult,
+    logger::BenchmarkLogger,
+    macros::{measure_system::ResourceReport, measure_time},
+    BenchmarkConfig, GenericBenchmarkResult, IndexBenchmarkResult,
 };
 use chrono::Local;
 use data::{
@@ -248,13 +249,13 @@ async fn main() {
         // TODO: Add benchmark for measuring application of dimensionality reduction techniques to data.
 
         // Benchmark for saving to disk.
-        let save_time_start = Instant::now();
-        let saved_file = save_index(
-            &dir_path,
-            format!("annoy_serial_{}", amount), // TODO: Modify to support parallel
-            IndexType::Annoy(index),
-        );
-        let total_save_duration = save_time_start.elapsed();
+        let (saved_file, total_save_duration) = measure_time!({
+            save_index(
+                &dir_path,
+                format!("annoy_serial_{}", amount), // TODO: Modify to support parallel
+                IndexType::Annoy(index),
+            )
+        });
 
         let index_disk_space = saved_file
             .metadata()
@@ -263,9 +264,9 @@ async fn main() {
             / (1024.0 * 1024.0); // in mb
 
         // Benchmark loading time for index.
-        let load_time_start = Instant::now();
-        AnnoyIndex::load_index(&saved_file);
-        let total_load_duration = load_time_start.elapsed();
+        let (_, total_load_duration) = measure_time!({
+            AnnoyIndex::load_index(&saved_file);
+        });
 
         index_logger.add_record(IndexBenchmarkResult {
             execution_time: total_index_duration.as_secs_f32(),

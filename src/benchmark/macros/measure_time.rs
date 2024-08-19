@@ -1,9 +1,9 @@
+#[macro_export]
 macro_rules! measure_time {
-    ($func:expr) => {{
+    ($block:block) => {{
         let start = Instant::now();
-        let result = $func;
-        let end = Instant::now();
-        let duration = end.duration_since(start);
+        let result = $block;
+        let duration = start.elapsed();
         (result, duration)
     }};
 }
@@ -24,7 +24,7 @@ mod tests {
 
     #[test]
     fn test_measure_time_zero_duration() {
-        let (result, duration) = measure_time!(42);
+        let (result, duration) = measure_time!({ 42 });
         assert_eq!(result, 42);
         assert!(duration < Duration::from_millis(1));
     }
