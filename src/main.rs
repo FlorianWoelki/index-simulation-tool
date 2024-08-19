@@ -248,26 +248,34 @@ async fn main() {
         // TODO: Add benchmark for measuring application of dimensionality reduction techniques to data.
 
         // Benchmark for saving to disk.
+        let save_time_start = Instant::now();
         let saved_file = save_index(
             &dir_path,
             format!("annoy_serial_{}", amount), // TODO: Modify to support parallel
             IndexType::Annoy(index),
         );
+        let total_save_duration = save_time_start.elapsed();
+
         let index_disk_space = saved_file
             .metadata()
             .expect("Expected metadata in the file")
             .len() as f32
             / (1024.0 * 1024.0); // in mb
 
+        // Benchmark loading time for index.
+        let load_time_start = Instant::now();
+        AnnoyIndex::load_index(&saved_file);
+        let total_load_duration = load_time_start.elapsed();
+
         index_logger.add_record(IndexBenchmarkResult {
             execution_time: total_index_duration.as_secs_f32(),
-            index_loading_time: 0.0,   // TODO;
+            index_loading_time: total_load_duration.as_secs_f32(),
             index_restoring_time: 0.0, // TODO;
-            index_saving_time: 0.0,    // TODO;
-            queries_per_second: 0.0,   // TODO;
-            recall: 0.0,               // TODO;
-            search_time: 0.0,          // TODO;
-            scalability_factor: None,  // TODO:
+            index_saving_time: total_save_duration.as_secs_f32(),
+            queries_per_second: 0.0, // TODO;
+            recall: 0.0,             // TODO;
+            search_time: search_report.execution_time.as_secs_f32(),
+            scalability_factor: None, // TODO:
             index_disk_space,
             dataset_dimensionality: dimensions,
             dataset_size: amount,
