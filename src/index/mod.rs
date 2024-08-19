@@ -1,4 +1,4 @@
-use std::{fmt::Debug, fs::File};
+use std::{fmt::Debug, fs::File, io::Read};
 
 use annoy::AnnoyIndex;
 use hnsw::HNSWIndex;
@@ -47,7 +47,7 @@ pub trait SparseIndex {
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult>;
 
     fn save(&self, file: &mut File);
-    fn load(&self, file: &File) -> Self;
+    fn load_index(file: &File) -> Self;
 }
 
 #[allow(dead_code)]
@@ -59,6 +59,44 @@ pub enum IndexType {
     HNSW(HNSWIndex),
     NSW(NSWIndex),
     LinScan(LinScanIndex),
+}
+
+#[derive(Debug, PartialEq)]
+enum IndexIdentifier {
+    LSH,
+    Annoy,
+    PQ,
+    IVFPQ,
+    HNSW,
+    NSW,
+    LinScan,
+}
+
+impl IndexIdentifier {
+    fn to_u32(&self) -> u32 {
+        match self {
+            IndexIdentifier::LSH => 0,
+            IndexIdentifier::Annoy => 1,
+            IndexIdentifier::PQ => 2,
+            IndexIdentifier::IVFPQ => 3,
+            IndexIdentifier::HNSW => 4,
+            IndexIdentifier::NSW => 5,
+            IndexIdentifier::LinScan => 6,
+        }
+    }
+
+    fn from_u32(value: u32) -> Option<Self> {
+        match value {
+            0 => Some(IndexIdentifier::LSH),
+            1 => Some(IndexIdentifier::Annoy),
+            2 => Some(IndexIdentifier::PQ),
+            3 => Some(IndexIdentifier::IVFPQ),
+            4 => Some(IndexIdentifier::HNSW),
+            5 => Some(IndexIdentifier::NSW),
+            6 => Some(IndexIdentifier::LinScan),
+            _ => None,
+        }
+    }
 }
 
 impl SparseIndex for IndexType {
@@ -134,15 +172,22 @@ impl SparseIndex for IndexType {
         }
     }
 
-    fn load(&self, file: &File) -> Self {
-        match self {
-            IndexType::LSH(index) => IndexType::LSH(index.load(file)),
-            IndexType::Annoy(index) => IndexType::Annoy(index.load(file)),
-            IndexType::PQ(index) => IndexType::PQ(index.load(file)),
-            IndexType::IVFPQ(index) => IndexType::IVFPQ(index.load(file)),
-            IndexType::HNSW(index) => IndexType::HNSW(index.load(file)),
-            IndexType::NSW(index) => IndexType::NSW(index.load(file)),
-            IndexType::LinScan(index) => IndexType::LinScan(index.load(file)),
+    fn load_index(file: &File) -> Self {
+        let mut f = file.clone();
+        let mut buffer = [0; 4];
+        f.read_exact(&mut buffer)
+            .expect("Failed to read index type");
+        let index_type =
+            IndexIdentifier::from_u32(u32::from_be_bytes(buffer)).expect("Wrong index type");
+
+        match index_type {
+            IndexIdentifier::LSH => IndexType::LSH(LSHIndex::load_index(file)),
+            IndexIdentifier::Annoy => IndexType::Annoy(AnnoyIndex::load_index(file)),
+            IndexIdentifier::PQ => IndexType::PQ(PQIndex::load_index(file)),
+            IndexIdentifier::IVFPQ => IndexType::IVFPQ(IVFPQIndex::load_index(file)),
+            IndexIdentifier::HNSW => IndexType::HNSW(HNSWIndex::load_index(file)),
+            IndexIdentifier::NSW => IndexType::NSW(NSWIndex::load_index(file)),
+            IndexIdentifier::LinScan => IndexType::LinScan(LinScanIndex::load_index(file)),
         }
     }
 }

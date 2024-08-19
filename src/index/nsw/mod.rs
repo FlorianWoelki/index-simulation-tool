@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     fs::File,
-    io::{BufReader, BufWriter},
+    io::{BufReader, BufWriter, Read, Write},
     sync::{Arc, Mutex},
 };
 
@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::data::{QueryResult, SparseVector};
 
-use super::{DistanceMetric, SparseIndex};
+use super::{DistanceMetric, IndexIdentifier, SparseIndex};
 
 #[derive(Serialize, Deserialize)]
 pub struct NSWIndex {
@@ -292,12 +292,21 @@ impl SparseIndex for NSWIndex {
     }
 
     fn save(&self, file: &mut File) {
-        let writer = BufWriter::new(file);
-        bincode::serialize_into(writer, &self).expect("Failed to serialize");
+        let mut writer = BufWriter::new(file);
+        let index_type = IndexIdentifier::NSW.to_u32();
+        writer
+            .write_all(&index_type.to_be_bytes())
+            .expect("Failed to write metadata");
+        bincode::serialize_into(&mut writer, &self).expect("Failed to serialize");
     }
 
-    fn load(&self, file: &File) -> Self {
-        let reader = BufReader::new(file);
+    fn load_index(file: &File) -> Self {
+        let mut reader = BufReader::new(file);
+
+        let mut buffer = [0; 4];
+        reader
+            .read_exact(&mut buffer)
+            .expect("Failed to read metadata");
         bincode::deserialize_from(reader).unwrap()
     }
 }
