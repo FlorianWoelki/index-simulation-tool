@@ -78,8 +78,10 @@ mod tests {
         let mut contents = String::new();
         file.read_to_string(&mut contents).unwrap();
 
-        assert!(contents.contains("total_execution_time,index_execution_time,query_execution_time,queries_per_second,dataset_size,dataset_dimensionality,scalability_factor"));
-        assert!(contents.contains("10.0,2.0,1.0,100.0,1000,128,1.5"));
+        assert!(contents.contains(
+            "execution_time,dataset_size,dataset_dimensionality,consumed_memory,consumed_cpu"
+        ));
+        assert!(contents.contains("10.0,1000,128,1.0,1.0"));
 
         fs::remove_file(file_path).unwrap();
     }
