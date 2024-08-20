@@ -10,7 +10,7 @@ use rayon::iter::{
 use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
-    io::{BufReader, BufWriter, Read, Write},
+    io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write},
     sync::Arc,
 };
 
@@ -278,12 +278,15 @@ impl SparseIndex for PQIndex {
 
     fn load_index(file: &File) -> Self {
         let mut reader = BufReader::new(file);
+        reader.seek(SeekFrom::Start(0)).unwrap();
 
-        let mut buffer = [0; 4];
+        let mut buffer = [0u8; 4];
         reader
             .read_exact(&mut buffer)
             .expect("Failed to read metadata");
-        bincode::deserialize_from(reader).unwrap()
+        let index_type = u32::from_be_bytes(buffer);
+        assert_eq!(index_type, IndexIdentifier::PQ.to_u32());
+        bincode::deserialize_from(&mut reader).unwrap()
     }
 }
 
