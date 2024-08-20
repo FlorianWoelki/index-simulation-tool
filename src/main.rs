@@ -6,6 +6,7 @@ use std::{
 use benchmark::{
     logger::BenchmarkLogger,
     macros::{measure_system::ResourceReport, measure_time},
+    metrics::{calculate_queries_per_second, calculate_scalability_factor},
     BenchmarkConfig, GenericBenchmarkResult, IndexBenchmarkResult,
 };
 use chrono::Local;
@@ -167,7 +168,7 @@ async fn main() {
     let dir_path = format!("index/{}", &current_date);
     fs::create_dir_all(&dir_path).expect("Failed to create directory");
 
-    // let mut previous_benchmark_result = None;
+    let mut previous_benchmark_result = None;
     for (dimensions, amount) in benchmark_config.dataset_configurations() {
         println!("Generating data...");
         let (vectors, query_vectors, groundtruth) =
@@ -226,7 +227,6 @@ async fn main() {
             let add_vector_duration = add_vector_start.elapsed();
 
             total_add_duration += add_vector_duration;
-            println!("Add vector duration: {:?}", add_vector_duration);
         }
 
         let average_add_duration = total_add_duration / added_vectors.len() as u32;
@@ -240,7 +240,6 @@ async fn main() {
             let remove_vector_duration = remove_vector_start.elapsed();
 
             total_remove_duration += remove_vector_duration;
-            println!("Remove vector duration: {:?}", remove_vector_duration);
         }
 
         let average_remove_duration = total_add_duration / added_vectors.len() as u32;
@@ -268,21 +267,28 @@ async fn main() {
             AnnoyIndex::load_index(&saved_file);
         });
 
-        index_logger.add_record(IndexBenchmarkResult {
+        let queries_per_second = calculate_queries_per_second(search_report.execution_time);
+        let scalability_factor = previous_benchmark_result.as_ref().map(|previous_result| {
+            calculate_scalability_factor((queries_per_second, amount, dimensions), previous_result)
+        });
+        let new_index_benchmark_result = IndexBenchmarkResult {
             execution_time: total_index_duration.as_secs_f32(),
             index_loading_time: total_load_duration.as_secs_f32(),
             index_saving_time: total_save_duration.as_secs_f32(),
-            queries_per_second: 0.0, // TODO;
-            recall: 0.0,             // TODO;
+            queries_per_second,
+            recall: 0.0, // TODO;
             search_time: search_report.execution_time.as_secs_f32(),
-            scalability_factor: None, // TODO:
+            scalability_factor,
             index_disk_space,
             dataset_dimensionality: dimensions,
             dataset_size: amount,
             build_time: build_report.execution_time.as_secs_f32(),
             add_vector_performance: average_add_duration.as_secs_f32(),
             remove_vector_performance: average_remove_duration.as_secs_f32(),
-        });
+        };
+
+        previous_benchmark_result = Some(new_index_benchmark_result);
+        index_logger.add_record(new_index_benchmark_result);
     }
 
     build_logger
