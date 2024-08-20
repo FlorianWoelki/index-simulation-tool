@@ -271,7 +271,6 @@ async fn main() {
         index_logger.add_record(IndexBenchmarkResult {
             execution_time: total_index_duration.as_secs_f32(),
             index_loading_time: total_load_duration.as_secs_f32(),
-            index_restoring_time: 0.0, // TODO;
             index_saving_time: total_save_duration.as_secs_f32(),
             queries_per_second: 0.0, // TODO;
             recall: 0.0,             // TODO;

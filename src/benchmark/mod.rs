@@ -103,9 +103,8 @@ pub struct IndexBenchmarkResult {
     // Consumed_memory from `GenericBenchmarkResult`.
 
     // Time-based measurements.
-    pub index_saving_time: f32,    // in ms
-    pub index_loading_time: f32,   // in ms
-    pub index_restoring_time: f32, // in ms
+    pub index_saving_time: f32,  // in ms
+    pub index_loading_time: f32, // in ms
 }
 
 pub trait SerializableBenchmark: Serialize {}

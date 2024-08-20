@@ -123,7 +123,6 @@ mod tests {
             remove_vector_performance: Duration::from_secs(1).as_secs_f32(),
             index_disk_space: 0.0,
             index_loading_time: Duration::from_secs(1).as_secs_f32(),
-            index_restoring_time: Duration::from_secs(1).as_secs_f32(),
             index_saving_time: Duration::from_secs(1).as_secs_f32(),
             recall: 0.0,
         };
@@ -157,7 +156,6 @@ mod tests {
             remove_vector_performance: Duration::from_secs(1).as_secs_f32(),
             index_disk_space: 0.0,
             index_loading_time: Duration::from_secs(1).as_secs_f32(),
-            index_restoring_time: Duration::from_secs(1).as_secs_f32(),
             index_saving_time: Duration::from_secs(1).as_secs_f32(),
             recall: 0.0,
         };
@@ -191,7 +189,6 @@ mod tests {
             remove_vector_performance: Duration::from_secs(1).as_secs_f32(),
             index_disk_space: 0.0,
             index_loading_time: Duration::from_secs(1).as_secs_f32(),
-            index_restoring_time: Duration::from_secs(1).as_secs_f32(),
             index_saving_time: Duration::from_secs(1).as_secs_f32(),
             recall: 0.0,
         };
