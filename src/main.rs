@@ -1,5 +1,6 @@
 use std::{
     fs::{self, File, OpenOptions},
+    io::Write,
     time::{Duration, Instant},
 };
 
@@ -208,6 +209,7 @@ async fn main() {
         print_measurement_report(&search_report);
 
         // Benchmark for measuring adding a vector to the index.
+        println!("Measuring the addition of vectors to the index...");
         let mut added_vectors = vec![
             SparseVector {
                 indices: vec![],
@@ -231,8 +233,10 @@ async fn main() {
 
         let average_add_duration = total_add_duration / added_vectors.len() as u32;
         println!("Average vector adding time: {:?}", average_add_duration);
+        println!("...finished\n");
 
         // Benchmark for measuring removing a vector from the index.
+        println!("Measuring the removal of vectors to the index...");
         let mut total_remove_duration = Duration::new(0, 0);
         for _ in 0..added_vectors.len() {
             let remove_vector_start = Instant::now();
@@ -242,8 +246,9 @@ async fn main() {
             total_remove_duration += remove_vector_duration;
         }
 
-        let average_remove_duration = total_add_duration / added_vectors.len() as u32;
-        println!("Average vector adding time: {:?}", average_remove_duration);
+        let average_remove_duration = total_remove_duration / added_vectors.len() as u32;
+        println!("Average vector removal time: {:?}", average_remove_duration);
+        println!("...finished\n");
 
         // TODO: Add benchmark for measuring application of dimensionality reduction techniques to data.
 
@@ -477,10 +482,12 @@ fn save_index(dir_path: &String, name: String, index: IndexType) -> File {
     let file_path = format!("{}/{}.ist", dir_path, name);
     let mut file = OpenOptions::new()
         .write(true)
+        .read(true)
         .create(true)
         .open(&file_path)
         .expect("Failed to open file");
     index.save(&mut file);
+    file.flush().expect("Issue with flushing file");
     file
 }
 
