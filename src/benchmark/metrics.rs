@@ -1,4 +1,6 @@
-use std::time::Duration;
+use std::{collections::HashSet, time::Duration};
+
+use crate::data::SparseVector;
 
 use super::IndexBenchmarkResult;
 
@@ -25,6 +27,25 @@ pub fn calculate_queries_per_second(total_queries_execution_time: Duration) -> f
     } else {
         0.0
     }
+}
+
+pub fn calculate_recall(
+    search_results: &[SparseVector],
+    groundtruth: &[SparseVector],
+    k: usize,
+) -> f32 {
+    let mut correct_results = 0;
+
+    for (i, result) in search_results.iter().enumerate() {
+        if groundtruth
+            .iter()
+            .any(|gt_vector| gt_vector.indices == result.indices)
+        {
+            correct_results += 1;
+        }
+    }
+
+    correct_results as f32 / k as f32
 }
 
 /// Calculates the scalability factor based on the performance change between two benchmarks.
@@ -85,8 +106,73 @@ pub fn calculate_scalability_factor(
 
 #[cfg(test)]
 mod tests {
+    use ordered_float::OrderedFloat;
+
     use super::*;
     use std::time::Duration;
+
+    #[test]
+    fn test_perfect_recall() {
+        let search_results = vec![
+            SparseVector {
+                indices: vec![1, 2, 3],
+                values: vec![OrderedFloat(0.1), OrderedFloat(0.2), OrderedFloat(0.3)],
+            },
+            SparseVector {
+                indices: vec![2, 3, 4],
+                values: vec![OrderedFloat(0.2), OrderedFloat(0.3), OrderedFloat(0.4)],
+            },
+        ];
+        let groundtruth = vec![
+            SparseVector {
+                indices: vec![1, 2, 3],
+                values: vec![OrderedFloat(0.1), OrderedFloat(0.2), OrderedFloat(0.3)],
+            },
+            SparseVector {
+                indices: vec![2, 3, 4],
+                values: vec![OrderedFloat(0.2), OrderedFloat(0.3), OrderedFloat(0.4)],
+            },
+        ];
+
+        assert_eq!(calculate_recall(&search_results, &groundtruth, 2), 1.0);
+    }
+
+    #[test]
+    fn test_partial_recall() {
+        let search_results = vec![
+            SparseVector {
+                indices: vec![1, 2, 3],
+                values: vec![OrderedFloat(0.1), OrderedFloat(0.2), OrderedFloat(0.3)],
+            },
+            SparseVector {
+                indices: vec![2, 3, 4],
+                values: vec![OrderedFloat(0.2), OrderedFloat(0.3), OrderedFloat(0.4)],
+            },
+            SparseVector {
+                indices: vec![4, 5, 6],
+                values: vec![OrderedFloat(0.4), OrderedFloat(0.5), OrderedFloat(0.6)],
+            },
+        ];
+        let groundtruth = vec![
+            SparseVector {
+                indices: vec![1, 2, 3],
+                values: vec![OrderedFloat(0.1), OrderedFloat(0.2), OrderedFloat(0.3)],
+            },
+            SparseVector {
+                indices: vec![4, 5, 6],
+                values: vec![OrderedFloat(0.4), OrderedFloat(0.5), OrderedFloat(0.6)],
+            },
+            SparseVector {
+                indices: vec![7, 8, 9],
+                values: vec![OrderedFloat(0.7), OrderedFloat(0.8), OrderedFloat(0.9)],
+            },
+        ];
+
+        assert_eq!(
+            calculate_recall(&search_results, &groundtruth, 3),
+            2.0 / 3.0
+        );
+    }
 
     #[test]
     fn test_queries_per_second_normal_case() {
