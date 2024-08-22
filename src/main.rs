@@ -7,7 +7,7 @@ use std::{
 use benchmark::{
     logger::BenchmarkLogger,
     macros::{measure_system::ResourceReport, measure_time},
-    metrics::{calculate_queries_per_second, calculate_scalability_factor},
+    metrics::{calculate_queries_per_second, calculate_recall, calculate_scalability_factor},
     BenchmarkConfig, GenericBenchmarkResult, IndexBenchmarkResult,
 };
 use chrono::Local;
@@ -208,6 +208,23 @@ async fn main() {
 
         print_measurement_report(&search_report);
 
+        // Calculate recall.
+        let mut accumulated_recall = 0.0;
+        for (i, query_vector) in query_vectors.iter().enumerate() {
+            let groundtruth_vectors = &groundtruth[i];
+            let k = 10;
+            let results = index.search(query_vector, k);
+            let search_results = results
+                .iter()
+                .map(|result| vectors[result.index].clone())
+                .collect::<Vec<_>>();
+
+            let iter_recall = calculate_recall(&search_results, groundtruth_vectors, k);
+            accumulated_recall += iter_recall;
+        }
+
+        let recall = accumulated_recall / query_vectors.len() as f32;
+
         // Benchmark for measuring adding a vector to the index.
         println!("Measuring the addition of vectors to the index...");
         let mut added_vectors = vec![
@@ -281,7 +298,7 @@ async fn main() {
             index_loading_time: total_load_duration.as_secs_f32(),
             index_saving_time: total_save_duration.as_secs_f32(),
             queries_per_second,
-            recall: 0.0, // TODO;
+            recall,
             search_time: search_report.execution_time.as_secs_f32(),
             scalability_factor,
             index_disk_space,
