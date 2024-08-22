@@ -21,7 +21,7 @@ use rand::{thread_rng, Rng};
 use sysinfo::{Pid, System};
 
 use clap::Parser;
-use index::{annoy::AnnoyIndex, DistanceMetric, IndexType, SparseIndex};
+use index::{annoy::AnnoyIndex, linscan::LinScanIndex, DistanceMetric, IndexType, SparseIndex};
 use ordered_float::OrderedFloat;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
@@ -149,13 +149,13 @@ async fn main() {
     println!("Executing in serial? {}", !is_parallel);
 
     let args = Args::parse();
-    let dimensions = args.dimensions.unwrap_or(100);
+    let dimensions = args.dimensions.unwrap_or(10000);
     let amount = args.features.unwrap_or(1000);
 
     let mut rng = thread_rng();
     let distance_metric = DistanceMetric::Cosine;
     let benchmark_config = BenchmarkConfig::new(
-        (dimensions, 100, dimensions),
+        (dimensions, 10000, dimensions),
         (amount, 1000, amount),
         (0.0, 1.0),
         0.90,
@@ -177,7 +177,8 @@ async fn main() {
         println!("...finished generating data");
 
         let total_index_start = Instant::now();
-        let mut index = AnnoyIndex::new(20, 20, 40, distance_metric);
+        let mut index = LinScanIndex::new(distance_metric);
+        // let mut index = AnnoyIndex::new(20, 20, 40, distance_metric);
 
         for vector in &vectors {
             index.add_vector_before_build(&vector);
@@ -220,6 +221,7 @@ async fn main() {
                 .collect::<Vec<_>>();
 
             let iter_recall = calculate_recall(&search_results, groundtruth_vectors, k);
+            println!("{}", iter_recall);
             accumulated_recall += iter_recall;
         }
 
@@ -274,7 +276,7 @@ async fn main() {
             save_index(
                 &dir_path,
                 format!("annoy_serial_{}", amount), // TODO: Modify to support parallel
-                IndexType::Annoy(index),
+                IndexType::LinScan(index),
             )
         });
 

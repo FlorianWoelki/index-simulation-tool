@@ -1,4 +1,4 @@
-use std::collections::BinaryHeap;
+use std::{collections::BinaryHeap, sync::Mutex};
 
 use ordered_float::OrderedFloat;
 use rand::{
@@ -6,6 +6,7 @@ use rand::{
     rngs::StdRng,
     SeedableRng,
 };
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 use crate::index::DistanceMetric;
 
@@ -119,25 +120,25 @@ impl SparseDataGenerator {
         range: (f32, f32),
         sparsity: f32,
     ) -> Vec<SparseVector> {
-        let mut rng = StdRng::seed_from_u64(self.seed.wrapping_add(1000));
         let uniform_dist = Uniform::from(range.0..range.1);
         let bernoulli_dist = Bernoulli::new(sparsity as f64).unwrap();
-        let mut vectors = Vec::with_capacity(count);
 
-        for _ in 0..count {
-            let mut indices = Vec::new();
-            let mut values = Vec::new();
-            for i in 0..dim {
-                if !bernoulli_dist.sample(&mut rng) {
-                    indices.push(i);
-                    values.push(OrderedFloat(uniform_dist.sample(&mut rng)));
+        (0..count)
+            .into_par_iter()
+            .map(|i| {
+                let mut rng = StdRng::seed_from_u64(self.seed.wrapping_add(1000 + i as u64));
+                let mut indices = Vec::new();
+                let mut values = Vec::new();
+                for i in 0..dim {
+                    if !bernoulli_dist.sample(&mut rng) {
+                        indices.push(i);
+                        values.push(OrderedFloat(uniform_dist.sample(&mut rng)));
+                    }
                 }
-            }
 
-            vectors.push(SparseVector { indices, values });
-        }
-
-        vectors
+                SparseVector { indices, values }
+            })
+            .collect()
     }
 
     fn find_nearest_neighbors(
@@ -146,10 +147,11 @@ impl SparseDataGenerator {
         query: &SparseVector,
         k: usize,
     ) -> Vec<SparseVector> {
-        let mut heap = BinaryHeap::new();
+        let heap = Mutex::new(BinaryHeap::new());
 
-        for vector in data {
+        data.par_iter().for_each(|vector| {
             let distance = query.distance(&vector, &self.metric);
+            let mut heap = heap.lock().unwrap();
             if heap.len() < k {
                 heap.push((OrderedFloat(distance), vector.clone()));
             } else if let Some((OrderedFloat(max_distance), _)) = heap.peek() {
@@ -158,9 +160,11 @@ impl SparseDataGenerator {
                     heap.push((OrderedFloat(distance), vector.clone()));
                 }
             }
-        }
+        });
 
-        heap.into_sorted_vec()
+        heap.into_inner()
+            .unwrap()
+            .into_sorted_vec()
             .into_iter()
             .map(|(_, v)| v)
             .collect::<Vec<_>>()
