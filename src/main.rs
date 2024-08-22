@@ -21,7 +21,10 @@ use rand::{thread_rng, Rng};
 use sysinfo::{Pid, System};
 
 use clap::Parser;
-use index::{annoy::AnnoyIndex, linscan::LinScanIndex, DistanceMetric, IndexType, SparseIndex};
+use index::{
+    annoy::AnnoyIndex, hnsw::HNSWIndex, linscan::LinScanIndex, DistanceMetric, IndexType,
+    SparseIndex,
+};
 use ordered_float::OrderedFloat;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
@@ -156,7 +159,7 @@ async fn main() {
     let distance_metric = DistanceMetric::Cosine;
     let benchmark_config = BenchmarkConfig::new(
         (dimensions, 10000, dimensions),
-        (amount, 1000, amount),
+        (amount, 2000, amount),
         (0.0, 1.0),
         0.90,
         distance_metric,
@@ -177,8 +180,10 @@ async fn main() {
         println!("...finished generating data");
 
         let total_index_start = Instant::now();
+        let seed = thread_rng().gen_range(0..10000);
+        let mut index = HNSWIndex::new(0.5, 16, 200, 200, distance_metric, seed);
         // let mut index = LinScanIndex::new(distance_metric);
-        let mut index = AnnoyIndex::new(20, 20, 40, distance_metric);
+        // let mut index = AnnoyIndex::new(20, 20, 40, distance_metric);
 
         for vector in &vectors {
             index.add_vector_before_build(&vector);
@@ -256,7 +261,7 @@ async fn main() {
         println!("...finished\n");
 
         // Benchmark for measuring removing a vector from the index.
-        println!("Measuring the removal of vectors to the index...");
+        println!("Measuring the removal of vectors from the index...");
         let mut total_remove_duration = Duration::new(0, 0);
         for _ in 0..added_vectors.len() {
             let remove_vector_start = Instant::now();
@@ -277,7 +282,7 @@ async fn main() {
             save_index(
                 &dir_path,
                 format!("annoy_serial_{}", amount), // TODO: Modify to support parallel
-                IndexType::Annoy(index),
+                IndexType::HNSW(index),
             )
         });
 
@@ -289,7 +294,7 @@ async fn main() {
 
         // Benchmark loading time for index.
         let (_, total_load_duration) = measure_time!({
-            AnnoyIndex::load_index(&saved_file);
+            HNSWIndex::load_index(&saved_file);
         });
 
         let queries_per_second = calculate_queries_per_second(search_report.execution_time);
@@ -315,6 +320,10 @@ async fn main() {
         previous_benchmark_result = Some(new_index_benchmark_result);
         index_logger.add_record(new_index_benchmark_result);
     }
+
+    index_logger
+        .write_to_csv(format!("{}/annoy.csv", dir_path))
+        .expect("Something went wrong while writing to csv");
 
     build_logger
         .write_to_csv(format!("{}/annoy_build.csv", dir_path))
