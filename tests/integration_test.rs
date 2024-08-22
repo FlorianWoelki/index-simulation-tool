@@ -86,7 +86,7 @@ mod tests {
     fn test_annoy_index() {
         let n_trees = 10;
         let max_points = 10;
-        let search_k = 20;
+        let search_k = 200;
         let mut index = IndexType::Annoy(AnnoyIndex::new(
             n_trees,
             max_points,

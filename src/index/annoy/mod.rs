@@ -167,22 +167,26 @@ impl SparseIndex for AnnoyIndex {
 
         self.trees.par_iter().for_each(|tree| {
             let mut local_candidates: HashSet<usize> = HashSet::new();
-            let mut nodes = vec![(0.0, &tree.root)];
+            let mut nodes = vec![&tree.root];
             let mut visited = 0;
 
-            while let Some((_, node)) = nodes.pop() {
+            while let Some(node) = nodes.pop() {
                 visited += 1;
                 if visited > self.search_k {
                     break;
                 }
 
-                local_candidates.extend(&node.indices);
-
-                if let Some(ref left) = node.left {
-                    nodes.push((0.0, left));
-                }
-                if let Some(ref right) = node.right {
-                    nodes.push((0.0, right));
+                if node.left.is_none() && node.right.is_none() {
+                    // Leaf node
+                    local_candidates.extend(&node.indices);
+                } else {
+                    // Internal node
+                    if let Some(ref left) = node.left {
+                        nodes.push(left);
+                    }
+                    if let Some(ref right) = node.right {
+                        nodes.push(right);
+                    }
                 }
             }
 
@@ -314,7 +318,7 @@ mod tests {
 
     #[test]
     fn test_annoy_index_complex() {
-        let mut index = AnnoyIndex::new(10, 10, 10, DistanceMetric::Cosine);
+        let mut index = AnnoyIndex::new(10, 10, 100, DistanceMetric::Cosine);
 
         let (data, query_vector) = get_complex_vectors();
         for vector in &data {

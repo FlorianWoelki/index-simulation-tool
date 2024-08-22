@@ -177,8 +177,8 @@ async fn main() {
         println!("...finished generating data");
 
         let total_index_start = Instant::now();
-        let mut index = LinScanIndex::new(distance_metric);
-        // let mut index = AnnoyIndex::new(20, 20, 40, distance_metric);
+        // let mut index = LinScanIndex::new(distance_metric);
+        let mut index = AnnoyIndex::new(20, 20, 40, distance_metric);
 
         for vector in &vectors {
             index.add_vector_before_build(&vector);
@@ -226,6 +226,7 @@ async fn main() {
         }
 
         let recall = accumulated_recall / query_vectors.len() as f32;
+        println!("Average recall: {:?}", recall);
 
         // Benchmark for measuring adding a vector to the index.
         println!("Measuring the addition of vectors to the index...");
@@ -276,7 +277,7 @@ async fn main() {
             save_index(
                 &dir_path,
                 format!("annoy_serial_{}", amount), // TODO: Modify to support parallel
-                IndexType::LinScan(index),
+                IndexType::Annoy(index),
             )
         });
 
