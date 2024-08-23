@@ -45,7 +45,7 @@ impl NSWIndex {
         }
     }
 
-    fn knn_search_parallel(
+    fn knn_search(
         &self,
         query: &SparseVector,
         m: usize,
@@ -125,71 +125,6 @@ impl NSWIndex {
         result_vec
     }
 
-    fn knn_search(
-        &self,
-        query: &SparseVector,
-        m: usize,
-        k: usize,
-        graph: &HashMap<usize, HashSet<usize>>,
-    ) -> Vec<usize> {
-        let mut result = HashSet::new();
-        let mut candidates = HashSet::new();
-        let mut visited_set = HashSet::new();
-
-        for _ in 0..m {
-            if let Some(entry_point) = self.get_random_entry_point(graph) {
-                candidates.insert(entry_point);
-            }
-
-            while let Some(&c) = candidates.iter().min_by(|&&x, &&y| {
-                query
-                    .distance(&self.vectors[x], &self.metric)
-                    .partial_cmp(&query.distance(&self.vectors[y], &self.metric))
-                    .unwrap()
-            }) {
-                candidates.remove(&c);
-
-                if visited_set.contains(&c) {
-                    continue;
-                }
-
-                visited_set.insert(c);
-                result.insert(c);
-
-                if result.len() > k {
-                    let d1 = query.distance(&self.vectors[c], &self.metric);
-                    let d2 = result
-                        .iter()
-                        .map(|&x| query.distance(&self.vectors[x], &self.metric))
-                        .max_by(|a, b| a.partial_cmp(b).unwrap())
-                        .unwrap();
-
-                    if d1 > d2 {
-                        result.remove(&c);
-                    }
-                }
-
-                if let Some(neighbors) = self.graph.get(&c) {
-                    for &e in neighbors {
-                        if !visited_set.contains(&e) {
-                            candidates.insert(e);
-                        }
-                    }
-                }
-            }
-        }
-
-        let mut result_vec: Vec<usize> = result.into_iter().collect();
-        result_vec.sort_by(|&x, &y| {
-            query
-                .distance(&self.vectors[x], &self.metric)
-                .partial_cmp(&query.distance(&self.vectors[y], &self.metric))
-                .unwrap()
-        });
-        result_vec.truncate(k);
-        result_vec
-    }
-
     fn get_random_entry_point(&self, graph: &HashMap<usize, HashSet<usize>>) -> Option<usize> {
         let mut rng = StdRng::seed_from_u64(self.random_seed);
         graph.keys().choose(&mut rng).cloned()
@@ -259,7 +194,7 @@ impl SparseIndex for NSWIndex {
                 HashSet::new()
             } else {
                 let current_graph = graph.lock().unwrap().clone();
-                self.knn_search_parallel(
+                self.knn_search(
                     &vectors[i],
                     self.ef_construction,
                     self.ef_search,
@@ -280,8 +215,7 @@ impl SparseIndex for NSWIndex {
     }
 
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        let nearest_neighbors =
-            self.knn_search_parallel(query_vector, self.graph.len(), k, &self.graph);
+        let nearest_neighbors = self.knn_search(query_vector, self.graph.len(), k, &self.graph);
         nearest_neighbors
             .into_par_iter()
             .map(|idx| QueryResult {

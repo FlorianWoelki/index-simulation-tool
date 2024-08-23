@@ -134,18 +134,15 @@ mod tests {
 
     #[test]
     fn test_hnsw_index() {
-        let level_distribution_factor = 0.5;
-        let max_layers = 8;
-        let ef_construction = 50;
-        let ef_search = 50;
+        let m = 24;
+        let ef_construction = 400;
+        let ef_search = 200;
 
         let mut index = IndexType::HNSW(HNSWIndex::new(
-            level_distribution_factor,
-            max_layers,
+            m,
             ef_construction,
             ef_search,
             DistanceMetric::Cosine,
-            SEED,
         ));
         test_index(&mut index);
     }

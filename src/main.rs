@@ -22,8 +22,14 @@ use sysinfo::{Pid, System};
 
 use clap::Parser;
 use index::{
-    annoy::AnnoyIndex, hnsw::HNSWIndex, linscan::LinScanIndex, DistanceMetric, IndexType,
-    SparseIndex,
+    annoy::AnnoyIndex,
+    hnsw::HNSWIndex,
+    ivfpq::IVFPQIndex,
+    linscan::LinScanIndex,
+    lsh::{LSHHashType, LSHIndex},
+    nsw::NSWIndex,
+    pq::PQIndex,
+    DistanceMetric, IndexType, SparseIndex,
 };
 use ordered_float::OrderedFloat;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -152,14 +158,14 @@ async fn main() {
     println!("Executing in serial? {}", !is_parallel);
 
     let args = Args::parse();
-    let dimensions = args.dimensions.unwrap_or(10000);
-    let amount = args.features.unwrap_or(1000);
+    let dimensions = args.dimensions.unwrap_or(1000);
+    let amount = args.features.unwrap_or(500);
 
     let mut rng = thread_rng();
     let distance_metric = DistanceMetric::Cosine;
     let benchmark_config = BenchmarkConfig::new(
-        (dimensions, 10000, dimensions),
-        (amount, 2000, amount),
+        (dimensions, 1000, dimensions),
+        (amount, 500, amount),
         (0.0, 1.0),
         0.90,
         distance_metric,
@@ -180,8 +186,12 @@ async fn main() {
         println!("...finished generating data");
 
         let total_index_start = Instant::now();
-        let seed = thread_rng().gen_range(0..10000);
-        let mut index = HNSWIndex::new(0.5, 16, 200, 200, distance_metric, seed);
+        // let mut index = LSHIndex::new(20, 4, LSHHashType::SimHash, distance_metric);
+        // let mut index = LSHIndex::new(20, 4, LSHHashType::MinHash, distance_metric);
+        // let mut index = PQIndex::new(3, 50, 256, 0.01, distance_metric, seed);
+        // let mut index = IVFPQIndex::new(3, 100, 200, 256, 0.01, distance_metric, seed);
+        let mut index = HNSWIndex::new(32, 400, 200, distance_metric);
+        // let mut index = NSWIndex::new(200, 200, distance_metric, seed);
         // let mut index = LinScanIndex::new(distance_metric);
         // let mut index = AnnoyIndex::new(20, 20, 40, distance_metric);
 
@@ -192,7 +202,6 @@ async fn main() {
         let (_, build_report) = measure_resources!({
             index.build();
         });
-
         build_logger.add_record(GenericBenchmarkResult {
             execution_time: build_report.execution_time.as_secs_f32(),
             dataset_dimensionality: dimensions,

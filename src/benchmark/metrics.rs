@@ -36,7 +36,7 @@ pub fn calculate_recall(
 ) -> f32 {
     let mut correct_results = 0;
 
-    for (i, result) in search_results.iter().enumerate() {
+    for result in search_results {
         if groundtruth
             .iter()
             .any(|gt_vector| gt_vector.indices == result.indices)
