@@ -1,6 +1,6 @@
 # TO DO
 
-- [ ] Investigate why IVFPQ is so slow
+- [ ] Investigate HNSW
 
 ## Experiments
 
