@@ -62,6 +62,7 @@ impl HNSWIndex {
             entry_point,
         )];
         let mut nearest: Vec<(f32, usize)> = Vec::new();
+        let mut unique_indices = HashSet::new();
 
         while !candidates.is_empty() {
             candidates.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
@@ -71,7 +72,9 @@ impl HNSWIndex {
                 break;
             }
 
-            nearest.push((dist, current));
+            if unique_indices.insert(current) {
+                nearest.push((dist, current));
+            }
 
             if let Some(neighbors) = self
                 .graph
