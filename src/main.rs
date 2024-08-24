@@ -190,7 +190,7 @@ async fn main() {
         // let mut index = LSHIndex::new(20, 4, LSHHashType::MinHash, distance_metric);
         // let mut index = PQIndex::new(3, 50, 256, 0.01, distance_metric, seed);
         // let mut index = IVFPQIndex::new(3, 100, 200, 256, 0.01, distance_metric, seed);
-        let mut index = HNSWIndex::new(32, 400, 200, distance_metric);
+        let mut index = HNSWIndex::new(0.5, 32, 32, 400, 200, distance_metric);
         // let mut index = NSWIndex::new(200, 200, distance_metric, seed);
         // let mut index = LinScanIndex::new(distance_metric);
         // let mut index = AnnoyIndex::new(20, 20, 40, distance_metric);

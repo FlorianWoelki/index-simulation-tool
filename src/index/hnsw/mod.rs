@@ -1,25 +1,30 @@
 use std::{
+    cmp::Reverse,
     collections::{BinaryHeap, HashMap, HashSet},
     fs::File,
     io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write},
-    sync::{Arc, Mutex},
 };
 
-use node::Node;
 use ordered_float::OrderedFloat;
-use rand::{rngs::StdRng, Rng, SeedableRng};
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rand::Rng;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
 use crate::data::{QueryResult, SparseVector};
 
-use super::{neighbor::NeighborNode, DistanceMetric, IndexIdentifier, SparseIndex};
-
-mod node;
+use super::{DistanceMetric, IndexIdentifier, SparseIndex};
 
 #[derive(Serialize, Deserialize)]
 pub struct HNSWIndex {
     vectors: Vec<SparseVector>,
+    /// Factor controlling the distribution of levels in the hierarchical graph.
+    /// Values closer to 1 result in more levels, potentially improving search speed.
+    /// at the cost of increased memory usage. Typical values range from 0.3 to 0.5.
+    level_distribution_factor: f32,
+    /// Maximum number of layers in the graph.
+    /// Higher values can improve search speed for large datasets, but increase
+    /// memory usage.
+    max_layers: usize,
     /// Number of nearest neighbors to consider during index construction.
     /// Higher values improve recall but increase build time and memory usage.
     ef_construction: usize,
@@ -35,12 +40,21 @@ pub struct HNSWIndex {
 }
 
 impl HNSWIndex {
-    pub fn new(m: usize, ef_construction: usize, ef_search: usize, metric: DistanceMetric) -> Self {
+    pub fn new(
+        level_distribution_factor: f32,
+        max_layers: usize,
+        m: usize,
+        ef_construction: usize,
+        ef_search: usize,
+        metric: DistanceMetric,
+    ) -> Self {
         HNSWIndex {
             vectors: Vec::new(),
             graph: HashMap::new(),
             element_levels: HashMap::new(),
             entry_point: None,
+            level_distribution_factor,
+            max_layers,
             max_level: 0,
             ef_construction,
             ef_search,
@@ -57,23 +71,33 @@ impl HNSWIndex {
         layer: usize,
     ) -> Vec<(f32, usize)> {
         let mut visited = HashSet::new();
-        let mut candidates = vec![(
-            query_vector.distance(&self.vectors[entry_point], &self.metric),
+        let mut candidates = BinaryHeap::new();
+        candidates.push(Reverse((
+            OrderedFloat(query_vector.distance(&self.vectors[entry_point], &self.metric)),
             entry_point,
-        )];
+        )));
         let mut nearest: Vec<(f32, usize)> = Vec::new();
         let mut unique_indices = HashSet::new();
 
         while !candidates.is_empty() {
-            candidates.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
-            let (dist, current) = candidates.pop().unwrap();
+            let (dist, current) = candidates.pop().unwrap().0;
 
-            if !nearest.is_empty() && dist > nearest[0].0 && nearest.len() >= ef {
+            let should_terminate =
+                !nearest.is_empty() && dist.into_inner() > nearest[0].0 && nearest.len() >= ef;
+
+            if should_terminate {
                 break;
             }
 
             if unique_indices.insert(current) {
-                nearest.push((dist, current));
+                if nearest.len() < ef {
+                    nearest.push((dist.into_inner(), current));
+                    nearest.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+                } else if dist.into_inner() < nearest[ef - 1].0 {
+                    nearest.pop();
+                    nearest.push((dist.into_inner(), current));
+                    nearest.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+                }
             }
 
             if let Some(neighbors) = self
@@ -81,26 +105,32 @@ impl HNSWIndex {
                 .get(&current)
                 .and_then(|layers| layers.get(&layer))
             {
-                for &neighbor in neighbors {
-                    if !visited.contains(&neighbor) {
-                        visited.insert(neighbor);
+                let new_candidates: Vec<_> = neighbors
+                    .par_iter()
+                    .filter(|&&neighbor| !visited.contains(&neighbor))
+                    .map(|&neighbor| {
                         let neighbor_dist =
                             query_vector.distance(&self.vectors[neighbor], &self.metric);
-                        candidates.push((neighbor_dist, neighbor));
-                    }
-                }
+                        (neighbor, neighbor_dist)
+                    })
+                    .collect();
+
+                new_candidates
+                    .into_iter()
+                    .for_each(|(neighbor, neighbor_dist)| {
+                        visited.insert(neighbor);
+                        candidates.push(Reverse((OrderedFloat(neighbor_dist), neighbor)))
+                    })
             }
         }
 
-        nearest.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-        nearest.truncate(ef);
         nearest
     }
 
     fn random_level(&self) -> usize {
         let mut rng = rand::thread_rng();
         let mut level = 0;
-        while rng.gen::<f32>() < 0.5 && level < 32 {
+        while rng.gen::<f32>() < self.level_distribution_factor && level < self.max_layers {
             level += 1;
         }
         level
@@ -388,7 +418,7 @@ mod tests {
 
     #[test]
     fn test_remove_vector() {
-        let mut index = HNSWIndex::new(3, 10, 10, DistanceMetric::Cosine);
+        let mut index = HNSWIndex::new(0.5, 32, 3, 10, 10, DistanceMetric::Cosine);
 
         let mut vectors = vec![];
         for i in 0..5 {
@@ -436,7 +466,7 @@ mod tests {
 
     #[test]
     fn test_hnsw_index_simple() {
-        let mut index = HNSWIndex::new(2, 50, 50, DistanceMetric::Euclidean);
+        let mut index = HNSWIndex::new(0.5, 32, 2, 50, 50, DistanceMetric::Euclidean);
 
         let (data, query_vectors) = get_simple_vectors();
         for vector in &data {
@@ -451,7 +481,7 @@ mod tests {
 
     #[test]
     fn test_hnsw_index_complex() {
-        let mut index = HNSWIndex::new(16, 200, 200, DistanceMetric::Euclidean);
+        let mut index = HNSWIndex::new(0.5, 32, 16, 200, 200, DistanceMetric::Euclidean);
 
         let (data, query_vector) = get_complex_vectors();
 

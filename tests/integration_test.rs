@@ -139,6 +139,8 @@ mod tests {
         let ef_search = 200;
 
         let mut index = IndexType::HNSW(HNSWIndex::new(
+            0.5,
+            32,
             m,
             ef_construction,
             ef_search,
