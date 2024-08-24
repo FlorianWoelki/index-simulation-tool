@@ -36,6 +36,13 @@ pub struct HNSWIndex {
     max_level: usize,
     graph: HashMap<usize, HashMap<usize, Vec<usize>>>,
     element_levels: HashMap<usize, usize>,
+    /// Number of bidirectional links created for every new element during
+    /// construction. Controls the connectivity of the graph.
+    /// Lower values lead to a more sparse graph, which can speed up the
+    /// build time and reduce memory usage but might decrease the recall.
+    /// Higher values increase the number of connections, potentially
+    /// improving recall at the expense of increased memory usage and
+    /// longer build times.
     m: usize,
 }
 
