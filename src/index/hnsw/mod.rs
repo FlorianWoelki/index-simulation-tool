@@ -357,68 +357,62 @@ mod tests {
 
     use super::*;
 
-    // #[test]
-    // fn test_serde() {
-    //     let (data, _) = get_simple_vectors();
-    //     let mut index = HNSWIndex::new(16, 200, 200, DistanceMetric::Euclidean);
-    //     for vector in &data {
-    //         index.add_vector_before_build(vector);
-    //     }
+    #[test]
+    fn test_serde() {
+        let (data, _) = get_simple_vectors();
+        let mut index = HNSWIndex::new(0.5, 32, 3, 200, 200, DistanceMetric::Euclidean);
+        for vector in &data {
+            index.add_vector_before_build(vector);
+        }
 
-    //     let bytes = bincode::serialize(&index).unwrap();
-    //     let reconstructed: HNSWIndex = bincode::deserialize(&bytes).unwrap();
+        let bytes = bincode::serialize(&index).unwrap();
+        let reconstructed: HNSWIndex = bincode::deserialize(&bytes).unwrap();
 
-    //     assert_eq!(index.vectors, reconstructed.vectors);
-    //     assert_eq!(index.metric, reconstructed.metric);
-    //     assert_eq!(index.nodes, reconstructed.nodes);
-    //     assert_eq!(
-    //         index.level_distribution_factor,
-    //         reconstructed.level_distribution_factor
-    //     );
-    //     assert_eq!(index.max_layers, reconstructed.max_layers);
-    //     assert_eq!(index.ef_construction, reconstructed.ef_construction);
-    //     assert_eq!(index.ef_search, reconstructed.ef_search);
-    //     assert_eq!(index.random_seed, reconstructed.random_seed);
-    // }
+        assert_eq!(index.vectors, reconstructed.vectors);
+        assert_eq!(index.metric, reconstructed.metric);
+        assert_eq!(index.element_levels, reconstructed.element_levels);
+        assert_eq!(index.entry_point, reconstructed.entry_point);
+        assert_eq!(index.m, reconstructed.m);
+        assert_eq!(index.graph, reconstructed.graph);
+        assert_eq!(
+            index.level_distribution_factor,
+            reconstructed.level_distribution_factor
+        );
+        assert_eq!(index.max_layers, reconstructed.max_layers);
+        assert_eq!(index.ef_construction, reconstructed.ef_construction);
+        assert_eq!(index.ef_search, reconstructed.ef_search);
+    }
 
-    // #[test]
-    // fn test_add_vector() {
-    //     let random_seed = 42;
-    //     let mut index = HNSWIndex::new(
-    //         1.0 / 3.0,
-    //         16,
-    //         200,
-    //         200,
-    //         DistanceMetric::Euclidean,
-    //         random_seed,
-    //     );
+    #[test]
+    fn test_add_vector() {
+        let mut index = HNSWIndex::new(0.5, 32, 3, 200, 200, DistanceMetric::Euclidean);
 
-    //     let (vectors, _) = get_simple_vectors();
-    //     for vector in &vectors {
-    //         index.add_vector_before_build(vector);
-    //     }
-    //     index.build();
+        let (vectors, _) = get_simple_vectors();
+        for vector in &vectors {
+            index.add_vector_before_build(vector);
+        }
+        index.build();
 
-    //     assert_eq!(index.vectors.len(), vectors.len());
+        assert_eq!(index.vectors.len(), vectors.len());
 
-    //     let new_vector = SparseVector {
-    //         indices: vec![1, 3],
-    //         values: vec![OrderedFloat(4.0), OrderedFloat(5.0)],
-    //     };
-    //     index.add_vector(&new_vector);
+        let new_vector = SparseVector {
+            indices: vec![1, 3],
+            values: vec![OrderedFloat(4.0), OrderedFloat(5.0)],
+        };
+        index.add_vector(&new_vector);
 
-    //     assert_eq!(index.vectors.len(), vectors.len() + 1);
-    //     assert_eq!(index.vectors[index.vectors.len() - 1], new_vector);
+        assert_eq!(index.vectors.len(), vectors.len() + 1);
+        assert_eq!(index.vectors[index.vectors.len() - 1], new_vector);
 
-    //     let results = index.search(&new_vector, 2);
+        let results = index.search(&new_vector, 2);
 
-    //     assert_eq!(results[0].index, vectors.len());
-    //     assert_eq!(results[1].index, 1);
-    // }
+        assert_eq!(results[0].index, vectors.len());
+        assert_eq!(results[1].index, 1);
+    }
 
     #[test]
     fn test_remove_vector() {
-        let mut index = HNSWIndex::new(0.5, 32, 3, 10, 10, DistanceMetric::Cosine);
+        let mut index = HNSWIndex::new(0.5, 32, 8, 10, 10, DistanceMetric::Cosine);
 
         let mut vectors = vec![];
         for i in 0..5 {
