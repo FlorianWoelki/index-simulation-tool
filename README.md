@@ -1,6 +1,6 @@
 # TO DO
 
-- [ ] Investigate HNSW
+- [ ] Investigate NSW
 
 ## Experiments
 
