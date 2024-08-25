@@ -6,8 +6,6 @@ use std::{
 };
 
 use ordered_float::OrderedFloat;
-use rand::Rng;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
 use crate::data::{QueryResult, SparseVector};

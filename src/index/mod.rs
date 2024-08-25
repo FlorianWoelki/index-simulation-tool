@@ -16,7 +16,6 @@ pub mod hnsw;
 pub mod ivfpq;
 pub mod linscan;
 pub mod lsh;
-pub mod neighbor;
 pub mod nsw;
 pub mod pq;
 
