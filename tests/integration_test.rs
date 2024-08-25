@@ -155,10 +155,10 @@ mod tests {
         let ef_search = 50;
 
         let mut index = IndexType::NSW(NSWIndex::new(
+            32,
             ef_construction,
             ef_search,
             DistanceMetric::Cosine,
-            SEED,
         ));
         test_index(&mut index);
     }

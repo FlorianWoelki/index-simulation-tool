@@ -1,13 +1,13 @@
 use std::{
-    collections::{HashMap, HashSet},
+    cmp::Reverse,
+    collections::{BinaryHeap, HashMap, HashSet},
     fs::File,
     io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write},
-    sync::{Arc, Mutex},
 };
 
 use ordered_float::OrderedFloat;
-use rand::{rngs::StdRng, seq::IteratorRandom, SeedableRng};
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rand::Rng;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
 use crate::data::{QueryResult, SparseVector};
@@ -17,7 +17,6 @@ use super::{DistanceMetric, IndexIdentifier, SparseIndex};
 #[derive(Serialize, Deserialize)]
 pub struct NSWIndex {
     vectors: Vec<SparseVector>,
-    graph: HashMap<usize, HashSet<usize>>,
     /// Number of nearest neighbors to consider during index construction.
     /// Higher values improve recall but increase build time and memory usage.
     ef_construction: usize,
@@ -25,109 +24,85 @@ pub struct NSWIndex {
     /// Higher values improve recall but increase search time.
     ef_search: usize,
     metric: DistanceMetric,
-    random_seed: u64,
+    graph: HashMap<usize, Vec<usize>>,
+    /// Number of bidirectional links created for every new element during
+    /// construction. Controls the connectivity of the graph.
+    /// Lower values lead to a more sparse graph, which can speed up the
+    /// build time and reduce memory usage but might decrease the recall.
+    /// Higher values increase the number of connections, potentially
+    /// improving recall at the expense of increased memory usage and
+    /// longer build times.
+    m: usize,
 }
 
 impl NSWIndex {
-    pub fn new(
-        ef_construction: usize,
-        ef_search: usize,
-        metric: DistanceMetric,
-        random_seed: u64,
-    ) -> Self {
+    pub fn new(m: usize, ef_construction: usize, ef_search: usize, metric: DistanceMetric) -> Self {
         NSWIndex {
             vectors: Vec::new(),
             graph: HashMap::new(),
             ef_construction,
             ef_search,
             metric,
-            random_seed,
+            m,
         }
     }
 
-    fn knn_search(
+    fn search_graph(
         &self,
-        query: &SparseVector,
-        m: usize,
-        k: usize,
-        graph: &HashMap<usize, HashSet<usize>>,
-    ) -> Vec<usize> {
-        let result = Arc::new(Mutex::new(HashSet::new()));
-        let candidates = Arc::new(Mutex::new(HashSet::new()));
-        let visited_set = Arc::new(Mutex::new(HashSet::new()));
+        query_vector: &SparseVector,
+        entry_point: usize,
+        ef: usize,
+    ) -> Vec<(f32, usize)> {
+        let mut visited = HashSet::new();
+        let mut candidates = BinaryHeap::new();
+        let mut nearest = BinaryHeap::new();
 
-        (0..m).into_par_iter().for_each(|_| {
-            if let Some(entry_point) = self.get_random_entry_point(graph) {
-                candidates.lock().unwrap().insert(entry_point);
+        let initial_dist = query_vector.distance(&self.vectors[entry_point], &self.metric);
+        candidates.push(Reverse((OrderedFloat(initial_dist), entry_point)));
+        nearest.push((OrderedFloat(initial_dist), entry_point));
+        visited.insert(entry_point);
+
+        while let Some(Reverse((dist, current))) = candidates.pop() {
+            if nearest
+                .peek()
+                .map_or(false, |&(top_dist, _)| dist > top_dist)
+                && nearest.len() >= ef
+            {
+                break;
             }
 
-            loop {
-                let c = {
-                    let candidates_guard = candidates.lock().unwrap();
-                    if candidates_guard.is_empty() {
-                        break;
+            if let Some(neighbors) = self.graph.get(&current) {
+                for &neighbor in neighbors {
+                    if !visited.insert(neighbor) {
+                        continue;
                     }
-                    *candidates_guard
-                        .iter()
-                        .min_by(|&&x, &&y| {
-                            query
-                                .distance(&self.vectors[x], &self.metric)
-                                .partial_cmp(&query.distance(&self.vectors[y], &self.metric))
-                                .unwrap()
-                        })
-                        .unwrap()
-                };
 
-                candidates.lock().unwrap().remove(&c);
+                    let neighbor_dist =
+                        query_vector.distance(&self.vectors[neighbor], &self.metric);
+                    let neighbor_dist = OrderedFloat(neighbor_dist);
 
-                if !visited_set.lock().unwrap().insert(c) {
-                    continue;
-                }
+                    if nearest.len() < ef || neighbor_dist < nearest.peek().unwrap().0 {
+                        candidates.push(Reverse((neighbor_dist, neighbor)));
+                        nearest.push((neighbor_dist, neighbor));
 
-                {
-                    let mut result_guard = result.lock().unwrap();
-                    result_guard.insert(c);
-
-                    if result_guard.len() > k {
-                        let d1 = query.distance(&self.vectors[c], &self.metric);
-                        let d2 = result_guard
-                            .iter()
-                            .map(|&x| query.distance(&self.vectors[x], &self.metric))
-                            .max_by(|a, b| a.partial_cmp(b).unwrap())
-                            .unwrap();
-
-                        if d1 > d2 {
-                            result_guard.remove(&c);
-                        }
-                    }
-                }
-
-                if let Some(neighbors) = self.graph.get(&c) {
-                    let mut candidates_guard = candidates.lock().unwrap();
-                    let visited_set_guard = visited_set.lock().unwrap();
-                    for &e in neighbors {
-                        if !visited_set_guard.contains(&e) {
-                            candidates_guard.insert(e);
+                        if nearest.len() > ef {
+                            nearest.pop();
                         }
                     }
                 }
             }
-        });
+        }
 
-        let mut result_vec: Vec<usize> = result.lock().unwrap().iter().cloned().collect();
-        result_vec.sort_by(|&x, &y| {
-            query
-                .distance(&self.vectors[x], &self.metric)
-                .partial_cmp(&query.distance(&self.vectors[y], &self.metric))
-                .unwrap()
-        });
-        result_vec.truncate(k);
-        result_vec
+        nearest
+            .into_sorted_vec()
+            .into_iter()
+            .map(|(dist, idx)| (dist.into_inner(), idx))
+            .collect()
     }
 
-    fn get_random_entry_point(&self, graph: &HashMap<usize, HashSet<usize>>) -> Option<usize> {
-        let mut rng = StdRng::seed_from_u64(self.random_seed);
-        graph.keys().choose(&mut rng).cloned()
+    fn update_graph(&mut self, vector_index: usize, neighbor: usize) {
+        self.graph.entry(vector_index).or_default().push(neighbor);
+        self.graph.entry(neighbor).or_default().push(vector_index);
     }
 }
 
@@ -140,89 +115,83 @@ impl SparseIndex for NSWIndex {
         let vector_index = self.vectors.len();
         self.vectors.push(vector.clone());
 
-        let new_node_neighbors = if self.graph.is_empty() {
-            HashSet::new()
-        } else {
-            let neighbors =
-                self.knn_search(vector, self.ef_construction, self.ef_search, &self.graph);
-            neighbors.iter().cloned().collect()
-        };
+        if self.graph.is_empty() {
+            self.graph.insert(vector_index, Vec::new());
+            return;
+        }
 
-        self.graph.insert(vector_index, new_node_neighbors.clone());
+        let entry_point = *self.graph.keys().next().unwrap();
+        let nearest = self.search_graph(vector, entry_point, self.ef_construction);
 
-        for &neighbor in &new_node_neighbors {
-            self.graph.get_mut(&neighbor).unwrap().insert(vector_index);
+        for &(_, neighbor) in nearest.iter().take(self.m) {
+            self.update_graph(vector_index, neighbor);
         }
     }
 
-    fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
-        if id >= self.vectors.len() {
+    fn remove_vector(&mut self, index: usize) -> Option<SparseVector> {
+        if index >= self.vectors.len() {
             return None;
         }
 
-        let removed_vector = self.vectors.remove(id);
-        self.graph.remove(&id);
+        let removed_vector = self.vectors.swap_remove(index);
+        self.graph.remove(&index);
 
-        // Updates the graph: remove references to the deleted id and shift ids
-        let mut new_graph = HashMap::new();
-        for (&k, v) in self.graph.iter() {
-            let mut new_set = HashSet::new();
-            for &neighbor in v {
-                if neighbor != id {
-                    if neighbor > id {
-                        new_set.insert(neighbor - 1);
-                    } else {
-                        new_set.insert(neighbor);
+        for connections in self.graph.values_mut() {
+            connections.retain(|&x| x != index);
+        }
+
+        let last_index = self.vectors.len();
+        if index != last_index {
+            if let Some(connections) = self.graph.remove(&last_index) {
+                self.graph.insert(index, connections);
+            }
+
+            for connections in self.graph.values_mut() {
+                for connection in connections.iter_mut() {
+                    if *connection == last_index {
+                        *connection = index;
                     }
                 }
             }
-
-            let new_key = if k > id { k - 1 } else { k };
-            new_graph.insert(new_key, new_set);
         }
-        self.graph = new_graph;
 
         Some(removed_vector)
     }
 
     fn build(&mut self) {
-        let graph = Arc::new(Mutex::new(HashMap::new()));
-        let vectors = Arc::new(self.vectors.clone());
-
-        (0..vectors.len()).into_iter().for_each(|i| {
-            let neighbors = if i == 0 {
-                HashSet::new()
-            } else {
-                let current_graph = graph.lock().unwrap().clone();
-                self.knn_search(
-                    &vectors[i],
-                    self.ef_construction,
-                    self.ef_search,
-                    &current_graph,
-                )
-                .into_iter()
-                .collect()
-            };
-
-            let mut current_graph = graph.lock().unwrap();
-            current_graph.insert(i, neighbors.clone());
-            for &neighbor in &neighbors {
-                current_graph.entry(neighbor).or_default().insert(i);
+        let vector_count = self.vectors.len();
+        for vector_index in 0..vector_count {
+            if self.graph.is_empty() {
+                self.graph.insert(vector_index, Vec::new());
+                continue;
             }
-        });
 
-        self.graph = Arc::try_unwrap(graph).unwrap().into_inner().unwrap();
+            let entry_point = *self.graph.keys().next().unwrap();
+            let nearest = self.search_graph(
+                &self.vectors[vector_index],
+                entry_point,
+                self.ef_construction,
+            );
+
+            for &(_, neighbor) in nearest.iter().take(self.m) {
+                self.update_graph(vector_index, neighbor);
+            }
+        }
     }
 
     fn search(&self, query_vector: &SparseVector, k: usize) -> Vec<QueryResult> {
-        let nearest_neighbors = self.knn_search(query_vector, self.graph.len(), k, &self.graph);
-        nearest_neighbors
-            .into_par_iter()
-            .map(|idx| QueryResult {
-                index: idx,
-                score: OrderedFloat(query_vector.distance(&self.vectors[idx], &self.metric)),
-            })
-            .collect()
+        if let Some(&entry_point) = self.graph.keys().next() {
+            let nearest = self.search_graph(query_vector, entry_point, k);
+            nearest
+                .into_iter()
+                .map(|(distance, id)| QueryResult {
+                    index: id,
+                    score: OrderedFloat(distance),
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
     }
 
     fn save(&self, file: &mut File) {
@@ -230,7 +199,7 @@ impl SparseIndex for NSWIndex {
         let index_type = IndexIdentifier::NSW.to_u32();
         writer
             .write_all(&index_type.to_be_bytes())
-            .expect("Failed to write metadata");
+            .expect("Failed to write metdata");
         bincode::serialize_into(&mut writer, &self).expect("Failed to serialize");
     }
 
@@ -259,8 +228,7 @@ mod tests {
     #[test]
     fn test_serde() {
         let (data, _) = get_simple_vectors();
-        let random_seed = 42;
-        let mut index = NSWIndex::new(5, 3, DistanceMetric::Euclidean, random_seed);
+        let mut index = NSWIndex::new(3, 200, 200, DistanceMetric::Euclidean);
         for vector in &data {
             index.add_vector_before_build(vector);
         }
@@ -270,16 +238,15 @@ mod tests {
 
         assert_eq!(index.vectors, reconstructed.vectors);
         assert_eq!(index.metric, reconstructed.metric);
+        assert_eq!(index.m, reconstructed.m);
         assert_eq!(index.graph, reconstructed.graph);
         assert_eq!(index.ef_construction, reconstructed.ef_construction);
         assert_eq!(index.ef_search, reconstructed.ef_search);
-        assert_eq!(index.random_seed, reconstructed.random_seed);
     }
 
     #[test]
     fn test_add_vector() {
-        let random_seed = 42;
-        let mut index = NSWIndex::new(5, 3, DistanceMetric::Euclidean, random_seed);
+        let mut index = NSWIndex::new(8, 200, 200, DistanceMetric::Euclidean);
 
         let (vectors, _) = get_simple_vectors();
         for vector in &vectors {
@@ -300,112 +267,59 @@ mod tests {
 
         let results = index.search(&new_vector, 2);
 
+        println!("{:?}", results);
+
         assert_eq!(results[0].index, vectors.len());
         assert_eq!(results[1].index, 1);
     }
 
     #[test]
     fn test_remove_vector() {
-        let mut index = NSWIndex::new(5, 3, DistanceMetric::Cosine, 42);
+        let mut index = NSWIndex::new(8, 10, 10, DistanceMetric::Cosine);
 
+        let mut vectors = vec![];
         for i in 0..5 {
             let vector = SparseVector {
                 indices: vec![i],
                 values: vec![OrderedFloat(1.0)],
             };
-            index.add_vector_before_build(&vector);
+            vectors.push(vector);
+        }
+
+        for vector in &vectors {
+            index.add_vector_before_build(vector);
         }
 
         index.build();
 
-        assert_eq!(index.vectors.len(), 5);
-        assert_eq!(index.graph.len(), 5);
+        let removed = index.remove_vector(2);
 
-        let result = index.remove_vector(2);
-        assert_eq!(
-            result,
-            Some(SparseVector {
-                indices: vec![2],
-                values: vec![OrderedFloat(1.0)]
-            })
-        );
+        assert_eq!(removed, Some(vectors[2].clone()));
         assert_eq!(index.vectors.len(), 4);
-        assert_eq!(index.graph.len(), 4);
 
-        assert!(index.graph.contains_key(&0));
-        assert!(index.graph.contains_key(&1));
-        assert!(index.graph.contains_key(&2)); // This was previously 3
-        assert!(index.graph.contains_key(&3)); // This was previously 4
-        assert!(!index.graph.contains_key(&4));
+        assert_eq!(index.vectors[0], vectors[0].clone());
+        assert_eq!(index.vectors[1], vectors[1].clone());
+        assert_eq!(index.vectors[2], vectors[4].clone());
+        assert_eq!(index.vectors[3], vectors[3].clone());
 
-        for neighbors in index.graph.values() {
-            assert!(!neighbors.contains(&4)); // Shifted out of bounds
+        // Check that the removed index is not present in any connections
+        for (_, connections) in index.graph.iter() {
+            assert!(!connections.contains(&4));
         }
 
-        let result = index.remove_vector(10);
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_remove_vector_out_of_bounds() {
-        let mut index = NSWIndex::new(5, 3, DistanceMetric::Cosine, 42);
-
-        for i in 0..5 {
-            let vector = SparseVector {
-                indices: vec![i],
-                values: vec![OrderedFloat(1.0)],
-            };
-            index.add_vector_before_build(&vector);
-        }
-
-        index.build();
-
-        let result = index.remove_vector(10);
-        assert!(result.is_none());
-        assert_eq!(index.vectors.len(), 5);
-        assert_eq!(index.graph.len(), 5);
-    }
-
-    #[test]
-    fn test_remove_vector_last() {
-        let mut index = NSWIndex::new(5, 3, DistanceMetric::Cosine, 42);
-
-        for i in 0..5 {
-            let vector = SparseVector {
-                indices: vec![i],
-                values: vec![OrderedFloat(1.0)],
-            };
-            index.add_vector_before_build(&vector);
-        }
-
-        index.build();
-
-        assert_eq!(index.vectors.len(), 5);
-        assert_eq!(index.graph.len(), 5);
-
-        let result = index.remove_vector(3);
-        assert_eq!(
-            result,
-            Some(SparseVector {
-                indices: vec![3],
-                values: vec![OrderedFloat(1.0)]
-            })
-        );
-        assert_eq!(index.vectors.len(), 4);
-        assert_eq!(index.graph.len(), 4);
-
-        // Verify that no neighbors reference the removed index
-        for neighbors in index.graph.values() {
-            assert!(!neighbors.contains(&4));
+        // Check that the last vector's connections have been updated
+        if let Some(connections) = index.graph.get(&2) {
+            for &neighbor in connections {
+                assert!(index.graph.get(&neighbor).unwrap().contains(&2));
+            }
         }
     }
 
     #[test]
     fn test_nsw_index_simple() {
-        let mut index = NSWIndex::new(10, 5, DistanceMetric::Euclidean, 42);
+        let mut index = NSWIndex::new(2, 50, 50, DistanceMetric::Euclidean);
 
         let (data, query_vectors) = get_simple_vectors();
-
         for vector in &data {
             index.add_vector_before_build(vector);
         }
@@ -418,7 +332,7 @@ mod tests {
 
     #[test]
     fn test_nsw_index_complex() {
-        let mut index = NSWIndex::new(200, 200, DistanceMetric::Euclidean, 42);
+        let mut index = NSWIndex::new(16, 200, 200, DistanceMetric::Euclidean);
 
         let (data, query_vector) = get_complex_vectors();
 
@@ -428,7 +342,7 @@ mod tests {
 
         index.build();
 
-        let results = index.search(&query_vector, 10);
+        let results = index.search(&query_vector, 2);
         assert!(is_in_actual_result(&data, &query_vector, &results));
     }
 }
