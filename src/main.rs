@@ -321,7 +321,7 @@ async fn main() {
 
         // Benchmark loading time for index.
         let (_, total_load_duration) = measure_time!({
-            HNSWIndex::load_index(&saved_file);
+            IndexType::load_index(&saved_file);
         });
 
         let queries_per_second = calculate_queries_per_second(search_report.execution_time);

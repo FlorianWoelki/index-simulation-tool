@@ -1,4 +1,8 @@
-use std::{fmt::Debug, fs::File, io::Read};
+use std::{
+    fmt::Debug,
+    fs::File,
+    io::{BufReader, Read, Seek, SeekFrom},
+};
 
 use annoy::AnnoyIndex;
 use hnsw::HNSWIndex;
@@ -172,10 +176,13 @@ impl SparseIndex for IndexType {
     }
 
     fn load_index(file: &File) -> Self {
-        let mut f = file.clone();
-        let mut buffer = [0; 4];
-        f.read_exact(&mut buffer)
-            .expect("Failed to read index type");
+        let mut reader = BufReader::new(file);
+        reader.seek(SeekFrom::Start(0)).unwrap();
+
+        let mut buffer = [0u8; 4];
+        reader
+            .read_exact(&mut buffer)
+            .expect("Failed to read metadata");
         let index_type =
             IndexIdentifier::from_u32(u32::from_be_bytes(buffer)).expect("Wrong index type");
 
