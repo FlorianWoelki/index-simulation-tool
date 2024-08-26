@@ -47,6 +47,8 @@ struct Args {
     dimensions: Option<usize>,
     #[clap(long, short, action)]
     features: Option<usize>,
+    #[clap(long, short, action)]
+    index_type: String,
 }
 
 #[allow(dead_code)]
@@ -161,8 +163,35 @@ async fn main() {
     let dimensions = args.dimensions.unwrap_or(1000);
     let amount = args.features.unwrap_or(500);
 
-    let mut rng = thread_rng();
     let distance_metric = DistanceMetric::Cosine;
+
+    let seed = thread_rng().gen_range(0..10000);
+    let index_type_input = args.index_type.as_str();
+    let mut index: IndexType = match index_type_input {
+        "hnsw" => IndexType::HNSW(HNSWIndex::new(0.5, 32, 32, 400, 200, distance_metric)),
+        "lsh-simhash" => {
+            IndexType::LSH(LSHIndex::new(20, 4, LSHHashType::SimHash, distance_metric))
+        }
+        "lsh-minhash" => {
+            IndexType::LSH(LSHIndex::new(20, 4, LSHHashType::MinHash, distance_metric))
+        }
+        "pq" => IndexType::PQ(PQIndex::new(3, 50, 256, 0.01, distance_metric, seed)),
+        "ivfpq" => IndexType::IVFPQ(IVFPQIndex::new(
+            3,
+            100,
+            200,
+            256,
+            0.01,
+            distance_metric,
+            seed,
+        )),
+        "nsw" => IndexType::NSW(NSWIndex::new(32, 200, 200, distance_metric)),
+        "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
+        "annoy" => IndexType::Annoy(AnnoyIndex::new(4, 20, 40, distance_metric)),
+        _ => panic!("Unsupported index type"),
+    };
+
+    let mut rng = thread_rng();
     let benchmark_config = BenchmarkConfig::new(
         (dimensions, 1000, dimensions),
         (amount, 500, amount),
@@ -186,14 +215,6 @@ async fn main() {
         println!("...finished generating data");
 
         let total_index_start = Instant::now();
-        // let mut index = LSHIndex::new(20, 4, LSHHashType::SimHash, distance_metric);
-        // let mut index = LSHIndex::new(20, 4, LSHHashType::MinHash, distance_metric);
-        // let mut index = PQIndex::new(3, 50, 256, 0.01, distance_metric, seed);
-        // let mut index = IVFPQIndex::new(3, 100, 200, 256, 0.01, distance_metric, seed);
-        let mut index = HNSWIndex::new(0.5, 32, 32, 400, 200, distance_metric);
-        // let mut index = NSWIndex::new(200, 200, distance_metric, seed);
-        // let mut index = LinScanIndex::new(distance_metric);
-        // let mut index = AnnoyIndex::new(20, 20, 40, distance_metric);
 
         for vector in &vectors {
             index.add_vector_before_build(&vector);
@@ -202,13 +223,11 @@ async fn main() {
         let (_, build_report) = measure_resources!({
             index.build();
         });
-        build_logger.add_record(GenericBenchmarkResult {
-            execution_time: build_report.execution_time.as_secs_f32(),
-            dataset_dimensionality: dimensions,
-            dataset_size: amount,
-            consumed_cpu: build_report.final_cpu,
-            consumed_memory: build_report.final_memory,
-        });
+        build_logger.add_record(GenericBenchmarkResult::from(
+            &build_report,
+            dimensions,
+            amount,
+        ));
         print_measurement_report(&build_report);
 
         // Benchmark for measuring searching.
@@ -218,10 +237,9 @@ async fn main() {
             println!("{:?}", vectors[result[0].index]);
             println!("{:?}", groundtruth[0][0]);
         });
+        print_measurement_report(&search_report);
 
         let total_index_duration = total_index_start.elapsed();
-
-        print_measurement_report(&search_report);
 
         // Calculate recall.
         let mut accumulated_recall = 0.0;
@@ -290,8 +308,8 @@ async fn main() {
         let (saved_file, total_save_duration) = measure_time!({
             save_index(
                 &dir_path,
-                format!("annoy_serial_{}", amount), // TODO: Modify to support parallel
-                IndexType::HNSW(index),
+                format!("{}_serial_{}", index_type_input, amount), // TODO: Modify to support parallel
+                &index,
             )
         });
 
@@ -331,73 +349,12 @@ async fn main() {
     }
 
     index_logger
-        .write_to_csv(format!("{}/annoy.csv", dir_path))
+        .write_to_csv(format!("{}/{}.csv", dir_path, index_type_input))
         .expect("Something went wrong while writing to csv");
 
     build_logger
-        .write_to_csv(format!("{}/annoy_build.csv", dir_path))
+        .write_to_csv(format!("{}/{}_build.csv", dir_path, index_type_input))
         .expect("Something went wrong while writing to csv");
-
-    // let seed = thread_rng().gen_range(0..10000);
-    // let mut annoy_index = AnnoyIndex::new(20, 20, 40, DistanceMetric::Cosine);
-    // let mut simhash_index = LSHIndex::new(20, 4, LSHHashType::SimHash, DistanceMetric::Cosine);
-    // let mut minhash_index = LSHIndex::new(20, 4, LSHHashType::MinHash, DistanceMetric::Cosine);
-    // let mut pq_index = PQIndex::new(3, 50, 256, 0.01, DistanceMetric::Cosine, seed);
-    // let mut ivfpq_index = IVFPQIndex::new(3, 100, 200, 256, 0.01, DistanceMetric::Cosine, seed);
-    // let mut nsw_index = NSWIndex::new(200, 200, DistanceMetric::Cosine, seed);
-    // let mut linscan_index = LinScanIndex::new(DistanceMetric::Euclidean);
-    // let mut hnsw_index = HNSWIndex::new(0.5, 16, 200, 200, DistanceMetric::Cosine, seed);
-
-    // println!("Start adding vectors...");
-    // for (i, vector) in vectors.iter().enumerate() {
-    //     linscan_index.add_vector(vector);
-    // annoy_index.add_vector(vector);
-    //     simhash_index.add_vector(vector);
-    //     minhash_index.add_vector(vector);
-    //     pq_index.add_vector(vector);
-    //     ivfpq_index.add_vector(vector);
-    //     hnsw_index.add_vector(vector);
-    //     nsw_index.add_vector(vector);
-    // }
-    // println!("Done adding vectors...");
-
-    // println!("Start building index...");
-    // linscan_index.build_parallel();
-    // annoy_index.build();
-    // simhash_index.build_parallel();
-    // minhash_index.build_parallel();
-    // pq_index.build_parallel();
-    // ivfpq_index.build_parallel();
-    // hnsw_index.build_parallel();
-    // nsw_index.build_parallel();
-    // println!("Done building index...");
-
-    // let linscan_result = linscan_index.search_parallel(&query_vectors[0], 10);
-    // let pq_result = pq_index.search_parallel(&query_vectors[0], 10);
-    // let ivfpq_result = ivfpq_index.search_parallel(&query_vectors[0], 10);
-    // let simhash_result = simhash_index.search_parallel(&query_vectors[0], 10);
-    // let minhash_result = minhash_index.search_parallel(&query_vectors[0], 10);
-    // let hnsw_result = hnsw_index.search_parallel(&query_vectors[0], 10);
-    // let nsw_result = nsw_index.search_parallel(&query_vectors[0], 10);
-    // let annoy_result = annoy_index.search(&query_vectors[0], 10);
-
-    // println!("l1: {:?}", vectors[linscan_result[0].index].indices);
-    // println!("l2: {:?}", vectors[linscan_result[1].index].indices);
-    // println!("h1: {:?}", vectors[hnsw_result[0].index].indices);
-    // println!("h2: {:?}", vectors[hnsw_result[1].index].indices);
-    // println!("n1: {:?}", vectors[nsw_result[0].index].indices);
-    // println!("n2: {:?}", vectors[nsw_result[1].index].indices);
-    // println!("p1: {:?}", vectors[pq_result[0].index].indices);
-    // println!("p2: {:?}", vectors[pq_result[1].index].indices);
-    // println!("s1: {:?}", vectors[simhash_result[0].index].indices);
-    // println!("s2: {:?}", vectors[simhash_result[1].index].indices);
-    // println!("i1: {:?}", vectors[ivfpq_result[0].index].indices);
-    // println!("i2: {:?}", vectors[ivfpq_result[1].index].indices);
-    // println!("a1: {:?}", vectors[annoy_result[0].index].indices);
-    // println!("a2: {:?}", vectors[annoy_result[1].index].indices);
-    // println!("m1: {:?}", vectors[minhash_result[0].index].indices);
-    // println!("m2: {:?}", vectors[minhash_result[1].index].indices);
-    // println!("gt: {:?}", groundtruth[0][0].indices);
 
     // for (i, res) in r.iter().enumerate() {
     /*let gt_index = groundtruth.0[0][i];
@@ -516,7 +473,7 @@ fn print_measurement_report(report: &ResourceReport) {
     println!("-----------------------------------\n");
 }
 
-fn save_index(dir_path: &String, name: String, index: IndexType) -> File {
+fn save_index(dir_path: &String, name: String, index: &IndexType) -> File {
     let file_path = format!("{}/{}.ist", dir_path, name);
     let mut file = OpenOptions::new()
         .write(true)
@@ -546,93 +503,3 @@ async fn generate_data(
     let (vectors, query_vectors, groundtruth) = generator.generate().await;
     (vectors, query_vectors, groundtruth)
 }
-
-// async fn run_benchmark(
-//     index: &mut IndexType,
-//     distance_metric: DistanceMetric,
-//     dimensions: usize,
-//     num_images: usize,
-// ) {
-//     let benchmark_config = BenchmarkConfig::new(
-//         (dimensions, 100, dimensions),
-//         (num_images, 1_000_000, num_images),
-//         (0.0, 255.0),
-//         0.95,
-//         distance_metric,
-//     );
-//     let mut logger = BenchmarkLogger::new();
-
-//     let mut previous_benchmark_result = None;
-//     for (dimensions, amount) in benchmark_config.dataset_configurations() {
-//         let generated_data = generate_data(&benchmark_config, dimensions, amount).await;
-
-//         measure_resources!({
-//             let result = perform_single_benchmark(
-//                 index,
-//                 &benchmark_config,
-//                 &mut logger,
-//                 previous_benchmark_result,
-//                 (dimensions, amount),
-//             )
-//             .await;
-//             previous_benchmark_result = Some(result);
-//         });
-//     }
-
-//     // TODO: Change file name to be more generic with a date.
-//     if let Err(e) = logger.write_to_csv("benchmark_results.csv") {
-//         eprintln!("Failed to write benchmark results to CSV: {}", e);
-//     }
-// }
-
-// async fn perform_single_benchmark(
-//     index: &mut IndexType,
-//     config: &BenchmarkConfig,
-//     logger: &mut BenchmarkLogger,
-//     previous_benchmark_result: Option<BenchmarkResult>,
-//     (dimensions, amount): (usize, usize),
-// ) -> BenchmarkResult {
-//     println!("------------------------------------");
-//     println!(
-//         "Benchmarking with number of vectors: {} and dimensions: {}",
-//         amount, dimensions
-//     );
-
-//     let query_vector = SparseVector {
-//         indices: vec![],
-//         values: vec![],
-//     };
-//     let k = 5;
-//     let result = measure_benchmark(
-//         index,
-//         &query_vector,
-//         previous_benchmark_result,
-//         amount,
-//         dimensions,
-//         k,
-//     );
-
-//     logger.add_record(&result);
-
-//     print_benchmark_results(&result);
-//     println!("------------------------------------");
-//     result
-// }
-
-// fn print_benchmark_results(result: &BenchmarkResult) {
-//     println!("Total Execution time: {:?}", result.total_execution_time);
-//     println!("Index Execution time: {:?}", result.index_execution_time);
-//     println!("Query Execution time: {:?}", result.query_execution_time);
-//     println!("Queries per Second (QPS): {:?}", result.queries_per_second);
-//     println!(
-//         "Scalability Factor: {:?}",
-//         result
-//             .scalability_factor
-//             .unwrap_or(DEFAULT_SCALABILITY_FACTOR)
-//     );
-//     println!("Dataset Size: {:?}", result.dataset_size);
-//     println!(
-//         "Dataset Dimensionality: {:?}",
-//         result.dataset_dimensionality
-//     );
-// }

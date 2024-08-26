@@ -1,3 +1,4 @@
+use macros::measure_system::ResourceReport;
 use serde::Serialize;
 
 use crate::index::DistanceMetric;
@@ -79,6 +80,18 @@ pub struct GenericBenchmarkResult {
     pub dataset_dimensionality: usize,
     pub consumed_memory: f32,
     pub consumed_cpu: f32,
+}
+
+impl GenericBenchmarkResult {
+    pub fn from(report: &ResourceReport, dimensions: usize, amount: usize) -> Self {
+        GenericBenchmarkResult {
+            execution_time: report.execution_time.as_secs_f32(),
+            dataset_dimensionality: dimensions,
+            dataset_size: amount,
+            consumed_cpu: report.final_cpu,
+            consumed_memory: report.final_memory,
+        }
+    }
 }
 
 #[derive(Serialize, Clone, Copy)]
