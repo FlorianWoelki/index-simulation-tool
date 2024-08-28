@@ -17,7 +17,7 @@ use crate::{
 
 use super::{DistanceMetric, IndexIdentifier, SparseIndex};
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 struct Node {
     left: Option<Box<Node>>,
     right: Option<Box<Node>>,
@@ -90,12 +90,12 @@ impl Node {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 struct Tree {
     root: Node,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AnnoyIndex {
     trees: Vec<Tree>,
     vectors: Vec<SparseVector>,

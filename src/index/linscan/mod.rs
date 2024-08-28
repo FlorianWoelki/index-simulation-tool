@@ -17,7 +17,7 @@ use crate::{
 
 use super::{IndexIdentifier, SparseIndex};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LinScanIndex {
     vectors: Vec<SparseVector>,
     inverted_index: HashMap<usize, Vec<(usize, OrderedFloat<f32>)>>,

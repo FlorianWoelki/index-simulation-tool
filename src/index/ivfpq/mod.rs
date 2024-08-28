@@ -18,7 +18,7 @@ use crate::{
 
 use super::{DistanceMetric, IndexIdentifier, SparseIndex};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct IVFPQIndex {
     /// Number of subvectors for PQ.
     /// Higher values increase granularity of vector encoding, potentially

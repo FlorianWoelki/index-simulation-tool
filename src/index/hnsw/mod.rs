@@ -14,7 +14,7 @@ use crate::data::{QueryResult, SparseVector};
 
 use super::{DistanceMetric, IndexIdentifier, SparseIndex};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct HNSWIndex {
     vectors: Vec<SparseVector>,
     /// Factor controlling the distribution of levels in the hierarchical graph.

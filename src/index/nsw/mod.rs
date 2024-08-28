@@ -12,7 +12,7 @@ use crate::data::{QueryResult, SparseVector};
 
 use super::{DistanceMetric, IndexIdentifier, SparseIndex};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct NSWIndex {
     vectors: Vec<SparseVector>,
     /// Number of nearest neighbors to consider during index construction.

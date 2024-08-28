@@ -21,13 +21,13 @@ use super::{DistanceMetric, IndexIdentifier, SparseIndex};
 mod minhash;
 mod simhash;
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub enum LSHHashType {
     MinHash,
     SimHash,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct LSHIndex {
     /// Number of buckets in the hash table.
     /// Higher values can improve search speed but increase memory usage.

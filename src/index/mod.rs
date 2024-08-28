@@ -54,6 +54,7 @@ pub trait SparseIndex {
 }
 
 #[allow(dead_code)]
+#[derive(Clone, Debug)]
 pub enum IndexType {
     LSH(LSHIndex),
     Annoy(AnnoyIndex),

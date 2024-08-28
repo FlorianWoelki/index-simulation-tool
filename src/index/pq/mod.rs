@@ -16,7 +16,7 @@ use std::{
 
 use super::{DistanceMetric, IndexIdentifier, SparseIndex};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PQIndex {
     /// Number of subvectors to divide the original vector into.
     /// Higher values increase compression but may reduce accuracy.
