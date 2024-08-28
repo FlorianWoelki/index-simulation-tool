@@ -1,8 +1,5 @@
 ## Experiments
 
-- [ ] Having a timeout (5min) that terminates the current run
--> use `thread::spawn` and `mpsc::channel`
-
 - [ ] Single-Threaded experiments
   - [ ] Using PCA
   - [ ] Using t-sne
