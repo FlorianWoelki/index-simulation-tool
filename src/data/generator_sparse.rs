@@ -10,7 +10,7 @@ use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterato
 
 use crate::index::DistanceMetric;
 
-use super::SparseVector;
+use super::vector::SparseVector;
 
 pub struct SparseDataGenerator {
     dim: usize,

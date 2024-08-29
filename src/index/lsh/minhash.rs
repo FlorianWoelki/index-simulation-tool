@@ -1,6 +1,6 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-use crate::data::SparseVector;
+use crate::data::vector::SparseVector;
 
 pub(super) fn minhash(vector: &SparseVector, hash_function_index: usize) -> u64 {
     let mut hasher = DefaultHasher::new();

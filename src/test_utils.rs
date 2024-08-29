@@ -1,6 +1,6 @@
 use ordered_float::OrderedFloat;
 
-use crate::data::{QueryResult, SparseVector};
+use crate::data::{vector::SparseVector, QueryResult};
 
 /// Returns a tuple where the first entry is easy to index vector data
 /// and the second entry are possible query vectors to use.

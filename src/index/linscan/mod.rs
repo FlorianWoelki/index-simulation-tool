@@ -10,7 +10,7 @@ use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIter
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    data::{QueryResult, SparseVector},
+    data::{vector::SparseVector, QueryResult},
     data_structures::min_heap::MinHeap,
     index::DistanceMetric,
 };

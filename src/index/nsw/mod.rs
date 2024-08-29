@@ -8,7 +8,7 @@ use std::{
 use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
 
-use crate::data::{QueryResult, SparseVector};
+use crate::data::{vector::SparseVector, QueryResult};
 
 use super::{DistanceMetric, IndexIdentifier, SparseIndex};
 

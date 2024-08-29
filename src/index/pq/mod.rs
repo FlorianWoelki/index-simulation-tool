@@ -1,5 +1,5 @@
 use crate::{
-    data::{QueryResult, SparseVector},
+    data::{vector::SparseVector, QueryResult},
     data_structures::min_heap::MinHeap,
     kmeans::kmeans,
 };

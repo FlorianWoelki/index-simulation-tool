@@ -2,7 +2,7 @@ use nalgebra::{DMatrix, DVector, SymmetricEigen};
 use ordered_float::OrderedFloat;
 use plotly::{common::Mode, Plot, Scatter};
 
-use super::SparseVector;
+use crate::data::vector::SparseVector;
 
 fn compute_mean(vectors: &Vec<SparseVector>, dimension: usize) -> Vec<f32> {
     let mut mean = vec![0.0; dimension];
@@ -59,7 +59,7 @@ fn compute_covariance_matrix(vectors: &Vec<SparseVector>, dimension: usize) -> D
 }
 
 pub fn pca(
-    vectors: Vec<SparseVector>,
+    vectors: &Vec<SparseVector>,
     dimension: usize,
     num_components: usize,
 ) -> (Vec<SparseVector>, Vec<f32>, DMatrix<f32>) {
@@ -219,7 +219,7 @@ mod tests {
         let dimension = 4; // Assuming original vectors have dimension 4
         let num_components = 2;
         let (transformed_vectors, explained_variances, eigenvectors) =
-            pca(vectors.clone(), dimension, num_components);
+            pca(&vectors, dimension, num_components);
 
         // Print the transformed sparse vectors
         for (i, vector) in transformed_vectors.iter().enumerate() {

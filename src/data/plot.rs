@@ -6,7 +6,9 @@ use plotly::{
 };
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-use crate::{data::SparseVector, index::DistanceMetric};
+use crate::index::DistanceMetric;
+
+use super::vector::SparseVector;
 
 fn mean(data: &Vec<f32>) -> Option<f32> {
     if data.is_empty() {

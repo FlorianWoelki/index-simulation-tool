@@ -3,7 +3,7 @@ mod tests {
     use std::collections::HashSet;
 
     use index_simulation_tool::{
-        data::SparseVector,
+        data::vector::SparseVector,
         index::{
             annoy::AnnoyIndex,
             hnsw::HNSWIndex,

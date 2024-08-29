@@ -13,7 +13,7 @@ use nsw::NSWIndex;
 use pq::PQIndex;
 use serde::{Deserialize, Serialize};
 
-use crate::data::{QueryResult, SparseVector};
+use crate::data::{vector::SparseVector, QueryResult};
 
 pub mod annoy;
 pub mod hnsw;

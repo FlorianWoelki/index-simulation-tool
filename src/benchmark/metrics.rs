@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::data::SparseVector;
+use crate::data::vector::SparseVector;
 
 use super::IndexBenchmarkResult;
 

@@ -7,7 +7,7 @@ use rayon::iter::{
     IntoParallelRefMutIterator, ParallelIterator,
 };
 
-use super::SparseVector;
+use super::vector::SparseVector;
 
 fn generate_normal(mean: f64, std_dev: f64, rng: &mut StdRng) -> f64 {
     let u1: f64 = rng.gen();

@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use simhash::simhash;
 
 use crate::{
-    data::{QueryResult, SparseVector},
+    data::{vector::SparseVector, QueryResult},
     data_structures::min_heap::MinHeap,
 };
 
@@ -232,7 +232,10 @@ impl SparseIndex for LSHIndex {
 
 #[cfg(test)]
 mod tests {
-    use crate::test_utils::{get_complex_vectors, get_simple_vectors, is_in_actual_result};
+    use crate::{
+        data::vector::SparseVector,
+        test_utils::{get_complex_vectors, get_simple_vectors, is_in_actual_result},
+    };
 
     use super::*;
 

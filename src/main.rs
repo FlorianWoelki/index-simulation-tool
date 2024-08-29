@@ -16,7 +16,7 @@ use chrono::Local;
 use data::{
     generator_sparse::SparseDataGenerator,
     plot::{plot_nearest_neighbor_distances, plot_sparsity_distribution},
-    SparseVector,
+    vector::SparseVector,
 };
 
 use rand::{thread_rng, Rng};
@@ -332,8 +332,6 @@ async fn main() {
         let average_remove_duration = total_remove_duration / added_vectors.len() as u32;
         println!("Average vector removal time: {:?}", average_remove_duration);
         println!("...finished\n");
-
-        // TODO: Add benchmark for measuring application of dimensionality reduction techniques to data.
 
         // Benchmark for saving to disk.
         let (saved_file, total_save_duration) = measure_time!({

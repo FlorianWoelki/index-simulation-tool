@@ -11,7 +11,7 @@ use std::{
 use ordered_float::OrderedFloat;
 use rand::{rngs::StdRng, SeedableRng};
 
-use crate::{data::SparseVector, index::DistanceMetric};
+use crate::{data::vector::SparseVector, index::DistanceMetric};
 
 fn initialize_centers(
     vectors: &[SparseVector],
