@@ -1,39 +1,54 @@
 use nalgebra::{DMatrix, DVector, SymmetricEigen};
 use ordered_float::OrderedFloat;
 use plotly::{common::Mode, Plot, Scatter};
+use rayon::iter::{
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
+};
 
 use crate::data::vector::SparseVector;
 
 fn compute_mean(vectors: &Vec<SparseVector>, dimension: usize) -> Vec<f32> {
-    let mut mean = vec![0.0; dimension];
-    let mut counts = vec![0; dimension];
+    let (sum, count): (Vec<f32>, Vec<u32>) = vectors
+        .par_iter()
+        .fold(
+            || (vec![0.0; dimension], vec![0; dimension]),
+            |(mut sum, mut count), vector| {
+                for (i, &value) in vector.values.iter().enumerate() {
+                    let idx = vector.indices[i];
+                    sum[idx] += value.into_inner();
+                    count[idx] += 1;
+                }
+                (sum, count)
+            },
+        )
+        .reduce(
+            || (vec![0.0; dimension], vec![0; dimension]),
+            |mut a, b| {
+                a.0.iter_mut().zip(b.0.iter()).for_each(|(x, y)| *x += y);
+                a.1.iter_mut().zip(b.1.iter()).for_each(|(x, y)| *x += y);
+                a
+            },
+        );
 
-    for vector in vectors {
-        for (i, &value) in vector.values.iter().enumerate() {
-            let idx = vector.indices[i];
-            mean[idx] += value.into_inner();
-            counts[idx] += 1;
-        }
-    }
-
-    for i in 0..dimension {
-        if counts[i] > 0 {
-            mean[i] /= counts[i] as f32;
-        }
-    }
-
-    mean
+    sum.into_iter()
+        .zip(count.into_iter())
+        .map(|(s, c)| if c > 0 { s / c as f32 } else { 0.0 })
+        .collect()
 }
 
 fn center_data(vectors: &Vec<SparseVector>, mean: &Vec<f32>) -> Vec<SparseVector> {
     vectors
-        .iter()
+        .par_iter()
         .map(|vector| {
-            let mut centered_values = Vec::new();
-            for (i, &value) in vector.values.iter().enumerate() {
-                let idx = vector.indices[i];
-                centered_values.push(OrderedFloat(value.into_inner() - mean[idx]));
-            }
+            let centered_values = vector
+                .values
+                .par_iter()
+                .enumerate()
+                .map(|(i, &value)| {
+                    let idx = vector.indices[i];
+                    OrderedFloat(value.into_inner() - mean[idx])
+                })
+                .collect();
             SparseVector {
                 indices: vector.indices.clone(),
                 values: centered_values,
@@ -43,17 +58,27 @@ fn center_data(vectors: &Vec<SparseVector>, mean: &Vec<f32>) -> Vec<SparseVector
 }
 
 fn compute_covariance_matrix(vectors: &Vec<SparseVector>, dimension: usize) -> DMatrix<f32> {
-    let mut covariance_matrix = DMatrix::zeros(dimension, dimension);
-
-    for vector in vectors {
-        let mut dense_vector = vec![0.0; dimension];
-        for (i, &value) in vector.values.iter().enumerate() {
-            dense_vector[vector.indices[i]] = value.into_inner();
-        }
-
-        let dv = DVector::from_vec(dense_vector);
-        covariance_matrix += &dv * dv.transpose();
-    }
+    let covariance_matrix = vectors
+        .par_iter()
+        .fold(
+            || DMatrix::zeros(dimension, dimension),
+            |mut matrix, vector| {
+                let mut dense_vector = vec![0.0; dimension];
+                for (i, &value) in vector.values.iter().enumerate() {
+                    dense_vector[vector.indices[i]] = value.into_inner();
+                }
+                let dv = DVector::from_vec(dense_vector);
+                matrix += &dv * dv.transpose();
+                matrix
+            },
+        )
+        .reduce(
+            || DMatrix::zeros(dimension, dimension),
+            |mut a, b| {
+                a += b;
+                a
+            },
+        );
 
     covariance_matrix / (vectors.len() as f32 - 1.0)
 }
@@ -72,35 +97,36 @@ pub fn pca(
     let eigenvalues = eig.eigenvalues;
 
     let transformed_data: Vec<SparseVector> = centered_vectors
-        .iter()
+        .par_iter()
         .map(|vector| {
-            let mut transformed_indices = Vec::new();
-            let mut transformed_values = Vec::new();
-
-            for i in 0..num_components {
-                let mut component_value = 0.0;
-                for (j, &value) in vector.values.iter().enumerate() {
-                    let idx = vector.indices[j];
-                    component_value += value.into_inner() * eigenvectors[(idx, i)];
-                }
-                if component_value.abs() > f32::EPSILON {
-                    transformed_indices.push(i);
-                    transformed_values.push(OrderedFloat(component_value));
-                }
-            }
+            let transformed = (0..num_components)
+                .into_par_iter()
+                .filter_map(|i| {
+                    let component_value: f32 = vector
+                        .values
+                        .par_iter()
+                        .enumerate()
+                        .map(|(j, &value)| {
+                            let idx = vector.indices[j];
+                            value.into_inner() * eigenvectors[(idx, i)]
+                        })
+                        .sum();
+                    if component_value.abs() > f32::EPSILON {
+                        Some((i, OrderedFloat(component_value)))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
 
             SparseVector {
-                indices: transformed_indices,
-                values: transformed_values,
+                indices: transformed.iter().map(|&(i, _)| i).collect(),
+                values: transformed.into_iter().map(|(_, v)| v).collect(),
             }
         })
         .collect();
 
-    let explained_variances: Vec<f32> = eigenvalues
-        .iter()
-        .take(num_components)
-        .map(|&v| v)
-        .collect();
+    let explained_variances: Vec<f32> = eigenvalues.iter().take(num_components).cloned().collect();
 
     (
         transformed_data,

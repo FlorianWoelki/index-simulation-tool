@@ -15,6 +15,7 @@ use benchmark::{
 use chrono::Local;
 use data::{
     generator_sparse::SparseDataGenerator,
+    pca::pca,
     plot::{plot_nearest_neighbor_distances, plot_sparsity_distribution},
     vector::SparseVector,
 };
@@ -162,7 +163,7 @@ async fn main() {
     println!("Executing in serial? {}", !is_parallel);
 
     let args = Args::parse();
-    let dimensions = args.dimensions.unwrap_or(1000);
+    let dimensions = args.dimensions.unwrap_or(500);
     let amount = args.features.unwrap_or(500);
 
     let distance_metric = DistanceMetric::Cosine;
@@ -172,7 +173,7 @@ async fn main() {
 
     let mut rng = thread_rng();
     let benchmark_config = BenchmarkConfig::new(
-        (dimensions, 1000, dimensions),
+        (dimensions, 500, dimensions),
         (amount, 500, amount),
         (0.0, 1.0),
         0.90,
@@ -216,6 +217,9 @@ async fn main() {
         let (vectors, query_vectors, groundtruth) =
             generate_data(&benchmark_config, dimensions, amount).await;
         println!("...finished generating data");
+
+        // TODO: Add benchmark for measuring application of dimensionality reduction techniques to data.
+        let (vectors, _, _) = pca(&vectors, dimensions, dimensions / 2);
 
         let total_index_start = Instant::now();
 
