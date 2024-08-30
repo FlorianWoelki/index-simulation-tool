@@ -215,17 +215,23 @@ async fn main() {
             _ => panic!("Unsupported index type"),
         };
 
-        println!("Generating data...");
+        println!("\nGenerating data...");
         let (mut vectors, query_vectors, groundtruth) =
             generate_data(&benchmark_config, dimensions, amount).await;
         println!("...finished generating data");
 
         if let Some(reduction_technique) = &args.reduction_technique {
             if reduction_technique == "pca" {
+                println!(
+                    "\nTransforming data with technique {}...",
+                    reduction_technique
+                );
                 let (transformed_vectors, _, _) = pca(&vectors, dimensions, dimensions / 2);
                 vectors = transformed_vectors;
 
                 // TODO: Transform query and groundtruth vectors as well.
+
+                println!("...finished transforming data");
             }
         }
 
