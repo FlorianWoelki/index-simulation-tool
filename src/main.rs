@@ -52,6 +52,8 @@ struct Args {
     features: Option<usize>,
     #[clap(long, short, action)]
     index_type: String,
+    #[clap(long, short, action)]
+    reduction_technique: Option<String>,
 }
 
 #[allow(dead_code)]
@@ -214,12 +216,18 @@ async fn main() {
         };
 
         println!("Generating data...");
-        let (vectors, query_vectors, groundtruth) =
+        let (mut vectors, query_vectors, groundtruth) =
             generate_data(&benchmark_config, dimensions, amount).await;
         println!("...finished generating data");
 
-        // TODO: Add benchmark for measuring application of dimensionality reduction techniques to data.
-        let (vectors, _, _) = pca(&vectors, dimensions, dimensions / 2);
+        if let Some(reduction_technique) = &args.reduction_technique {
+            if reduction_technique == "pca" {
+                let (transformed_vectors, _, _) = pca(&vectors, dimensions, dimensions / 2);
+                vectors = transformed_vectors;
+
+                // TODO: Transform query and groundtruth vectors as well.
+            }
+        }
 
         let total_index_start = Instant::now();
 
