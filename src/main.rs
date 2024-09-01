@@ -1,8 +1,7 @@
 use std::{
     fs::{self, File, OpenOptions},
     io::Write,
-    sync::{mpsc, Arc, Mutex},
-    thread,
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
@@ -260,41 +259,37 @@ async fn main() {
 
         let timeout = Duration::from_secs(30);
 
-        let (tx, rx) = mpsc::channel();
-
         let index = Arc::new(Mutex::new(index));
         let index_clone = Arc::clone(&index);
         let query_vector = query_vectors[0].clone();
 
-        // Spawns a new thread to have a timeout to cancel this thread.
-        // TODO: Use execute_with_timeout function.
-        thread::spawn(move || {
-            let mut index = index_clone.lock().unwrap();
-            let (_, build_report) = measure_resources!({
-                index.build();
-            });
+        let result = execute_with_timeout(
+            move || {
+                let mut index = index_clone.lock().unwrap();
+                let (_, build_report) = measure_resources!({
+                    index.build();
+                });
 
-            // Benchmark for measuring searching.
-            let (_, search_report) = measure_resources!({
-                index.search(&query_vector, 5);
+                // Benchmark for measuring searching.
+                let (_, search_report) = measure_resources!({
+                    index.search(&query_vector, 5);
 
-                // println!("{:?}", vectors[result[0].index]);
-                // println!("{:?}", groundtruth[0][0]);
-            });
+                    // println!("{:?}", vectors[result[0].index]);
+                    // println!("{:?}", groundtruth[0][0]);
+                });
 
-            tx.send((build_report, search_report)).unwrap();
-        });
+                (build_report, search_report)
+            },
+            timeout,
+        );
 
-        let (build_report, search_report) = match rx.recv_timeout(timeout) {
-            Ok((build_report, search_report)) => (Some(build_report), Some(search_report)),
-            Err(_) => {
+        let (build_report, search_report) = match result {
+            Some((build_report, search_report)) => (build_report, search_report),
+            None => {
                 println!("Build & Search index timed out");
                 continue;
             }
         };
-
-        let build_report = build_report.unwrap();
-        let search_report = search_report.unwrap();
 
         let mut index = Arc::try_unwrap(index).unwrap().into_inner().unwrap();
 
