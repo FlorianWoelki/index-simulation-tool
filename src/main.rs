@@ -7,6 +7,7 @@ use std::{
 };
 
 use benchmark::{
+    execute_with_timeout,
     logger::BenchmarkLogger,
     macros::{measure_system::ResourceReport, measure_time},
     metrics::{calculate_queries_per_second, calculate_recall, calculate_scalability_factor},
@@ -216,24 +217,40 @@ async fn main() {
         };
 
         println!("\nGenerating data...");
-        let (mut vectors, query_vectors, groundtruth) =
+        let (vectors, query_vectors, groundtruth) =
             generate_data(&benchmark_config, dimensions, amount).await;
         println!("...finished generating data");
 
-        if let Some(reduction_technique) = &args.reduction_technique {
-            if reduction_technique == "pca" {
-                println!(
-                    "\nTransforming data with technique {}...",
-                    reduction_technique
-                );
-                let (transformed_vectors, _, _) = pca(&vectors, dimensions, dimensions / 2);
-                vectors = transformed_vectors;
+        let timeout = Duration::from_secs(30);
+        let vectors = if let Some(reduction_technique) = &args.reduction_technique {
+            match reduction_technique.as_str() {
+                "pca" => execute_with_timeout(
+                    move || {
+                        println!("\nTransforming data with reduction technique...",);
+                        let (transformed_vectors, _, _) = pca(&vectors, dimensions, dimensions / 2);
 
-                // TODO: Transform query and groundtruth vectors as well.
+                        // TODO: Transform query and groundtruth vectors as well.
 
-                println!("...finished transforming data");
+                        transformed_vectors
+                    },
+                    timeout,
+                ),
+                _ => {
+                    println!("Unsupported reduction technique: {}", reduction_technique);
+                    None
+                }
             }
-        }
+        } else {
+            Some(vectors)
+        };
+
+        let vectors = match vectors {
+            Some(vectors) => vectors,
+            None => {
+                println!("Failed to process vectors due to timeout or unsupported operation");
+                continue;
+            }
+        };
 
         let total_index_start = Instant::now();
 
@@ -249,6 +266,8 @@ async fn main() {
         let index_clone = Arc::clone(&index);
         let query_vector = query_vectors[0].clone();
 
+        // Spawns a new thread to have a timeout to cancel this thread.
+        // TODO: Use execute_with_timeout function.
         thread::spawn(move || {
             let mut index = index_clone.lock().unwrap();
             let (_, build_report) = measure_resources!({

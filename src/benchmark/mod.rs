@@ -1,3 +1,5 @@
+use std::{sync::mpsc, thread, time::Duration};
+
 use macros::measure_system::ResourceReport;
 use serde::Serialize;
 
@@ -125,3 +127,29 @@ pub trait SerializableBenchmark: Serialize {}
 impl SerializableBenchmark for GenericBenchmarkResult {}
 
 impl SerializableBenchmark for IndexBenchmarkResult {}
+
+pub fn execute_with_timeout<T, F>(operation: F, timeout: Duration) -> Option<T>
+where
+    F: FnOnce() -> T + Send + 'static,
+    T: Send + 'static,
+{
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        let result = operation();
+        tx.send(result)
+            .unwrap_or_else(|_| println!("Failed to send result back"));
+    });
+
+    match rx.recv_timeout(timeout) {
+        Ok(result) => Some(result),
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            println!("Operation timed out after {:?}", timeout);
+            None
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            println!("Channel is disconnected");
+            None
+        }
+    }
+}
