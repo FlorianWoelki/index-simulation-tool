@@ -153,3 +153,36 @@ where
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{thread, time::Duration};
+
+    use super::execute_with_timeout;
+
+    #[test]
+    fn test_execute_with_timeout_success() {
+        let result = execute_with_timeout(
+            || {
+                thread::sleep(Duration::from_millis(5));
+                "Success"
+            },
+            Duration::from_millis(10),
+        );
+
+        assert_eq!(result, Some("Success"));
+    }
+
+    #[test]
+    fn test_execute_with_timeout_failure() {
+        let result = execute_with_timeout(
+            || {
+                thread::sleep(Duration::from_millis(20));
+                "Should not see this"
+            },
+            Duration::from_millis(10),
+        );
+
+        assert_eq!(result, None);
+    }
+}
