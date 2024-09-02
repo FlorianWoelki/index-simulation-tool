@@ -57,6 +57,14 @@ impl SparseDataGenerator {
         }
     }
 
+    /// Generates sparse vectors, query vectors, and ground truth nearest neighbors.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing:
+    /// - `Vec<SparseVector>`: A vector of generated sparse vectors.
+    /// - `Vec<SparseVector>`: A vector of query vectors.
+    /// - `Vec<Vec<usize>>`: Ground truth nearest neighbor indices for each query vector.
     pub async fn generate(&mut self) -> (Vec<SparseVector>, Vec<SparseVector>, Vec<Vec<usize>>) {
         self.system.refresh_all();
 
