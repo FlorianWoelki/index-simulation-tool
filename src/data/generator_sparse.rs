@@ -6,7 +6,9 @@ use rand::{
     rngs::StdRng,
     SeedableRng,
 };
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{
+    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
+};
 
 use crate::index::DistanceMetric;
 
@@ -55,9 +57,7 @@ impl SparseDataGenerator {
         }
     }
 
-    pub async fn generate(
-        &mut self,
-    ) -> (Vec<SparseVector>, Vec<SparseVector>, Vec<Vec<SparseVector>>) {
+    pub async fn generate(&mut self) -> (Vec<SparseVector>, Vec<SparseVector>, Vec<Vec<usize>>) {
         self.system.refresh_all();
 
         let mut handles = vec![];
@@ -146,18 +146,18 @@ impl SparseDataGenerator {
         data: &[SparseVector],
         query: &SparseVector,
         k: usize,
-    ) -> Vec<SparseVector> {
+    ) -> Vec<usize> {
         let heap = Mutex::new(BinaryHeap::new());
 
-        data.par_iter().for_each(|vector| {
+        data.par_iter().enumerate().for_each(|(i, vector)| {
             let distance = query.distance(&vector, &self.metric);
             let mut heap = heap.lock().unwrap();
             if heap.len() < k {
-                heap.push((OrderedFloat(distance), vector.clone()));
+                heap.push((OrderedFloat(distance), i));
             } else if let Some((OrderedFloat(max_distance), _)) = heap.peek() {
                 if distance < *max_distance {
                     heap.pop();
-                    heap.push((OrderedFloat(distance), vector.clone()));
+                    heap.push((OrderedFloat(distance), i));
                 }
             }
         });
@@ -190,11 +190,11 @@ mod tests {
         assert_eq!(query_vectors.len(), count / 10);
         assert_eq!(groundtruth_vectors.len(), query_vectors.len());
 
-        for vector in vectors {
+        for vector in &vectors {
             assert!(vector.indices.len() <= dim);
             assert_eq!(vector.indices.len(), vector.values.len());
 
-            for value in vector.values {
+            for value in &vector.values {
                 assert!(value.into_inner() >= range.0);
                 assert!(value.into_inner() < range.1);
             }
@@ -212,11 +212,11 @@ mod tests {
 
         for groundtruth_set in groundtruth_vectors {
             assert!(groundtruth_set.len() <= 10);
-            for vector in groundtruth_set {
-                assert!(vector.indices.len() <= dim);
-                assert_eq!(vector.indices.len(), vector.values.len());
+            for i in groundtruth_set {
+                assert!(vectors[i].indices.len() <= dim);
+                assert_eq!(vectors[i].indices.len(), vectors[i].values.len());
 
-                for value in vector.values {
+                for value in &vectors[i].values {
                     assert!(value.into_inner() >= range.0);
                     assert!(value.into_inner() < range.1);
                 }
@@ -297,20 +297,7 @@ mod tests {
             values: vec![OrderedFloat(0.1), OrderedFloat(0.2), OrderedFloat(0.3)],
         };
 
-        let expected_groundtruth = vec![
-            SparseVector {
-                indices: vec![0, 2, 4],
-                values: vec![OrderedFloat(0.1), OrderedFloat(0.2), OrderedFloat(0.3)],
-            },
-            SparseVector {
-                indices: vec![1, 2, 3],
-                values: vec![OrderedFloat(0.1), OrderedFloat(0.4), OrderedFloat(0.5)],
-            },
-            SparseVector {
-                indices: vec![0, 3, 4],
-                values: vec![OrderedFloat(0.6), OrderedFloat(0.7), OrderedFloat(0.8)],
-            },
-        ];
+        let expected_groundtruth = vec![0, 1, 2];
 
         let generator =
             SparseDataGenerator::new(0, 0, (0.0, 1.0), 0.0, DistanceMetric::Euclidean, seed);

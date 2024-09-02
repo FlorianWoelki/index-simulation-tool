@@ -134,7 +134,7 @@ async fn plot_artificially_generated_data() {
     // Get the first element of the groundtruth data
     let groundtruth_flat = groundtruth
         .iter()
-        .map(|nn| nn[0].clone())
+        .map(|nn| vectors[nn[0]].clone())
         .collect::<Vec<SparseVector>>();
 
     plot_sparsity_distribution(&vectors).show();
@@ -220,17 +220,18 @@ async fn main() {
             generate_data(&benchmark_config, dimensions, amount).await;
         println!("...finished generating data");
 
-        let timeout = Duration::from_secs(30);
-        let vectors = if let Some(reduction_technique) = &args.reduction_technique {
+        let timeout = Duration::from_secs(60);
+        let transformed_result = if let Some(reduction_technique) = &args.reduction_technique {
             match reduction_technique.as_str() {
                 "pca" => execute_with_timeout(
                     move || {
                         println!("\nTransforming data with reduction technique...",);
                         let (transformed_vectors, _, _) = pca(&vectors, dimensions, dimensions / 2);
+                        println!("✅ Transformed input vectors");
+                        let (query_vectors, _, _) = pca(&query_vectors, dimensions, dimensions / 2);
+                        println!("✅ Transformed query vectors");
 
-                        // TODO: Transform query and groundtruth vectors as well.
-
-                        transformed_vectors
+                        (transformed_vectors, query_vectors)
                     },
                     timeout,
                 ),
@@ -240,11 +241,11 @@ async fn main() {
                 }
             }
         } else {
-            Some(vectors)
+            Some((vectors, query_vectors))
         };
 
-        let vectors = match vectors {
-            Some(vectors) => vectors,
+        let (vectors, query_vectors) = match transformed_result {
+            Some((vectors, query_vectors)) => (vectors, query_vectors),
             None => {
                 println!("Failed to process vectors due to timeout or unsupported operation");
                 continue;
@@ -307,7 +308,10 @@ async fn main() {
         // Calculate recall.
         let mut accumulated_recall = 0.0;
         for (i, query_vector) in query_vectors.iter().enumerate() {
-            let groundtruth_vectors = &groundtruth[i];
+            let groundtruth_vectors = &groundtruth[i]
+                .iter()
+                .map(|&i| vectors[i].clone())
+                .collect::<Vec<SparseVector>>();
             let k = 10;
             let results = index.search(query_vector, k);
             let search_results = results
@@ -445,7 +449,7 @@ async fn generate_data(
     config: &BenchmarkConfig,
     dimensions: usize,
     amount: usize,
-) -> (Vec<SparseVector>, Vec<SparseVector>, Vec<Vec<SparseVector>>) {
+) -> (Vec<SparseVector>, Vec<SparseVector>, Vec<Vec<usize>>) {
     let seed = thread_rng().gen_range(0..10000);
     let mut generator = SparseDataGenerator::new(
         dimensions,
