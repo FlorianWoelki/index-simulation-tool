@@ -154,6 +154,22 @@ where
     }
 }
 
+pub fn maybe_parallel<T, F>(use_threads: bool, f: F) -> T
+where
+    T: Send,
+    F: FnOnce() -> T + Send,
+{
+    if use_threads {
+        f()
+    } else {
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(1)
+            .build()
+            .unwrap();
+        pool.install(f)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{thread, time::Duration};

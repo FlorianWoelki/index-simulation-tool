@@ -9,6 +9,7 @@ use benchmark::{
     execute_with_timeout,
     logger::BenchmarkLogger,
     macros::{measure_system::ResourceReport, measure_time},
+    maybe_parallel,
     metrics::{calculate_queries_per_second, calculate_recall, calculate_scalability_factor},
     BenchmarkConfig, GenericBenchmarkResult, IndexBenchmarkResult,
 };
@@ -54,6 +55,8 @@ struct Args {
     index_type: String,
     #[clap(long, short, action)]
     reduction_technique: Option<String>,
+    #[clap(long, short, action)]
+    serial: Option<bool>,
 }
 
 #[allow(dead_code)]
@@ -142,31 +145,12 @@ async fn plot_artificially_generated_data() {
         .show();
 }
 
-fn set_num_threads(num_threads: Option<usize>) {
-    // Initialize global pool with number of threads.
-    num_threads.map(|nt| {
-        rayon::ThreadPoolBuilder::new()
-            .num_threads(nt)
-            .build_global()
-            .unwrap();
-    });
-}
-
 #[tokio::main]
 async fn main() {
-    let num_threads = None; // Some(1) for serial
-    set_num_threads(num_threads);
-    println!(
-        "Using {}/{} threads",
-        rayon::current_num_threads(),
-        rayon::max_num_threads()
-    );
-    let is_parallel = num_threads == None;
-    println!("Executing in serial? {}", !is_parallel);
-
     let args = Args::parse();
     let dimensions = args.dimensions.unwrap_or(500);
     let amount = args.features.unwrap_or(500);
+    let serial = args.serial.unwrap_or(false);
 
     let distance_metric = DistanceMetric::Cosine;
 
@@ -264,25 +248,27 @@ async fn main() {
         let index_clone = Arc::clone(&index);
         let query_vector = query_vectors[0].clone();
 
-        let result = execute_with_timeout(
-            move || {
-                let mut index = index_clone.lock().unwrap();
-                let (_, build_report) = measure_resources!({
-                    index.build();
-                });
+        let result = maybe_parallel(!serial, || {
+            execute_with_timeout(
+                move || {
+                    let mut index = index_clone.lock().unwrap();
+                    let (_, build_report) = measure_resources!({
+                        index.build();
+                    });
 
-                // Benchmark for measuring searching.
-                let (_, search_report) = measure_resources!({
-                    index.search(&query_vector, 5);
+                    // Benchmark for measuring searching.
+                    let (_, search_report) = measure_resources!({
+                        index.search(&query_vector, 5);
 
-                    // println!("{:?}", vectors[result[0].index]);
-                    // println!("{:?}", groundtruth[0][0]);
-                });
+                        // println!("{:?}", vectors[result[0].index]);
+                        // println!("{:?}", groundtruth[0][0]);
+                    });
 
-                (build_report, search_report)
-            },
-            timeout,
-        );
+                    (build_report, search_report)
+                },
+                timeout,
+            )
+        });
 
         let (build_report, search_report) = match result {
             Some((build_report, search_report)) => (build_report, search_report),
@@ -299,8 +285,8 @@ async fn main() {
             dimensions,
             amount,
         ));
-        print_measurement_report(&build_report);
 
+        print_measurement_report(&build_report);
         print_measurement_report(&search_report);
 
         let total_index_duration = total_index_start.elapsed();
