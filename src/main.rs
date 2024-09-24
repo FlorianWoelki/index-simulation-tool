@@ -204,7 +204,7 @@ async fn main() {
             generate_data(&benchmark_config, dimensions, amount).await;
         println!("...finished generating data");
 
-        let timeout = Duration::from_secs(60);
+        let timeout = Duration::from_secs(5 * 60);
         let transformed_result = if let Some(reduction_technique) = &args.reduction_technique {
             match reduction_technique.as_str() {
                 "pca" => execute_with_timeout(
@@ -242,7 +242,7 @@ async fn main() {
             index.add_vector_before_build(&vector);
         }
 
-        let timeout = Duration::from_secs(30);
+        let timeout = Duration::from_secs(5 * 60);
 
         let index = Arc::new(Mutex::new(index));
         let index_clone = Arc::clone(&index);
