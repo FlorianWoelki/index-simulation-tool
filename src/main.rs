@@ -151,11 +151,14 @@ async fn main() {
     let dimensions = args.dimensions.unwrap_or(500);
     let amount = args.features.unwrap_or(500);
     let serial = args.serial.unwrap_or(false);
+    let threading_type = if serial { "serial" } else { "parallel" };
 
     let distance_metric = DistanceMetric::Cosine;
 
     let seed = thread_rng().gen_range(0..10000);
     let index_type_input = args.index_type.as_str();
+
+    let file_name = format!("{}_{}_{}", index_type_input, threading_type, amount);
 
     let mut rng = thread_rng();
     let benchmark_config = BenchmarkConfig::new(
@@ -356,13 +359,8 @@ async fn main() {
         println!("...finished\n");
 
         // Benchmark for saving to disk.
-        let (saved_file, total_save_duration) = measure_time!({
-            save_index(
-                &dir_path,
-                format!("{}_serial_{}", index_type_input, amount), // TODO: Modify to support parallel
-                &index,
-            )
-        });
+        let (saved_file, total_save_duration) =
+            measure_time!({ save_index(&dir_path, file_name.clone(), &index,) });
 
         let index_disk_space = saved_file
             .metadata()
@@ -400,11 +398,11 @@ async fn main() {
     }
 
     index_logger
-        .write_to_csv(format!("{}/{}.csv", dir_path, index_type_input))
+        .write_to_csv(format!("{}/{}.csv", dir_path, file_name))
         .expect("Something went wrong while writing to csv");
 
     build_logger
-        .write_to_csv(format!("{}/{}_build.csv", dir_path, index_type_input))
+        .write_to_csv(format!("{}/{}_build.csv", dir_path, file_name))
         .expect("Something went wrong while writing to csv");
 }
 
