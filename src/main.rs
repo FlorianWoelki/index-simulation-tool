@@ -172,7 +172,7 @@ async fn main() {
     let mut index_logger: BenchmarkLogger<IndexBenchmarkResult> = BenchmarkLogger::new();
     let mut build_logger: BenchmarkLogger<GenericBenchmarkResult> = BenchmarkLogger::new();
 
-    let current_date = Local::now().format("%Y-%m-%d").to_string();
+    let current_date = Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
     let dir_path = format!("index/{}", &current_date);
     fs::create_dir_all(&dir_path).expect("Failed to create directory");
 
