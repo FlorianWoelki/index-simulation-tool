@@ -19,7 +19,7 @@ fn read_sparse_matrix_fields(fname: &PathBuf) -> (Vec<f32>, Vec<usize>, Vec<usiz
         .expect("Unable to read size");
     let (nrow, ncol, nnz) = (sizes[0] as usize, sizes[1] as usize, sizes[2] as usize);
 
-    let mut indptr = vec![0usize; (nrow + 1) as usize];
+    let mut indptr = vec![0usize; nrow + 1];
     for i in &mut indptr {
         *i = reader
             .read_i64::<LittleEndian>()
@@ -34,12 +34,12 @@ fn read_sparse_matrix_fields(fname: &PathBuf) -> (Vec<f32>, Vec<usize>, Vec<usiz
             .expect("Unable to read indices") as usize;
     }
 
-    let mut data = vec![0f32; nnz as usize];
+    let mut data = vec![0f32; nnz];
     reader
         .read_f32_into::<LittleEndian>(&mut data)
         .expect("Unable to read data");
 
-    (data, indices, indptr, ncol as usize)
+    (data, indices, indptr, ncol)
 }
 
 fn read_sparse_matrix(fname: &PathBuf) -> CsMat<f32> {
@@ -79,15 +79,17 @@ fn knn_result_read(fname: &PathBuf) -> (Vec<Vec<i32>>, Vec<Vec<f32>>) {
 
 type SparseVectorData = Vec<(Vec<usize>, Vec<f32>)>; // indices, values
 
-// groundtruth, vectors, query_vectors
-pub fn load_msmarco_dataset() -> Result<
+type MSMarcoDataset = Result<
     (
         (Vec<Vec<i32>>, Vec<Vec<f32>>),
         SparseVectorData,
         SparseVectorData,
     ),
     Error,
-> {
+>;
+
+// groundtruth, vectors, query_vectors
+pub fn load_msmarco_dataset() -> MSMarcoDataset {
     let current_dir = std::env::current_dir()?;
     let msmarco_dir = current_dir.join("src/data/examples/msmarco");
 

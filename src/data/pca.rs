@@ -31,7 +31,7 @@ fn compute_mean(vectors: &Vec<SparseVector>, dimension: usize) -> Vec<f32> {
         );
 
     sum.into_iter()
-        .zip(count.into_iter())
+        .zip(count)
         .map(|(s, c)| if c > 0 { s / c as f32 } else { 0.0 })
         .collect()
 }
@@ -178,6 +178,7 @@ pub fn reconstruct(
         .collect()
 }
 
+#[allow(dead_code)]
 fn plot_pca_results(transformed_data: Vec<SparseVector>, num_components: usize) {
     let mut plot = Plot::new();
 

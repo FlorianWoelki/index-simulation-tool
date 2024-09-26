@@ -58,27 +58,6 @@ impl PQIndex {
         }
     }
 
-    fn encode(&self, vectors: &Vec<SparseVector>) -> Vec<Vec<usize>> {
-        let mut vector_codes: Vec<Vec<usize>> = Vec::new();
-        for vec in vectors {
-            let sub_vec_dims = vec.indices.len() / self.num_subvectors;
-            let remaining_dims = vec.indices.len() % self.num_subvectors;
-            let mut subvectors: Vec<SparseVector> = Vec::new();
-            for m in 0..self.num_subvectors {
-                // Divides each vector into subvectors to perform quantization on smaller
-                // subvectors independently.
-                let start_idx = m * sub_vec_dims + m.min(remaining_dims);
-                let end_idx = start_idx + sub_vec_dims + (m < remaining_dims) as usize;
-                let indices = vec.indices[start_idx..end_idx].to_vec();
-                let values = vec.values[start_idx..end_idx].to_vec();
-                subvectors.push(SparseVector { indices, values });
-            }
-            vector_codes.push(self.vector_quantize(&subvectors));
-        }
-
-        vector_codes
-    }
-
     fn vector_quantize(&self, vectors: &[SparseVector]) -> Vec<usize> {
         let mut codes: Vec<usize> = Vec::new();
 
@@ -430,70 +409,6 @@ mod tests {
 
         let results = pq_index.search(&query_vectors[0], 10);
         assert!(is_in_actual_result(&data, &query_vectors[0], &results));
-    }
-
-    #[test]
-    fn test_encode() {
-        let num_subvectors = 2;
-        let num_clusters = 2;
-        let kmeans_iterations = 10;
-        let mut pq_index = PQIndex::new(
-            num_subvectors,
-            num_clusters,
-            kmeans_iterations,
-            0.01,
-            DistanceMetric::Euclidean,
-            42,
-        );
-
-        pq_index.codebooks = vec![
-            vec![
-                SparseVector {
-                    indices: vec![0, 1],
-                    values: vec![OrderedFloat(1.0), OrderedFloat(1.0)],
-                },
-                SparseVector {
-                    indices: vec![0, 1],
-                    values: vec![OrderedFloat(5.0), OrderedFloat(5.0)],
-                },
-            ],
-            vec![
-                SparseVector {
-                    indices: vec![2, 3],
-                    values: vec![OrderedFloat(3.0), OrderedFloat(3.0)],
-                },
-                SparseVector {
-                    indices: vec![2, 3],
-                    values: vec![OrderedFloat(7.0), OrderedFloat(7.0)],
-                },
-            ],
-        ];
-
-        let vectors = vec![
-            SparseVector {
-                indices: vec![0, 1, 2, 3],
-                values: vec![
-                    OrderedFloat(1.0),
-                    OrderedFloat(1.0),
-                    OrderedFloat(3.0),
-                    OrderedFloat(3.0),
-                ],
-            },
-            SparseVector {
-                indices: vec![0, 1, 2, 3],
-                values: vec![
-                    OrderedFloat(5.0),
-                    OrderedFloat(5.0),
-                    OrderedFloat(7.0),
-                    OrderedFloat(7.0),
-                ],
-            },
-        ];
-
-        let encoded_vectors = pq_index.encode(&vectors);
-
-        println!("{:?}", encoded_vectors);
-        assert!(true)
     }
 
     #[test]

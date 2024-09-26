@@ -115,7 +115,7 @@ impl SparseDataGenerator {
 
         let mut groundtruth_vectors = Vec::with_capacity(query_vectors.len());
         for query_vector in &query_vectors {
-            groundtruth_vectors.push(self.find_nearest_neighbors(&results, &query_vector, 10));
+            groundtruth_vectors.push(self.find_nearest_neighbors(&results, query_vector, 10));
         }
 
         (results, query_vectors, groundtruth_vectors)
@@ -158,7 +158,7 @@ impl SparseDataGenerator {
         let heap = Mutex::new(BinaryHeap::new());
 
         data.par_iter().enumerate().for_each(|(i, vector)| {
-            let distance = query.distance(&vector, &self.metric);
+            let distance = query.distance(vector, &self.metric);
             let mut heap = heap.lock().unwrap();
             if heap.len() < k {
                 heap.push((OrderedFloat(distance), i));
