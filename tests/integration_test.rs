@@ -65,7 +65,7 @@ mod tests {
     fn test_lsh_index() {
         let num_buckets = 10;
         let num_hash_functions = 10;
-        let mut index = IndexType::LSH(LSHIndex::new(
+        let mut index = IndexType::Lsh(LSHIndex::new(
             num_buckets,
             num_hash_functions,
             LSHHashType::SimHash,
@@ -73,7 +73,7 @@ mod tests {
         ));
         test_index(&mut index);
 
-        let mut index = IndexType::LSH(LSHIndex::new(
+        let mut index = IndexType::Lsh(LSHIndex::new(
             num_buckets,
             num_hash_functions,
             LSHHashType::MinHash,
@@ -102,7 +102,7 @@ mod tests {
         let num_clusters = 50;
         let iterations = 256;
         let tolerance = 0.01;
-        let mut index = IndexType::PQ(PQIndex::new(
+        let mut index = IndexType::Pq(PQIndex::new(
             num_subvectors,
             num_clusters,
             iterations,
@@ -120,7 +120,7 @@ mod tests {
         let num_coarse_clusters = 100;
         let iterations = 256;
         let tolerance = 0.01;
-        let mut index = IndexType::IVFPQ(IVFPQIndex::new(
+        let mut index = IndexType::Ivfpq(IVFPQIndex::new(
             num_subvectors,
             num_clusters,
             num_coarse_clusters,
@@ -138,7 +138,7 @@ mod tests {
         let ef_construction = 400;
         let ef_search = 200;
 
-        let mut index = IndexType::HNSW(HNSWIndex::new(
+        let mut index = IndexType::Hnsw(HNSWIndex::new(
             0.5,
             32,
             m,
@@ -154,7 +154,7 @@ mod tests {
         let ef_construction = 50;
         let ef_search = 50;
 
-        let mut index = IndexType::NSW(NSWIndex::new(
+        let mut index = IndexType::Nsw(NSWIndex::new(
             32,
             ef_construction,
             ef_search,

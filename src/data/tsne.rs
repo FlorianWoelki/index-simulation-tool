@@ -9,6 +9,7 @@ use rayon::iter::{
 
 use super::vector::SparseVector;
 
+#[allow(dead_code)]
 fn generate_normal(mean: f64, std_dev: f64, rng: &mut StdRng) -> f64 {
     let u1: f64 = rng.gen();
     let u2: f64 = rng.gen();
@@ -16,6 +17,7 @@ fn generate_normal(mean: f64, std_dev: f64, rng: &mut StdRng) -> f64 {
     mean + z0 * std_dev
 }
 
+#[allow(dead_code)]
 fn generate_structured_sparse_data(
     n_samples: usize,
     n_features: usize,

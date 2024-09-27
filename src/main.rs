@@ -179,15 +179,15 @@ async fn main() {
     let mut previous_benchmark_result = None;
     for (dimensions, amount) in benchmark_config.dataset_configurations() {
         let mut index: IndexType = match index_type_input {
-            "hnsw" => IndexType::HNSW(HNSWIndex::new(0.5, 32, 32, 400, 200, distance_metric)),
+            "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 32, 32, 400, 200, distance_metric)),
             "lsh-simhash" => {
-                IndexType::LSH(LSHIndex::new(20, 4, LSHHashType::SimHash, distance_metric))
+                IndexType::Lsh(LSHIndex::new(20, 4, LSHHashType::SimHash, distance_metric))
             }
             "lsh-minhash" => {
-                IndexType::LSH(LSHIndex::new(20, 4, LSHHashType::MinHash, distance_metric))
+                IndexType::Lsh(LSHIndex::new(20, 4, LSHHashType::MinHash, distance_metric))
             }
-            "pq" => IndexType::PQ(PQIndex::new(3, 50, 256, 0.01, distance_metric, seed)),
-            "ivfpq" => IndexType::IVFPQ(IVFPQIndex::new(
+            "pq" => IndexType::Pq(PQIndex::new(3, 50, 256, 0.01, distance_metric, seed)),
+            "ivfpq" => IndexType::Ivfpq(IVFPQIndex::new(
                 3,
                 100,
                 200,
@@ -196,7 +196,7 @@ async fn main() {
                 distance_metric,
                 seed,
             )),
-            "nsw" => IndexType::NSW(NSWIndex::new(32, 200, 200, distance_metric)),
+            "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
             "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
             "annoy" => IndexType::Annoy(AnnoyIndex::new(4, 20, 40, distance_metric)),
             _ => panic!("Unsupported index type"),

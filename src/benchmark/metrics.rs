@@ -4,6 +4,7 @@ use crate::data::vector::SparseVector;
 
 use super::IndexBenchmarkResult;
 
+#[allow(dead_code)]
 pub const DEFAULT_SCALABILITY_FACTOR: f32 = 1.0;
 
 /// Calculates the number of queries per second from the total time taken to execute

@@ -209,7 +209,7 @@ impl SparseIndex for LSHIndex {
 
     fn save(&self, file: &mut File) {
         let mut writer = BufWriter::new(file);
-        let index_type = IndexIdentifier::LSH.to_u32();
+        let index_type = IndexIdentifier::Lsh.to_u32();
         writer
             .write_all(&index_type.to_be_bytes())
             .expect("Failed to write metadata");
@@ -225,7 +225,7 @@ impl SparseIndex for LSHIndex {
             .read_exact(&mut buffer)
             .expect("Failed to read metadata");
         let index_type = u32::from_be_bytes(buffer);
-        assert_eq!(index_type, IndexIdentifier::LSH.to_u32());
+        assert_eq!(index_type, IndexIdentifier::Lsh.to_u32());
         bincode::deserialize_from(&mut reader).unwrap()
     }
 }

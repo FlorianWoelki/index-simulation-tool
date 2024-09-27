@@ -135,6 +135,7 @@ pub fn pca(
     )
 }
 
+#[allow(dead_code)]
 pub fn reconstruct(
     transformed_vectors: &Vec<SparseVector>,
     mean: &Vec<f32>,
