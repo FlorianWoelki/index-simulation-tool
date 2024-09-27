@@ -67,7 +67,7 @@ impl PQIndex {
 
             for (k, code) in self.codebooks[m].iter().enumerate() {
                 // Finds the closest codeword to the subvector based on the distance metric.
-                let distance = subvector.distance(&code, &self.metric);
+                let distance = subvector.distance(code, &self.metric);
                 if distance < min_distance {
                     min_distance = distance;
                     min_distance_code_index = k;

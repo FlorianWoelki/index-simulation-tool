@@ -96,7 +96,7 @@ impl SparseIndex for LSHIndex {
         let id = self.vectors.len();
         self.vectors.push(vector.clone());
         for i in 0..self.num_hash_functions {
-            let hash = self.hash(&vector, i);
+            let hash = self.hash(vector, i);
             let bucket_index = self.hash_bucket(hash);
             self.buckets[bucket_index].push((id, vector.clone()));
         }

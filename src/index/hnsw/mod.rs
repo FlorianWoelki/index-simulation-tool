@@ -180,7 +180,7 @@ impl SparseIndex for HNSWIndex {
 
         let mut current_node = self.entry_point.unwrap();
         for layer in (0..=self.max_level.min(level)).rev() {
-            let nearest = self.search_layer(&vector, current_node, self.ef_construction, layer);
+            let nearest = self.search_layer(vector, current_node, self.ef_construction, layer);
             for &(_, neighbor) in nearest.iter().take(self.m) {
                 self.update_graph(vector_index, neighbor, layer);
             }
@@ -294,7 +294,7 @@ impl SparseIndex for HNSWIndex {
             for layer in (0..=self.max_level.min(level)).rev() {
                 let nearest = {
                     let vector = &self.vectors[vector_index];
-                    self.search_layer(&vector, current_node, self.ef_construction, layer)
+                    self.search_layer(vector, current_node, self.ef_construction, layer)
                 };
 
                 for &(_, neighbor) in nearest.iter().take(self.m) {
@@ -448,7 +448,7 @@ mod tests {
 
         // Check if the graph structure is updated correctly
         for (node_id, layers) in &index.graph {
-            for (_, connections) in layers {
+            for connections in layers.values() {
                 // Ensure no connections point to the old last index (4)
                 assert!(!connections.contains(&4));
 

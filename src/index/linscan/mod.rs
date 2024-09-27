@@ -282,7 +282,7 @@ mod tests {
             &vec![(0, OrderedFloat(3.0)), (1, OrderedFloat(9.0))]
         );
 
-        assert!(index.inverted_index.get(&1).is_none());
+        assert!(!index.inverted_index.contains_key(&1));
 
         let non_existent = index.remove_vector(5);
         assert_eq!(non_existent, None);

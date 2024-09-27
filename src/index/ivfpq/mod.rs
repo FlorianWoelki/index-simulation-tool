@@ -142,7 +142,7 @@ impl SparseIndex for IVFPQIndex {
         let mut min_distance = f32::MAX;
         let mut min_distance_code_index = 0;
         for (i, coarse_codeword) in self.coarse_centroids.iter().enumerate() {
-            let distance = vector.distance(&coarse_codeword, &self.metric);
+            let distance = vector.distance(coarse_codeword, &self.metric);
             if distance < min_distance {
                 min_distance = distance;
                 min_distance_code_index = i;
