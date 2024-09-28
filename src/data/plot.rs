@@ -10,7 +10,7 @@ use crate::index::DistanceMetric;
 
 use super::vector::SparseVector;
 
-fn mean(data: &Vec<f32>) -> Option<f32> {
+fn mean(data: &[f32]) -> Option<f32> {
     if data.is_empty() {
         return None;
     }
@@ -19,12 +19,12 @@ fn mean(data: &Vec<f32>) -> Option<f32> {
     Some(sum / data.len() as f32)
 }
 
-fn median(data: &Vec<f32>) -> Option<f32> {
+fn median(data: &[f32]) -> Option<f32> {
     if data.is_empty() {
         return None;
     }
 
-    let mut data = data.clone();
+    let mut data = data.to_owned();
     let mid = data.len() / 2;
     data.select_nth_unstable_by(mid, |a, b| {
         a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)

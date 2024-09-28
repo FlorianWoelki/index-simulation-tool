@@ -36,7 +36,7 @@ fn compute_mean(vectors: &Vec<SparseVector>, dimension: usize) -> Vec<f32> {
         .collect()
 }
 
-fn center_data(vectors: &Vec<SparseVector>, mean: &Vec<f32>) -> Vec<SparseVector> {
+fn center_data(vectors: &[SparseVector], mean: &[f32]) -> Vec<SparseVector> {
     vectors
         .par_iter()
         .map(|vector| {
@@ -88,8 +88,8 @@ pub fn pca(
     dimension: usize,
     num_components: usize,
 ) -> (Vec<SparseVector>, Vec<f32>, DMatrix<f32>) {
-    let mean = compute_mean(&vectors, dimension);
-    let centered_vectors = center_data(&vectors, &mean);
+    let mean = compute_mean(vectors, dimension);
+    let centered_vectors = center_data(vectors, &mean);
     let covariance_matrix = compute_covariance_matrix(&centered_vectors, dimension);
 
     let eig = SymmetricEigen::new(covariance_matrix);
@@ -137,10 +137,10 @@ pub fn pca(
 
 #[allow(dead_code)]
 pub fn reconstruct(
-    transformed_vectors: &Vec<SparseVector>,
-    mean: &Vec<f32>,
+    transformed_vectors: &[SparseVector],
+    mean: &[f32],
     eigenvectors: DMatrix<f32>,
-    original_vectors: &Vec<SparseVector>,
+    original_vectors: &[SparseVector],
     dimension: usize,
 ) -> Vec<SparseVector> {
     transformed_vectors

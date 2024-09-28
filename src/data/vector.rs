@@ -23,7 +23,7 @@ impl SparseVector {
     /// calculated using the arccosine of the cosine similarity.
     pub fn angular_distance(&self, other: &SparseVector) -> f32 {
         let cosine_sim = self.cosine_similarity(other);
-        (cosine_sim.acos() / std::f32::consts::PI).min(1.0).max(0.0)
+        (cosine_sim.acos() / std::f32::consts::PI).clamp(0.0, 1.0)
     }
 
     fn dot(&self, other: &SparseVector) -> f32 {
