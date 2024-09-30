@@ -166,18 +166,34 @@ async fn main() {
         (dimensions, 50000, dimensions),
         (amount, 5000, amount),
         (0.0, 1.0),
-        0.90,
+        0.96,
         distance_metric,
     );
 
     let mut index_logger: BenchmarkLogger<IndexBenchmarkResult> = BenchmarkLogger::new();
     let mut build_logger: BenchmarkLogger<GenericBenchmarkResult> = BenchmarkLogger::new();
-
     let current_date = Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
     let dir_path = format!("index/{}", &current_date);
     fs::create_dir_all(&dir_path).expect("Failed to create directory");
 
     let mut previous_benchmark_result = None;
+
+    // Just for plotting the different datasets
+    // for (i, (dimensions, amount)) in benchmark_config.dataset_configurations().enumerate() {
+    //     let seed = seeds[i];
+    //     let (vectors, query_vectors, groundtruth) =
+    //         generate_data(&benchmark_config, dimensions, amount, seed).await;
+
+    //     let groundtruth_flat = groundtruth
+    //         .iter()
+    //         .map(|nn| vectors[nn[0]].clone())
+    //         .collect::<Vec<SparseVector>>();
+
+    //     plot_sparsity_distribution(&vectors).show();
+    //     plot_nearest_neighbor_distances(&query_vectors, &groundtruth_flat, &DistanceMetric::Cosine)
+    //         .show();
+    // }
+
     for (i, (dimensions, amount)) in benchmark_config.dataset_configurations().enumerate() {
         let seed = seeds[i];
         let mut index: IndexType = match index_type_input {
@@ -206,7 +222,7 @@ async fn main() {
 
         println!("\nGenerating data...");
         let (vectors, query_vectors, groundtruth) =
-            generate_data(&benchmark_config, dimensions, amount).await;
+            generate_data(&benchmark_config, dimensions, amount, seed).await;
         println!("...finished generating data");
 
         let timeout = Duration::from_secs(5 * 60);
@@ -435,8 +451,8 @@ async fn generate_data(
     config: &BenchmarkConfig,
     dimensions: usize,
     amount: usize,
+    seed: u64,
 ) -> (Vec<SparseVector>, Vec<SparseVector>, Vec<Vec<usize>>) {
-    let seed = thread_rng().gen_range(0..10000);
     let mut generator = SparseDataGenerator::new(
         dimensions,
         amount,
