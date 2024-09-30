@@ -148,22 +148,23 @@ async fn plot_artificially_generated_data() {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    let dimensions = args.dimensions.unwrap_or(500);
-    let amount = args.features.unwrap_or(500);
+    let dimensions = args.dimensions.unwrap_or(10000);
+    let amount = args.features.unwrap_or(1000);
     let serial = args.serial.unwrap_or(false);
     let threading_type = if serial { "serial" } else { "parallel" };
 
     let distance_metric = DistanceMetric::Cosine;
 
-    let seed = thread_rng().gen_range(0..10000);
+    // let seed = thread_rng().gen_range(0..10000);
+    let seeds = vec![42, 7890, 54321, 191098, 1521];
     let index_type_input = args.index_type.as_str();
 
     let file_name = format!("{}_{}_{}", index_type_input, threading_type, amount);
 
     let mut rng = thread_rng();
     let benchmark_config = BenchmarkConfig::new(
-        (dimensions, 500, dimensions),
-        (amount, 500, amount),
+        (dimensions, 50000, dimensions),
+        (amount, 5000, amount),
         (0.0, 1.0),
         0.90,
         distance_metric,
@@ -177,7 +178,8 @@ async fn main() {
     fs::create_dir_all(&dir_path).expect("Failed to create directory");
 
     let mut previous_benchmark_result = None;
-    for (dimensions, amount) in benchmark_config.dataset_configurations() {
+    for (i, (dimensions, amount)) in benchmark_config.dataset_configurations().enumerate() {
+        let seed = seeds[i];
         let mut index: IndexType = match index_type_input {
             "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 32, 32, 400, 200, distance_metric)),
             "lsh-simhash" => {
