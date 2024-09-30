@@ -65,13 +65,11 @@ impl BenchmarkConfig {
     }
 
     pub fn dataset_configurations(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
-        (self.start_dimensions..=self.end_dimensions)
-            .step_by(self.step_dimensions)
-            .flat_map(|dimensions| {
-                (self.start_num_images..=self.end_num_images)
-                    .step_by(self.step_num_images)
-                    .map(move |num_images| (dimensions, num_images))
-            })
+        let dimensions_iter =
+            (self.start_dimensions..=self.end_dimensions).step_by(self.step_dimensions);
+        let num_images_iter =
+            (self.start_num_images..=self.end_num_images).step_by(self.step_num_images);
+        dimensions_iter.zip(num_images_iter)
     }
 }
 
