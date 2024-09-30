@@ -98,7 +98,11 @@ async fn plot_msmarco_dataset() {
         })
         .collect::<Vec<SparseVector>>();
 
-    plot_sparsity_distribution(&vectors_sparse_vectors).show();
+    plot_sparsity_distribution(
+        &vectors_sparse_vectors,
+        format!("amount: {}", vectors_sparse_vectors.len()).as_str(),
+    )
+    .show();
     plot_nearest_neighbor_distances(
         &query_sparse_vectors,
         &groundtruth_sparse_vectors,
@@ -130,8 +134,9 @@ async fn plot_artificially_generated_data() {
     // - Binary sparse data: Jaccard distance
     // - High-dimensional sparse data: Manhattan distance
     let amount = 1000;
+    let dim = 10000;
     let mut generator =
-        SparseDataGenerator::new(10000, amount, (0.0, 1.0), 0.95, DistanceMetric::Cosine, 42);
+        SparseDataGenerator::new(dim, amount, (0.0, 1.0), 0.95, DistanceMetric::Cosine, 42);
     let (vectors, query_vectors, groundtruth) = generator.generate().await;
 
     // Get the first element of the groundtruth data
@@ -140,7 +145,11 @@ async fn plot_artificially_generated_data() {
         .map(|nn| vectors[nn[0]].clone())
         .collect::<Vec<SparseVector>>();
 
-    plot_sparsity_distribution(&vectors).show();
+    plot_sparsity_distribution(
+        &vectors,
+        format!("dim: {}, amount: {}", dim, amount).as_str(),
+    )
+    .show();
     plot_nearest_neighbor_distances(&query_vectors, &groundtruth_flat, &DistanceMetric::Cosine)
         .show();
 }
@@ -181,17 +190,13 @@ async fn main() {
     // Just for plotting the different datasets
     // for (i, (dimensions, amount)) in benchmark_config.dataset_configurations().enumerate() {
     //     let seed = seeds[i];
-    //     let (vectors, query_vectors, groundtruth) =
-    //         generate_data(&benchmark_config, dimensions, amount, seed).await;
+    //     let (vectors, _, _) = generate_data(&benchmark_config, dimensions, amount, seed).await;
 
-    //     let groundtruth_flat = groundtruth
-    //         .iter()
-    //         .map(|nn| vectors[nn[0]].clone())
-    //         .collect::<Vec<SparseVector>>();
-
-    //     plot_sparsity_distribution(&vectors).show();
-    //     plot_nearest_neighbor_distances(&query_vectors, &groundtruth_flat, &DistanceMetric::Cosine)
-    //         .show();
+    //     plot_sparsity_distribution(
+    //         &vectors,
+    //         format!("seed: {}, dim: {}, amount: {}", seed, dimensions, amount).as_str(),
+    //     )
+    //     .show();
     // }
 
     for (i, (dimensions, amount)) in benchmark_config.dataset_configurations().enumerate() {

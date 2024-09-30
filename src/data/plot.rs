@@ -41,7 +41,7 @@ fn median(data: &[f32]) -> Option<f32> {
 /// a set of sparse vectors.
 /// This function helps to understand the sparsity characteristics of the
 /// provided dataset.
-pub fn plot_sparsity_distribution(data: &[SparseVector]) -> Plot {
+pub fn plot_sparsity_distribution(data: &[SparseVector], metadata: &str) -> Plot {
     let non_zero_counts: Vec<f32> = data.iter().map(|v| v.indices.len() as f32).collect();
 
     let trace = Histogram::new(non_zero_counts.clone())
@@ -55,7 +55,9 @@ pub fn plot_sparsity_distribution(data: &[SparseVector]) -> Plot {
     plot.add_trace(trace);
     plot.set_layout(
         Layout::new()
-            .title(Title::new("Distribution of Non-Zero Elements"))
+            .title(Title::new(
+                format!("Distribution of Non-Zero Elements ({})", metadata).as_str(),
+            ))
             .x_axis(Axis::new().title(Title::new("Number of Non-Zero Elements")))
             .y_axis(Axis::new().title(Title::new("Frequency")))
             .legend(Legend::new().title(Title::new("Legend")))
