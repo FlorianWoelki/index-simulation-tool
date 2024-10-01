@@ -154,6 +154,20 @@ async fn plot_artificially_generated_data() {
         .show();
 }
 
+#[allow(dead_code)]
+async fn plot_datasets(benchmark_config: &BenchmarkConfig, seeds: &[u64]) {
+    for (i, (dimensions, amount)) in benchmark_config.dataset_configurations().enumerate() {
+        let seed = seeds[i];
+        let (vectors, _, _) = generate_data(&benchmark_config, dimensions, amount, seed).await;
+
+        plot_sparsity_distribution(
+            &vectors,
+            format!("seed: {}, dim: {}, amount: {}", seed, dimensions, amount).as_str(),
+        )
+        .show();
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
@@ -186,18 +200,6 @@ async fn main() {
     fs::create_dir_all(&dir_path).expect("Failed to create directory");
 
     let mut previous_benchmark_result = None;
-
-    // Just for plotting the different datasets
-    // for (i, (dimensions, amount)) in benchmark_config.dataset_configurations().enumerate() {
-    //     let seed = seeds[i];
-    //     let (vectors, _, _) = generate_data(&benchmark_config, dimensions, amount, seed).await;
-
-    //     plot_sparsity_distribution(
-    //         &vectors,
-    //         format!("seed: {}, dim: {}, amount: {}", seed, dimensions, amount).as_str(),
-    //     )
-    //     .show();
-    // }
 
     for (i, (dimensions, amount)) in benchmark_config.dataset_configurations().enumerate() {
         let seed = seeds[i];
