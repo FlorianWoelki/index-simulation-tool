@@ -1,6 +1,7 @@
 use std::{
     fs::{self, File, OpenOptions},
     io::Write,
+    path::Path,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -173,11 +174,72 @@ async fn plot_datasets(benchmark_config: &BenchmarkConfig, seeds: &[u64]) {
     }
 }
 
+#[allow(dead_code)]
+async fn generate_datasets(
+    config: &BenchmarkConfig,
+    seeds: &[u64],
+    base_path: &str,
+) -> Vec<String> {
+    let mut file_paths = Vec::new();
+
+    for (i, (dimensions, amount)) in config.dataset_configurations().enumerate() {
+        let seed = seeds[i];
+        let file_name = format!("dataset_{}_{}_{}.bin", dimensions, amount, seed);
+        let file_path = format!("{}/{}", base_path, file_name);
+
+        if Path::new(&file_path).exists() {
+            println!("Dataset already exists: {}", file_path);
+            file_paths.push(file_path);
+            continue;
+        }
+
+        println!(
+            "Generating dataset: dimensions={}, amount={}, seed={}",
+            dimensions, amount, seed
+        );
+        let data_generator = generate_data(&config, dimensions, amount, seed).await;
+
+        data_generator
+            .save_data(&file_path)
+            .expect("Failed to save dataset");
+        println!("Saved dataset: {}", file_path);
+        file_paths.push(file_path);
+    }
+
+    file_paths
+}
+
+fn create_index(index_type: &str, distance_metric: DistanceMetric, seed: u64) -> IndexType {
+    match index_type {
+        "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 32, 32, 400, 200, distance_metric)),
+        "lsh-simhash" => {
+            IndexType::Lsh(LSHIndex::new(20, 4, LSHHashType::SimHash, distance_metric))
+        }
+        "lsh-minhash" => {
+            IndexType::Lsh(LSHIndex::new(20, 4, LSHHashType::MinHash, distance_metric))
+        }
+        "pq" => IndexType::Pq(PQIndex::new(3, 50, 256, 0.01, distance_metric, seed)),
+        "ivfpq" => IndexType::Ivfpq(IVFPQIndex::new(
+            3,
+            100,
+            200,
+            256,
+            0.01,
+            distance_metric,
+            seed,
+        )),
+        "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
+        "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
+        "annoy" => IndexType::Annoy(AnnoyIndex::new(4, 20, 40, distance_metric)),
+        _ => panic!("Unsupported index type"),
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    let dimensions = args.dimensions.unwrap_or(100);
-    let amount = args.features.unwrap_or(10);
+    let dimensions = args.dimensions.unwrap_or(10000);
+    let amount = args.features.unwrap_or(1000);
     let serial = args.serial.unwrap_or(false);
     let threading_type = if serial { "serial" } else { "parallel" };
 
@@ -191,8 +253,8 @@ async fn main() {
 
     let mut rng = thread_rng();
     let benchmark_config = BenchmarkConfig::new(
-        (dimensions, 100, dimensions),
-        (amount, 10, amount),
+        (dimensions, 50000, dimensions),
+        (amount, 5000, amount),
         (0.0, 1.0),
         0.96,
         distance_metric,
@@ -201,45 +263,26 @@ async fn main() {
     let mut index_logger: BenchmarkLogger<IndexBenchmarkResult> = BenchmarkLogger::new();
     let mut build_logger: BenchmarkLogger<GenericBenchmarkResult> = BenchmarkLogger::new();
     let current_date = Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
-    let dir_path = format!("index/{}", &current_date);
+    let base_path = "index";
+    let dir_path = format!("{}/{}", &base_path, &current_date);
     fs::create_dir_all(&dir_path).expect("Failed to create directory");
+
+    let datasets_dir = format!("{}/datasets", &base_path);
+    fs::create_dir_all(&datasets_dir).expect("Failed to create datasets directory");
+
+    let dataset_paths = generate_datasets(&benchmark_config, &seeds, &datasets_dir).await;
 
     let mut previous_benchmark_result = None;
 
-    for (i, (dimensions, amount)) in benchmark_config.dataset_configurations().enumerate() {
-        let seed = seeds[i];
-        let mut index: IndexType = match index_type_input {
-            "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 32, 32, 400, 200, distance_metric)),
-            "lsh-simhash" => {
-                IndexType::Lsh(LSHIndex::new(20, 4, LSHHashType::SimHash, distance_metric))
-            }
-            "lsh-minhash" => {
-                IndexType::Lsh(LSHIndex::new(20, 4, LSHHashType::MinHash, distance_metric))
-            }
-            "pq" => IndexType::Pq(PQIndex::new(3, 50, 256, 0.01, distance_metric, seed)),
-            "ivfpq" => IndexType::Ivfpq(IVFPQIndex::new(
-                3,
-                100,
-                200,
-                256,
-                0.01,
-                distance_metric,
-                seed,
-            )),
-            "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
-            "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
-            "annoy" => IndexType::Annoy(AnnoyIndex::new(4, 20, 40, distance_metric)),
-            _ => panic!("Unsupported index type"),
-        };
+    for (i, dataset_path) in dataset_paths.iter().enumerate() {
+        let mut index = create_index(&index_type_input, distance_metric, seeds[i]);
 
-        println!("\nGenerating data...");
-        let data_generator = generate_data(&benchmark_config, dimensions, amount, seed).await;
-        let (vectors, query_vectors, groundtruth) = (
-            data_generator.vectors,
-            data_generator.query_vectors,
-            data_generator.groundtruth,
-        );
-        println!("...finished generating data");
+        println!("\nLoading data...");
+        let data_generator = SparseDataGenerator::new(0, 0, (0.0, 1.0), 0.0, distance_metric, 0); // Dummy values
+        let (vectors, query_vectors, groundtruth) = data_generator
+            .load_data(dataset_path)
+            .expect("Failed to load dataset");
+        println!("...finished loading data");
 
         let timeout = Duration::from_secs(5 * 60);
         let transformed_result = if let Some(reduction_technique) = &args.reduction_technique {
