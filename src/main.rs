@@ -135,33 +135,38 @@ async fn plot_artificially_generated_data() {
     // - High-dimensional sparse data: Manhattan distance
     let amount = 1000;
     let dim = 10000;
-    let mut generator =
+    let mut data_generator =
         SparseDataGenerator::new(dim, amount, (0.0, 1.0), 0.95, DistanceMetric::Cosine, 42);
-    let (vectors, query_vectors, groundtruth) = generator.generate().await;
+    data_generator.generate().await;
 
     // Get the first element of the groundtruth data
-    let groundtruth_flat = groundtruth
+    let groundtruth_flat = data_generator
+        .groundtruth
         .iter()
-        .map(|nn| vectors[nn[0]].clone())
+        .map(|nn| data_generator.vectors[nn[0]].clone())
         .collect::<Vec<SparseVector>>();
 
     plot_sparsity_distribution(
-        &vectors,
+        &data_generator.vectors,
         format!("dim: {}, amount: {}", dim, amount).as_str(),
     )
     .show();
-    plot_nearest_neighbor_distances(&query_vectors, &groundtruth_flat, &DistanceMetric::Cosine)
-        .show();
+    plot_nearest_neighbor_distances(
+        &data_generator.query_vectors,
+        &groundtruth_flat,
+        &DistanceMetric::Cosine,
+    )
+    .show();
 }
 
 #[allow(dead_code)]
 async fn plot_datasets(benchmark_config: &BenchmarkConfig, seeds: &[u64]) {
     for (i, (dimensions, amount)) in benchmark_config.dataset_configurations().enumerate() {
         let seed = seeds[i];
-        let (vectors, _, _) = generate_data(&benchmark_config, dimensions, amount, seed).await;
+        let data_generator = generate_data(&benchmark_config, dimensions, amount, seed).await;
 
         plot_sparsity_distribution(
-            &vectors,
+            &data_generator.vectors,
             format!("seed: {}, dim: {}, amount: {}", seed, dimensions, amount).as_str(),
         )
         .show();
@@ -171,8 +176,8 @@ async fn plot_datasets(benchmark_config: &BenchmarkConfig, seeds: &[u64]) {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    let dimensions = args.dimensions.unwrap_or(10000);
-    let amount = args.features.unwrap_or(1000);
+    let dimensions = args.dimensions.unwrap_or(100);
+    let amount = args.features.unwrap_or(10);
     let serial = args.serial.unwrap_or(false);
     let threading_type = if serial { "serial" } else { "parallel" };
 
@@ -186,8 +191,8 @@ async fn main() {
 
     let mut rng = thread_rng();
     let benchmark_config = BenchmarkConfig::new(
-        (dimensions, 50000, dimensions),
-        (amount, 5000, amount),
+        (dimensions, 100, dimensions),
+        (amount, 10, amount),
         (0.0, 1.0),
         0.96,
         distance_metric,
@@ -228,8 +233,12 @@ async fn main() {
         };
 
         println!("\nGenerating data...");
-        let (vectors, query_vectors, groundtruth) =
-            generate_data(&benchmark_config, dimensions, amount, seed).await;
+        let data_generator = generate_data(&benchmark_config, dimensions, amount, seed).await;
+        let (vectors, query_vectors, groundtruth) = (
+            data_generator.vectors,
+            data_generator.query_vectors,
+            data_generator.groundtruth,
+        );
         println!("...finished generating data");
 
         let timeout = Duration::from_secs(5 * 60);
@@ -459,7 +468,7 @@ async fn generate_data(
     dimensions: usize,
     amount: usize,
     seed: u64,
-) -> (Vec<SparseVector>, Vec<SparseVector>, Vec<Vec<usize>>) {
+) -> SparseDataGenerator {
     let mut generator = SparseDataGenerator::new(
         dimensions,
         amount,
@@ -468,6 +477,6 @@ async fn generate_data(
         config.distance_metric,
         seed,
     );
-    let (vectors, query_vectors, groundtruth) = generator.generate().await;
-    (vectors, query_vectors, groundtruth)
+    generator.generate().await;
+    generator
 }

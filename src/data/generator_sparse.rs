@@ -1,4 +1,9 @@
-use std::{collections::BinaryHeap, sync::Mutex};
+use std::{
+    collections::BinaryHeap,
+    fs::File,
+    io::{BufReader, BufWriter, Read, Write},
+    sync::Mutex,
+};
 
 use ordered_float::OrderedFloat;
 use rand::{
@@ -22,6 +27,10 @@ pub struct SparseDataGenerator {
     metric: DistanceMetric,
     system: sysinfo::System,
     seed: u64,
+
+    pub vectors: Vec<SparseVector>,
+    pub query_vectors: Vec<SparseVector>,
+    pub groundtruth: Vec<Vec<usize>>,
 }
 
 impl SparseDataGenerator {
@@ -54,18 +63,15 @@ impl SparseDataGenerator {
             metric,
             system: sysinfo::System::new(),
             seed,
+            vectors: vec![],
+            query_vectors: vec![],
+            groundtruth: vec![],
         }
     }
 
     /// Generates sparse vectors, query vectors, and ground truth nearest neighbors.
-    ///
-    /// # Returns
-    ///
-    /// A tuple containing:
-    /// - `Vec<SparseVector>`: A vector of generated sparse vectors.
-    /// - `Vec<SparseVector>`: A vector of query vectors.
-    /// - `Vec<Vec<usize>>`: Ground truth nearest neighbor indices for each query vector.
-    pub async fn generate(&mut self) -> (Vec<SparseVector>, Vec<SparseVector>, Vec<Vec<usize>>) {
+    /// Sets the vectors, query vectors, and groundtruth vectors inside the generator struct.
+    pub async fn generate(&mut self) {
         self.system.refresh_all();
 
         let mut handles = vec![];
@@ -118,7 +124,9 @@ impl SparseDataGenerator {
             groundtruth_vectors.push(self.find_nearest_neighbors(&results, query_vector, 10));
         }
 
-        (results, query_vectors, groundtruth_vectors)
+        self.vectors = results;
+        self.query_vectors = query_vectors;
+        self.groundtruth = groundtruth_vectors;
     }
 
     fn generate_vectors(
@@ -177,6 +185,29 @@ impl SparseDataGenerator {
             .map(|(_, v)| v)
             .collect::<Vec<_>>()
     }
+
+    pub fn save_data(&self, filename: &str) -> std::io::Result<()> {
+        let file = File::create(filename)?;
+        let mut writer = BufWriter::new(file);
+        let serialized =
+            bincode::serialize(&(&self.vectors, &self.query_vectors, &self.groundtruth))
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        writer.write_all(&serialized)?;
+        Ok(())
+    }
+
+    pub fn load_data(
+        &self,
+        filename: &str,
+    ) -> std::io::Result<(Vec<SparseVector>, Vec<SparseVector>, Vec<Vec<usize>>)> {
+        let file = File::open(filename)?;
+        let mut reader = BufReader::new(file);
+        let mut buffer = Vec::new();
+        reader.read_to_end(&mut buffer)?;
+        let deserialized = bincode::deserialize(&buffer)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        Ok(deserialized)
+    }
 }
 
 #[cfg(test)]
@@ -192,13 +223,13 @@ mod tests {
         let sparsity = 0.5;
         let mut generator =
             SparseDataGenerator::new(dim, count, range, sparsity, DistanceMetric::Euclidean, seed);
-        let (vectors, query_vectors, groundtruth_vectors) = generator.generate().await;
+        generator.generate().await;
 
-        assert_eq!(vectors.len(), count);
-        assert_eq!(query_vectors.len(), count / 10);
-        assert_eq!(groundtruth_vectors.len(), query_vectors.len());
+        assert_eq!(generator.vectors.len(), count);
+        assert_eq!(generator.query_vectors.len(), count / 10);
+        assert_eq!(generator.groundtruth.len(), generator.query_vectors.len());
 
-        for vector in &vectors {
+        for vector in &generator.vectors {
             assert!(vector.indices.len() <= dim);
             assert_eq!(vector.indices.len(), vector.values.len());
 
@@ -208,7 +239,7 @@ mod tests {
             }
         }
 
-        for vector in query_vectors {
+        for vector in generator.query_vectors {
             assert!(vector.indices.len() <= dim);
             assert_eq!(vector.indices.len(), vector.values.len());
 
@@ -218,13 +249,16 @@ mod tests {
             }
         }
 
-        for groundtruth_set in groundtruth_vectors {
+        for groundtruth_set in generator.groundtruth {
             assert!(groundtruth_set.len() <= 10);
             for i in groundtruth_set {
-                assert!(vectors[i].indices.len() <= dim);
-                assert_eq!(vectors[i].indices.len(), vectors[i].values.len());
+                assert!(generator.vectors[i].indices.len() <= dim);
+                assert_eq!(
+                    generator.vectors[i].indices.len(),
+                    generator.vectors[i].values.len()
+                );
 
-                for value in &vectors[i].values {
+                for value in &generator.vectors[i].values {
                     assert!(value.into_inner() >= range.0);
                     assert!(value.into_inner() < range.1);
                 }
@@ -241,14 +275,14 @@ mod tests {
         let sparsity = 0.8;
         let mut generator =
             SparseDataGenerator::new(dim, count, range, sparsity, DistanceMetric::Euclidean, seed);
-        let (vectors, _, _) = generator.generate().await;
+        generator.generate().await;
 
-        assert_eq!(vectors.len(), count);
+        assert_eq!(generator.vectors.len(), count);
 
         let mut total_non_zero = 0;
         let mut total_elements = 0;
 
-        for vector in vectors {
+        for vector in generator.vectors {
             let non_zero_count = vector.indices.len();
 
             total_non_zero += non_zero_count;
@@ -269,13 +303,18 @@ mod tests {
         let k = 10;
         let mut generator =
             SparseDataGenerator::new(dim, count, range, sparsity, DistanceMetric::Euclidean, seed);
-        let (vectors, query_vectors, groundtruth_vectors) = generator.generate().await;
+        generator.generate().await;
 
-        assert_eq!(query_vectors.len(), count / 10);
-        assert_eq!(groundtruth_vectors.len(), query_vectors.len());
+        assert_eq!(generator.query_vectors.len(), count / 10);
+        assert_eq!(generator.groundtruth.len(), generator.query_vectors.len());
 
-        for (query, groundtruth_set) in query_vectors.iter().zip(groundtruth_vectors.iter()) {
-            let calculated_groundtruth = generator.find_nearest_neighbors(&vectors, query, k);
+        for (query, groundtruth_set) in generator
+            .query_vectors
+            .iter()
+            .zip(generator.groundtruth.iter())
+        {
+            let calculated_groundtruth =
+                generator.find_nearest_neighbors(&generator.vectors, query, k);
 
             assert_eq!(groundtruth_set.len(), k);
             assert_eq!(groundtruth_set, &calculated_groundtruth);
