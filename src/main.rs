@@ -400,7 +400,7 @@ async fn main() {
                 indices: vec![],
                 values: vec![]
             };
-            100
+            25
         ];
         let mut total_add_duration = Duration::new(0, 0);
         for vector in &mut added_vectors {
