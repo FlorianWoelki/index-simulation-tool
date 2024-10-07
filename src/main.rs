@@ -55,6 +55,8 @@ struct Args {
     index_type: String,
     #[clap(long, short, action)]
     reduction_technique: Option<String>,
+    #[clap(long, short = 'm', action)]
+    distance_metric: DistanceMetric,
 }
 
 #[allow(dead_code)]
@@ -237,9 +239,7 @@ async fn main() {
     let args = Args::parse();
     let dimensions = args.dimensions.unwrap_or(10000);
     let amount = args.features.unwrap_or(1000);
-
-    // TODO: Make this configurable
-    let distance_metric = DistanceMetric::Jaccard;
+    let distance_metric = args.distance_metric;
 
     // let seed = thread_rng().gen_range(0..10000);
     let seeds = vec![42, 7890, 54321, 191098, 1521];

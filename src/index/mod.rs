@@ -2,6 +2,7 @@ use std::{
     fmt::Debug,
     fs::File,
     io::{BufReader, Read, Seek, SeekFrom},
+    str::FromStr,
 };
 
 use annoy::AnnoyIndex;
@@ -30,6 +31,21 @@ pub enum DistanceMetric {
     Cosine,
     Jaccard,
     Angular,
+}
+
+impl FromStr for DistanceMetric {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "dot" => Ok(DistanceMetric::Dot),
+            "euclidean" => Ok(DistanceMetric::Euclidean),
+            "cosine" => Ok(DistanceMetric::Cosine),
+            "jaccard" => Ok(DistanceMetric::Jaccard),
+            "angular" => Ok(DistanceMetric::Angular),
+            _ => Err(format!("Unknown distance metric: {}", s)),
+        }
+    }
 }
 
 impl Debug for DistanceMetric {
