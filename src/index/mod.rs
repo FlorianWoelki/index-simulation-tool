@@ -25,6 +25,7 @@ pub mod pq;
 
 #[derive(PartialEq, Serialize, Deserialize, Copy, Clone)]
 pub enum DistanceMetric {
+    Dot,
     Euclidean,
     Cosine,
     Jaccard,
@@ -34,6 +35,7 @@ pub enum DistanceMetric {
 impl Debug for DistanceMetric {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            DistanceMetric::Dot => write!(f, "Dot"),
             DistanceMetric::Euclidean => write!(f, "Euclidean"),
             DistanceMetric::Cosine => write!(f, "Cosine"),
             DistanceMetric::Jaccard => write!(f, "Jaccard"),

@@ -12,6 +12,7 @@ pub struct SparseVector {
 impl SparseVector {
     pub fn distance(&self, other: &SparseVector, metric: &DistanceMetric) -> f32 {
         match metric {
+            DistanceMetric::Dot => self.dot(other),
             DistanceMetric::Euclidean => self.euclidean_distance(other),
             DistanceMetric::Cosine => 1.0 - self.cosine_similarity(other),
             DistanceMetric::Jaccard => 1.0 - self.jaccard_similarity(other),

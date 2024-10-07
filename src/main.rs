@@ -10,7 +10,6 @@ use benchmark::{
     execute_with_timeout,
     logger::BenchmarkLogger,
     macros::{measure_system::ResourceReport, measure_time},
-    maybe_parallel,
     metrics::{calculate_queries_per_second, calculate_recall, calculate_scalability_factor},
     BenchmarkConfig, GenericBenchmarkResult, IndexBenchmarkResult,
 };
@@ -56,8 +55,6 @@ struct Args {
     index_type: String,
     #[clap(long, short, action)]
     reduction_technique: Option<String>,
-    #[clap(long, short, action)]
-    serial: Option<bool>,
 }
 
 #[allow(dead_code)]
@@ -230,7 +227,7 @@ fn create_index(index_type: &str, distance_metric: DistanceMetric, seed: u64) ->
         )),
         "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
         "linscan" => IndexType::LinScan(LinScanIndex::new()),
-        "annoy" => IndexType::Annoy(AnnoyIndex::new(4, 20, 40, distance_metric)),
+        "annoy" => IndexType::Annoy(AnnoyIndex::new(10, 20, 100, distance_metric)),
         _ => panic!("Unsupported index type"),
     }
 }
@@ -240,16 +237,13 @@ async fn main() {
     let args = Args::parse();
     let dimensions = args.dimensions.unwrap_or(10000);
     let amount = args.features.unwrap_or(1000);
-    let serial = args.serial.unwrap_or(false);
-    let threading_type = if serial { "serial" } else { "parallel" };
 
-    let distance_metric = DistanceMetric::Cosine;
+    // TODO: Make this configurable
+    let distance_metric = DistanceMetric::Jaccard;
 
     // let seed = thread_rng().gen_range(0..10000);
     let seeds = vec![42, 7890, 54321, 191098, 1521];
     let index_type_input = args.index_type.as_str();
-
-    let file_name = format!("{}_{}", index_type_input, threading_type);
 
     let mut rng = thread_rng();
     let benchmark_config = BenchmarkConfig::new(
@@ -262,9 +256,8 @@ async fn main() {
 
     let mut index_logger: BenchmarkLogger<IndexBenchmarkResult> = BenchmarkLogger::new();
     let mut build_logger: BenchmarkLogger<GenericBenchmarkResult> = BenchmarkLogger::new();
-    let current_date = Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
     let base_path = format!("index/{:?}", distance_metric);
-    let dir_path = format!("{}/{}", &base_path, &current_date);
+    let dir_path = format!("{}/{}", &base_path, index_type_input);
     fs::create_dir_all(&dir_path).expect("Failed to create directory");
 
     let datasets_dir = format!("{}/datasets", &base_path);
@@ -275,10 +268,16 @@ async fn main() {
     let mut previous_benchmark_result = None;
 
     for (i, dataset_path) in dataset_paths.iter().enumerate() {
-        let mut index = create_index(&index_type_input, distance_metric, seeds[i]);
+        let seed = seeds[i];
+        let amount = benchmark_config.start_num_images * (i + 1);
+        let dimensions = benchmark_config.start_dimensions * (i + 1);
+        let file_name = format!("{}_{}_{}", index_type_input, amount, dimensions);
+
+        let mut index = create_index(&index_type_input, distance_metric, seed);
 
         println!("\nLoading data...");
-        let data_generator = SparseDataGenerator::new(0, 0, (0.0, 1.0), 0.0, distance_metric, 0); // Dummy values
+        let data_generator =
+            SparseDataGenerator::new(dimensions, amount, (0.0, 1.0), 0.96, distance_metric, seed); // Dummy values
         let (vectors, query_vectors, groundtruth) = data_generator
             .load_data(dataset_path)
             .expect("Failed to load dataset");
@@ -328,27 +327,25 @@ async fn main() {
         let index_clone = Arc::clone(&index);
         let query_vector = query_vectors[0].clone();
 
-        let result = maybe_parallel(!serial, || {
-            execute_with_timeout(
-                move || {
-                    let mut index = index_clone.lock().unwrap();
-                    let (_, build_report) = measure_resources!({
-                        index.build();
-                    });
+        let result = execute_with_timeout(
+            move || {
+                let mut index = index_clone.lock().unwrap();
+                let (_, build_report) = measure_resources!({
+                    index.build();
+                });
 
-                    // Benchmark for measuring searching.
-                    let (_, search_report) = measure_resources!({
-                        index.search(&query_vector, 5);
+                // Benchmark for measuring searching.
+                let (_, search_report) = measure_resources!({
+                    index.search(&query_vector, 5);
 
-                        // println!("{:?}", vectors[result[0].index]);
-                        // println!("{:?}", groundtruth[0][0]);
-                    });
+                    // println!("{:?}", vectors[result[0].index]);
+                    // println!("{:?}", groundtruth[0][0]);
+                });
 
-                    (build_report, search_report)
-                },
-                timeout,
-            )
-        });
+                (build_report, search_report)
+            },
+            timeout,
+        );
 
         let (build_report, search_report) = match result {
             Some((build_report, search_report)) => (build_report, search_report),
@@ -386,7 +383,7 @@ async fn main() {
                 .collect::<Vec<_>>();
 
             let iter_recall = calculate_recall(&search_results, groundtruth_vectors, k);
-            println!("{}", iter_recall);
+            // println!("{}", iter_recall);
             accumulated_recall += iter_recall;
         }
 
@@ -394,13 +391,13 @@ async fn main() {
         println!("Average recall: {:?}", recall);
 
         // Benchmark for measuring adding a vector to the index.
-        println!("Measuring the addition of vectors to the index...");
+        println!("Measuring the addition of a vector to the index...");
         let mut added_vectors = vec![
             SparseVector {
                 indices: vec![],
                 values: vec![]
             };
-            25
+            1
         ];
         let mut total_add_duration = Duration::new(0, 0);
         for vector in &mut added_vectors {
@@ -421,7 +418,7 @@ async fn main() {
         println!("...finished\n");
 
         // Benchmark for measuring removing a vector from the index.
-        println!("Measuring the removal of vectors from the index...");
+        println!("Measuring the removal of a vector from the index...");
         let mut total_remove_duration = Duration::new(0, 0);
         for _ in 0..added_vectors.len() {
             let remove_vector_start = Instant::now();
@@ -474,6 +471,7 @@ async fn main() {
         index_logger.add_record(new_index_benchmark_result);
     }
 
+    let file_name = format!("{}", index_type_input);
     index_logger
         .write_to_csv(format!("{}/{}.csv", dir_path, file_name))
         .expect("Something went wrong while writing to csv");
