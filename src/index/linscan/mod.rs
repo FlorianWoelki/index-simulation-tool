@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
 use crate::{
     data::{vector::SparseVector, QueryResult},
     data_structures::min_heap::MinHeap,
-    index::DistanceMetric,
 };
 
 use super::{IndexIdentifier, SparseIndex};
@@ -21,15 +20,13 @@ use super::{IndexIdentifier, SparseIndex};
 pub struct LinScanIndex {
     vectors: Vec<SparseVector>,
     inverted_index: HashMap<usize, Vec<(usize, OrderedFloat<f32>)>>,
-    metric: DistanceMetric,
 }
 
 impl LinScanIndex {
-    pub fn new(metric: DistanceMetric) -> Self {
+    pub fn new() -> Self {
         LinScanIndex {
             vectors: Vec::new(),
             inverted_index: HashMap::new(),
-            metric,
         }
     }
 }
@@ -168,7 +165,7 @@ mod tests {
 
     #[test]
     fn test_serde() {
-        let mut index = LinScanIndex::new(DistanceMetric::Cosine);
+        let mut index = LinScanIndex::new();
         let (data, _) = get_simple_vectors();
         for vector in &data {
             index.add_vector_before_build(vector);
@@ -179,13 +176,12 @@ mod tests {
         let reconstructed: LinScanIndex = bincode::deserialize(&bytes).unwrap();
 
         assert_eq!(index.vectors, reconstructed.vectors);
-        assert_eq!(index.metric, reconstructed.metric);
         assert_eq!(index.inverted_index, reconstructed.inverted_index);
     }
 
     #[test]
     fn test_add_vector() {
-        let mut index = LinScanIndex::new(DistanceMetric::Cosine);
+        let mut index = LinScanIndex::new();
 
         // Create test vectors
         let v1 = SparseVector {
@@ -236,7 +232,7 @@ mod tests {
 
     #[test]
     fn test_remove_vector() {
-        let mut index = LinScanIndex::new(DistanceMetric::Cosine);
+        let mut index = LinScanIndex::new();
 
         // Add some test vectors
         let v1 = SparseVector {
@@ -292,7 +288,7 @@ mod tests {
     fn test_linscan_simple() {
         let (data, query_vectors) = get_simple_vectors();
 
-        let mut index = LinScanIndex::new(DistanceMetric::Cosine);
+        let mut index = LinScanIndex::new();
         for vector in &data {
             index.add_vector_before_build(vector);
         }
@@ -306,7 +302,7 @@ mod tests {
     fn test_linscan_complex() {
         let (data, query_vector) = get_complex_vectors();
 
-        let mut index = LinScanIndex::new(DistanceMetric::Cosine);
+        let mut index = LinScanIndex::new();
         for vector in &data {
             index.add_vector_before_build(vector);
         }

@@ -20,8 +20,8 @@ use crate::index::DistanceMetric;
 use super::vector::SparseVector;
 
 pub struct SparseDataGenerator {
-    dim: usize,
-    count: usize,
+    pub dim: usize,
+    pub count: usize,
     range: (f32, f32),
     sparsity: f32,
     metric: DistanceMetric,

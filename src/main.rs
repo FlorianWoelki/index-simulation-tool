@@ -229,7 +229,7 @@ fn create_index(index_type: &str, distance_metric: DistanceMetric, seed: u64) ->
             seed,
         )),
         "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
-        "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
+        "linscan" => IndexType::LinScan(LinScanIndex::new()),
         "annoy" => IndexType::Annoy(AnnoyIndex::new(4, 20, 40, distance_metric)),
         _ => panic!("Unsupported index type"),
     }
@@ -249,7 +249,7 @@ async fn main() {
     let seeds = vec![42, 7890, 54321, 191098, 1521];
     let index_type_input = args.index_type.as_str();
 
-    let file_name = format!("{}_{}_{}", index_type_input, threading_type, amount);
+    let file_name = format!("{}_{}", index_type_input, threading_type);
 
     let mut rng = thread_rng();
     let benchmark_config = BenchmarkConfig::new(
@@ -263,7 +263,7 @@ async fn main() {
     let mut index_logger: BenchmarkLogger<IndexBenchmarkResult> = BenchmarkLogger::new();
     let mut build_logger: BenchmarkLogger<GenericBenchmarkResult> = BenchmarkLogger::new();
     let current_date = Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
-    let base_path = "index";
+    let base_path = format!("index/{:?}", distance_metric);
     let dir_path = format!("{}/{}", &base_path, &current_date);
     fs::create_dir_all(&dir_path).expect("Failed to create directory");
 
@@ -362,8 +362,8 @@ async fn main() {
 
         build_logger.add_record(GenericBenchmarkResult::from(
             &build_report,
-            dimensions,
-            amount,
+            data_generator.dim,
+            data_generator.count,
         ));
 
         print_measurement_report(&build_report);
@@ -463,8 +463,8 @@ async fn main() {
             search_time: search_report.execution_time.as_secs_f32(),
             scalability_factor,
             index_disk_space,
-            dataset_dimensionality: dimensions,
-            dataset_size: amount,
+            dataset_dimensionality: data_generator.dim,
+            dataset_size: data_generator.count,
             build_time: build_report.execution_time.as_secs_f32(),
             add_vector_performance: average_add_duration.as_secs_f32(),
             remove_vector_performance: average_remove_duration.as_secs_f32(),
