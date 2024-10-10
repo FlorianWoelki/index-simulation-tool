@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::File,
     io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write},
     sync::Mutex,
@@ -14,19 +14,21 @@ use crate::{
     data_structures::min_heap::MinHeap,
 };
 
-use super::{IndexIdentifier, SparseIndex};
+use super::{DistanceMetric, IndexIdentifier, SparseIndex};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LinScanIndex {
     vectors: Vec<SparseVector>,
     inverted_index: HashMap<usize, Vec<(usize, OrderedFloat<f32>)>>,
+    distance_metric: DistanceMetric,
 }
 
 impl LinScanIndex {
-    pub fn new() -> Self {
+    pub fn new(distance_metric: DistanceMetric) -> Self {
         LinScanIndex {
             vectors: Vec::new(),
             inverted_index: HashMap::new(),
+            distance_metric,
         }
     }
 }
@@ -109,21 +111,27 @@ impl SparseIndex for LinScanIndex {
         for (index, value) in query_vector.indices.iter().zip(query_vector.values.iter()) {
             if let Some(vectors) = self.inverted_index.get(index) {
                 vectors.par_iter().for_each(|(vec_id, vec_value)| {
-                    scores.lock().unwrap()[*vec_id] += value.into_inner() * vec_value.into_inner();
+                    let mut scores = scores.lock().unwrap();
+                    scores[*vec_id] += value.into_inner() * vec_value.into_inner();
                 });
             }
         }
 
         let mut heap: MinHeap<QueryResult> = MinHeap::new();
-        for (index, &score) in scores.lock().unwrap().iter().enumerate() {
-            if heap.len() < k || score > heap.peek().unwrap().score.into_inner() {
+        let scores = scores.into_inner().unwrap();
+
+        for (index, _) in scores.iter().enumerate() {
+            let distance = query_vector.distance(&self.vectors[index], &self.distance_metric);
+            let final_score = 1.0 - distance;
+
+            if heap.len() < k || final_score > heap.peek().unwrap().score.into_inner() {
                 heap.push(
                     QueryResult {
                         //vector: self.vectors[index].clone(),
                         index,
-                        score: OrderedFloat(score),
+                        score: OrderedFloat(final_score),
                     },
-                    OrderedFloat(score),
+                    OrderedFloat(final_score),
                 );
                 if heap.len() > k {
                     heap.pop();
@@ -165,7 +173,7 @@ mod tests {
 
     #[test]
     fn test_serde() {
-        let mut index = LinScanIndex::new();
+        let mut index = LinScanIndex::new(DistanceMetric::Dot);
         let (data, _) = get_simple_vectors();
         for vector in &data {
             index.add_vector_before_build(vector);
@@ -181,7 +189,7 @@ mod tests {
 
     #[test]
     fn test_add_vector() {
-        let mut index = LinScanIndex::new();
+        let mut index = LinScanIndex::new(DistanceMetric::Dot);
 
         // Create test vectors
         let v1 = SparseVector {
@@ -232,7 +240,7 @@ mod tests {
 
     #[test]
     fn test_remove_vector() {
-        let mut index = LinScanIndex::new();
+        let mut index = LinScanIndex::new(DistanceMetric::Dot);
 
         // Add some test vectors
         let v1 = SparseVector {
@@ -288,7 +296,7 @@ mod tests {
     fn test_linscan_simple() {
         let (data, query_vectors) = get_simple_vectors();
 
-        let mut index = LinScanIndex::new();
+        let mut index = LinScanIndex::new(DistanceMetric::Dot);
         for vector in &data {
             index.add_vector_before_build(vector);
         }
@@ -302,7 +310,7 @@ mod tests {
     fn test_linscan_complex() {
         let (data, query_vector) = get_complex_vectors();
 
-        let mut index = LinScanIndex::new();
+        let mut index = LinScanIndex::new(DistanceMetric::Dot);
         for vector in &data {
             index.add_vector_before_build(vector);
         }

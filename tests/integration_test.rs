@@ -165,7 +165,7 @@ mod tests {
 
     #[test]
     fn test_linscan_index() {
-        let mut index = IndexType::LinScan(LinScanIndex::new());
+        let mut index = IndexType::LinScan(LinScanIndex::new(DistanceMetric::Cosine));
         test_index(&mut index);
     }
 }
