@@ -9,11 +9,10 @@ use std::{
 use benchmark::{
     execute_with_timeout,
     logger::BenchmarkLogger,
-    macros::{measure_system::ResourceReport, measure_time},
+    macros::measure_system::ResourceReport,
     metrics::{calculate_queries_per_second, calculate_recall, calculate_scalability_factor},
     BenchmarkConfig, GenericBenchmarkResult, IndexBenchmarkResult,
 };
-use chrono::Local;
 use data::{
     generator_sparse::SparseDataGenerator,
     pca::pca,
@@ -22,7 +21,7 @@ use data::{
 };
 
 use rand::{thread_rng, Rng};
-use sysinfo::{Pid, System};
+use sysinfo::Pid;
 
 use clap::Parser;
 use index::{
@@ -36,7 +35,7 @@ use index::{
     DistanceMetric, IndexType, SparseIndex,
 };
 use ordered_float::OrderedFloat;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 mod benchmark;
 mod data;
@@ -228,7 +227,7 @@ fn create_index(index_type: &str, distance_metric: DistanceMetric, seed: u64) ->
             seed,
         )),
         "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
-        "linscan" => IndexType::LinScan(LinScanIndex::new()),
+        "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
         "annoy" => IndexType::Annoy(AnnoyIndex::new(10, 20, 100, distance_metric)),
         _ => panic!("Unsupported index type"),
     }
@@ -336,7 +335,7 @@ async fn main() {
 
                 // Benchmark for measuring searching.
                 let (_, search_report) = measure_resources!({
-                    index.search(&query_vector, 5);
+                    index.search(&query_vector, 10);
 
                     // println!("{:?}", vectors[result[0].index]);
                     // println!("{:?}", groundtruth[0][0]);
@@ -369,25 +368,29 @@ async fn main() {
         let total_index_duration = total_index_start.elapsed();
 
         // Calculate recall.
-        let mut accumulated_recall = 0.0;
-        for (i, query_vector) in query_vectors.iter().enumerate() {
-            let groundtruth_vectors = &groundtruth[i]
-                .iter()
-                .map(|&i| vectors[i].clone())
-                .collect::<Vec<SparseVector>>();
-            let k = 10;
-            let results = index.search(query_vector, k);
-            let search_results = results
-                .iter()
-                .map(|result| vectors[result.index].clone())
-                .collect::<Vec<_>>();
+        let accumulated_recall = Mutex::new(0.0);
+        query_vectors
+            .par_iter()
+            .enumerate()
+            .for_each(|(i, query_vector)| {
+                let groundtruth_vectors = &groundtruth[i]
+                    .iter()
+                    .map(|&i| vectors[i].clone())
+                    .collect::<Vec<SparseVector>>();
+                let k = 10;
+                let results = index.search(query_vector, k);
+                let search_results = results
+                    .iter()
+                    .map(|result| vectors[result.index].clone())
+                    .collect::<Vec<_>>();
 
-            let iter_recall = calculate_recall(&search_results, groundtruth_vectors, k);
-            // println!("{}", iter_recall);
-            accumulated_recall += iter_recall;
-        }
+                let iter_recall = calculate_recall(&search_results, groundtruth_vectors, k);
+                // println!("{}", iter_recall);
+                let mut accumulated_recall = accumulated_recall.lock().unwrap();
+                *accumulated_recall += iter_recall;
+            });
 
-        let recall = accumulated_recall / query_vectors.len() as f32;
+        let recall = *accumulated_recall.lock().unwrap() / query_vectors.len() as f32;
         println!("Average recall: {:?}", recall);
 
         // Benchmark for measuring adding a vector to the index.
