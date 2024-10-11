@@ -3,96 +3,169 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 algo = 'linscan'
-df = pd.read_csv(f"../index/Cosine/2024-10-07_16-13-15/{algo}.csv")
-df_build = pd.read_csv(f"../index/Cosine/2024-10-07_16-13-15/{algo}_build.csv")
+distance_metrics = ['Angular', 'Cosine', 'Dot', 'Euclidean', 'Jaccard']
 
-fig, ax = plt.subplots(figsize=(7, 7))
+dfs = {}
+dfs_build = {}
+
+for metric in distance_metrics:
+    dfs[metric] = pd.read_csv(f"../index/{metric}/{algo}/{algo}.csv")
+    dfs_build[metric] = pd.read_csv(f"../index/{metric}/{algo}/{algo}_build.csv")
+
+fig, ax = plt.subplots(figsize=(12, 7))
 current_index = 0
 
-def plot_execution_time(ax):
-    ax.plot(df['dataset_size'], df['execution_time'], marker='o', label=algo.upper())
-    ax.set_title('Execution Time vs Dataset Size')
-    ax.set_xlabel('Dataset Size')
-    ax.set_ylabel('Execution Time (in s)')
-    ax.legend()
+def plot_recall_and_qps(fig):
+    fig.clear()
+    axs = fig.subplots(1, 2)
 
-def plot_recall(ax):
-    ax.plot(df['dataset_size'], df['recall'], marker='o', label=algo.upper())
-    ax.set_title('Recall vs Dataset Size')
-    ax.set_xlabel('Dataset Size')
-    ax.set_ylabel('Recall')
-    ax.legend()
+    for metric in distance_metrics:
+        axs[0].plot(dfs[metric]['dataset_size'], dfs[metric]['recall'], marker='o', label=f'{metric}')
+        axs[1].plot(dfs[metric]['dataset_size'], dfs[metric]['queries_per_second'], marker='o', label=f'{metric}')
 
-def plot_queries_per_second(ax):
-    ax.plot(df['dataset_size'], df['queries_per_second'], marker='o', label=algo.upper())
-    ax.set_title('Queries per Second vs Dataset Size')
-    ax.set_xlabel('Dataset Size')
-    ax.set_ylabel('Queries per Second')
-    ax.legend()
+    axs[0].set_title('Recall vs Dataset Size')
+    axs[0].set_xlabel('Dataset Size')
+    axs[0].set_ylabel('Recall')
+    axs[0].legend()
+    axs[0].grid(True)
 
-def plot_index_disk_space(ax):
-    ax.plot(df['dataset_size'], df['index_disk_space'], marker='o', label=algo.upper())
-    ax.set_title('Index Disk Space vs Dataset Size')
-    ax.set_xlabel('Dataset Size')
-    ax.set_ylabel('Index Disk Space (in mb)')
-    ax.legend()
+    axs[1].set_title('Queries per Second vs Dataset Size')
+    axs[1].set_xlabel('Dataset Size')
+    axs[1].set_ylabel('Queries per Second')
+    axs[1].legend()
+    axs[1].grid(True)
 
-def plot_performance_metrics(ax):
-    ax.plot(df['dataset_size'], df['add_vector_performance'], marker='o', linestyle='--', label=f'{algo.upper()} Add Vector')
-    ax.plot(df['dataset_size'], df['remove_vector_performance'], marker='s', linestyle='--', label=f'{algo.upper()} Remove Vector')
-    ax.plot(df['dataset_size'], df['build_time'], marker='^', linestyle='--', label=f'{algo.upper()} Build Time')
-    ax.plot(df['dataset_size'], df['search_time'], marker='D', linestyle='--', label=f'{algo.upper()} Search Time')
-    ax.set_title('Performance Metrics Comparison')
-    ax.set_xlabel('Dataset Size')
-    ax.set_ylabel('Time (in s)')
-    ax.legend()
+    plt.tight_layout()
 
-def plot_index_operations(ax):
-    ax.plot(df['dataset_size'], df['index_saving_time'], marker='o', linestyle='--', label=f'{algo.upper()} Saving Time')
-    ax.plot(df['dataset_size'], df['index_loading_time'], marker='s', linestyle='--', label=f'{algo.upper()} Loading Time')
-    ax.set_title('Index Operations Time vs Dataset Size')
-    ax.set_xlabel('Dataset Size')
-    ax.set_ylabel('Time (in s)')
-    ax.legend()
+def plot_add_and_remove_vector(fig):
+    fig.clear()
+    axs = fig.subplots(1, 2)
 
-def plot_scalability_factor(ax):
-    valid_data = df[np.isfinite(df['scalability_factor'])]
-    ax.plot(valid_data['dataset_size'], valid_data['scalability_factor'], marker='o', label=algo.upper())
-    ax.set_title('Scalability Factor vs Dataset Size')
-    ax.set_xlabel('Dataset Size')
-    ax.set_ylabel('Scalability Factor')
-    ax.legend()
+    for metric in distance_metrics:
+        axs[0].plot(dfs[metric]['dataset_size'], dfs[metric]['add_vector_performance'], marker='o', label=f'{metric}')
+        axs[1].plot(dfs[metric]['dataset_size'], dfs[metric]['remove_vector_performance'], marker='o', label=f'{metric}')
 
-def plot_consumed_memory(ax):
-    ax.plot(df_build['dataset_size'], df_build['consumed_memory'], marker='o', label=algo.upper())
-    ax.set_title('Consumed Memory vs Dataset Size')
-    ax.set_xlabel('Dataset Size')
-    ax.set_ylabel('Consumed Memory (in mb)')
-    ax.legend()
+    axs[0].set_title('Add Vector Performance vs Dataset Size')
+    axs[0].set_xlabel('Dataset Size')
+    axs[0].set_ylabel('Time (in s)')
+    axs[0].legend()
+    axs[0].grid(True)
 
-def plot_consumed_cpu(ax):
-    ax.plot(df_build['dataset_size'], df_build['consumed_cpu'], marker='o', label=algo.upper())
-    ax.set_title('Consumed CPU vs Dataset Size')
-    ax.set_xlabel('Dataset Size')
-    ax.set_ylabel('Consumed CPU (in %)')
-    ax.legend()
+    axs[1].set_title('Remove Vector Performance vs Dataset Size')
+    axs[1].set_xlabel('Dataset Size')
+    axs[1].set_ylabel('Time (in s)')
+    axs[1].legend()
+    axs[1].grid(True)
+
+    plt.tight_layout()
+
+def plot_build_and_search_time(fig):
+    fig.clear()
+    axs = fig.subplots(1, 2)
+
+    for metric in distance_metrics:
+        axs[0].plot(dfs[metric]['dataset_size'], dfs[metric]['build_time'], marker='o', label=f'{metric}')
+        axs[1].plot(dfs[metric]['dataset_size'], dfs[metric]['search_time'], marker='o', label=f'{metric}')
+
+    axs[0].set_title('Build Time vs Dataset Size')
+    axs[0].set_xlabel('Dataset Size')
+    axs[0].set_ylabel('Time (in s)')
+    axs[0].legend()
+    axs[0].grid(True)
+
+    axs[1].set_title('Search Time vs Dataset Size')
+    axs[1].set_xlabel('Dataset Size')
+    axs[1].set_ylabel('Time (in s)')
+    axs[1].legend()
+    axs[1].grid(True)
+
+    plt.tight_layout()
+
+def plot_saving_and_loading_time(fig):
+    fig.clear()
+    axs = fig.subplots(1, 2)
+
+    for metric in distance_metrics:
+        axs[0].plot(dfs[metric]['dataset_size'], dfs[metric]['index_saving_time'], marker='o', label=f'{metric}')
+        axs[1].plot(dfs[metric]['dataset_size'], dfs[metric]['index_loading_time'], marker='o', label=f'{metric}')
+
+    axs[0].set_title('Index Saving Time vs Dataset Size')
+    axs[0].set_xlabel('Dataset Size')
+    axs[0].set_ylabel('Time (in s)')
+    axs[0].legend()
+    axs[0].grid(True)
+
+    axs[1].set_title('Index Loading Time vs Dataset Size')
+    axs[1].set_xlabel('Dataset Size')
+    axs[1].set_ylabel('Time (in s)')
+    axs[1].legend()
+    axs[1].grid(True)
+
+    plt.tight_layout()
+
+def plot_cpu_memory_disk(fig):
+    fig.clear()
+    axs = fig.subplots(1, 3)
+
+    for metric in distance_metrics:
+        axs[0].plot(dfs_build[metric]['dataset_size'], dfs_build[metric]['consumed_cpu'], marker='o', label=f'{metric}')
+        axs[1].plot(dfs_build[metric]['dataset_size'], dfs_build[metric]['consumed_memory'], marker='o', label=f'{metric}')
+        axs[2].plot(dfs[metric]['dataset_size'], dfs[metric]['index_disk_space'], marker='o', label=f'{metric}')
+
+    axs[0].set_title('Consumed CPU vs Dataset Size')
+    axs[0].set_xlabel('Dataset Size')
+    axs[0].set_ylabel('Consumed CPU (in %)')
+    axs[0].legend()
+    axs[0].grid(True)
+
+    axs[1].set_title('Consumed Memory vs Dataset Size')
+    axs[1].set_xlabel('Dataset Size')
+    axs[1].set_ylabel('Consumed Memory (in mb)')
+    axs[1].legend()
+    axs[1].grid(True)
+
+    axs[2].set_title('Index Disk Space vs Dataset Size')
+    axs[2].set_xlabel('Dataset Size')
+    axs[2].set_ylabel('Index Disk Space (in mb)')
+    axs[2].legend()
+    axs[2].grid(True)
+
+    plt.tight_layout()
+
+def plot_scalability_and_execution_time(fig):
+    fig.clear()
+    axs = fig.subplots(1, 2)
+
+    for metric in distance_metrics:
+        valid_data = dfs[metric][np.isfinite(dfs[metric]['scalability_factor'])]
+        axs[0].plot(valid_data['dataset_size'], valid_data['scalability_factor'], marker='o', label=f'{metric}')
+        axs[1].plot(dfs[metric]['dataset_size'], dfs[metric]['execution_time'], marker='o', label=f'{metric}')
+
+    axs[0].set_title('Scalability Factor vs Dataset Size')
+    axs[0].set_xlabel('Dataset Size')
+    axs[0].set_ylabel('Scalability Factor')
+    axs[0].legend()
+    axs[0].grid(True)
+
+    axs[1].set_title('Execution Time vs Dataset Size')
+    axs[1].set_xlabel('Dataset Size')
+    axs[1].set_ylabel('Execution Time (in s)')
+    axs[1].legend()
+    axs[1].grid(True)
+
+    plt.tight_layout()
 
 plot_functions = [
-    plot_execution_time,
-    plot_recall,
-    plot_queries_per_second,
-    plot_index_disk_space,
-    plot_performance_metrics,
-    plot_index_operations,
-    plot_scalability_factor,
-    plot_consumed_memory,
-    plot_consumed_cpu,
+    plot_recall_and_qps,
+    plot_add_and_remove_vector,
+    plot_build_and_search_time,
+    plot_saving_and_loading_time,
+    plot_cpu_memory_disk,
+    plot_scalability_and_execution_time,
 ]
 
 def update_plot(index):
-    ax.clear()
-    plot_functions[index](ax)
-    ax.grid(True)
+    plot_functions[index](fig)
     fig.canvas.draw()
 
 def on_key(event):
