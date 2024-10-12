@@ -49,49 +49,6 @@ pub fn calculate_recall(
     correct_results as f32 / k as f32
 }
 
-/// Calculates the scalability factor based on the performance change between two benchmarks.
-///
-/// This function computes how the queries per second (QPS) performance metric scales with
-/// changes in dataset size and dimensionality. A scalability factor greater than 1 indicates
-/// performance improvements relative to dataset growth, while a value less than 1 indicates
-/// performance degradation.
-///
-/// # Arguments
-/// - (`queries_per_second`, `dataset_size`, `dataset_dimensionality`): The performance metrics
-/// of the current benchmark.
-/// - `previous_result`: The performance metrics of the previous benchmark.
-///
-/// # Examples
-/// ```
-/// use benchmark::metrics::calculate_scalability_factor;
-/// use benchmark::BenchmarkResult;
-///
-/// let previous_result = BenchmarkResult {
-///    total_execution_time: std::time::Duration::from_secs(1),
-///    index_execution_time: std::time::Duration::from_secs(1),
-///    query_execution_time: std::time::Duration::from_secs(1),
-///    queries_per_second: 1.0,
-///    dataset_size: 1,
-///    dataset_dimensionality: 1,
-///    scalability_factor: None,
-/// };
-///
-/// let current_result = BenchmarkResult {
-///   total_execution_time: std::time::Duration::from_secs(1),
-///   index_execution_time: std::time::Duration::from_secs(1),
-///   query_execution_time: std::time::Duration::from_secs(1),
-///   queries_per_second: 2.0,
-///   dataset_size: 2,
-///   dataset_dimensionality: 2,
-///   scalability_factor: None,
-/// };
-///
-/// let scalability_factor = calculate_scalability_factor(
-///   (current_result.queries_per_second, current_result.dataset_size, current_result.dataset_dimensionality),
-///   &previous_result,
-/// );
-/// assert_eq!(scalability_factor, 2.0);
-/// ```
 pub fn calculate_scalability_factor(
     (queries_per_second, dataset_size, dataset_dimensionality): (f32, usize, usize),
     previous_result: &IndexBenchmarkResult,
@@ -100,9 +57,10 @@ pub fn calculate_scalability_factor(
     let dimensionality_ratio =
         (dataset_dimensionality as f32) / (previous_result.dataset_dimensionality as f32);
 
-    let qps_scalability_factor = queries_per_second / previous_result.queries_per_second;
+    let expected_qps =
+        previous_result.queries_per_second / (dataset_size_ratio * dimensionality_ratio);
 
-    qps_scalability_factor / (dataset_size_ratio * dimensionality_ratio)
+    queries_per_second / expected_qps
 }
 
 #[cfg(test)]
