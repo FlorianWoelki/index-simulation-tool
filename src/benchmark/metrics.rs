@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{ops::Index, time::Duration};
 
 use crate::data::vector::SparseVector;
 
@@ -7,27 +7,8 @@ use super::IndexBenchmarkResult;
 #[allow(dead_code)]
 pub const DEFAULT_SCALABILITY_FACTOR: f32 = 1.0;
 
-/// Calculates the number of queries per second from the total time taken to execute
-/// the queries.
-///
-/// # Arguments
-/// - `total_queries_execution_time`: The total time taken to execute the queries.
-///
-/// # Examples
-/// ```
-/// use std::time::Duration;
-/// use benchmark::metrics::calculate_queries_per_second;
-///
-/// let total_queries_execution_time = Duration::from_nanos(1_000_000_000);
-/// let queries_per_second = calculate_queries_per_second(total_queries_execution_time);
-/// assert_eq!(queries_per_second, 1.0);
-/// ```
-pub fn calculate_queries_per_second(total_queries_execution_time: Duration) -> f32 {
-    if !total_queries_execution_time.is_zero() {
-        1_000_000_000.0 / total_queries_execution_time.as_nanos() as f32
-    } else {
-        0.0
-    }
+pub fn calculate_queries_per_second(num_queries: usize, query_duration: Duration) -> f32 {
+    num_queries as f32 / query_duration.as_secs_f32()
 }
 
 pub fn calculate_recall(

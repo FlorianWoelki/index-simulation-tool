@@ -450,7 +450,16 @@ async fn main() {
             IndexType::load_index(&saved_file);
         });
 
-        let queries_per_second = calculate_queries_per_second(search_report.execution_time);
+        println!("Measuring queries per second...");
+        let num_queries = 25;
+        let query_start = Instant::now();
+        for query_vector in query_vectors.iter().take(num_queries) {
+            index.search(query_vector, 10);
+        }
+        let query_duration = query_start.elapsed();
+        let queries_per_second = calculate_queries_per_second(num_queries, query_duration);
+        println!("Queries per second: {:.2}", queries_per_second);
+
         let scalability_factor = previous_benchmark_result.as_ref().map(|previous_result| {
             calculate_scalability_factor((queries_per_second, amount, dimensions), previous_result)
         });
