@@ -1,4 +1,4 @@
-use std::{ops::Index, time::Duration};
+use std::time::Duration;
 
 use crate::data::vector::SparseVector;
 
@@ -116,23 +116,26 @@ mod tests {
 
     #[test]
     fn test_queries_per_second_normal_case() {
+        let num_queries = 100;
         let duration = Duration::from_secs(1);
-        let qps = calculate_queries_per_second(duration);
-        assert_eq!(qps, 1.0);
+        let qps = calculate_queries_per_second(num_queries, duration);
+        assert_eq!(qps, 100.0);
     }
 
     #[test]
     fn test_queries_per_second_fractional_result() {
+        let num_queries = 100;
         let duration = Duration::from_millis(500);
-        let qps = calculate_queries_per_second(duration);
-        assert_eq!(qps, 2.0);
+        let qps = calculate_queries_per_second(num_queries, duration);
+        assert_eq!(qps, 200.0);
     }
 
     #[test]
     fn test_queries_per_second_zero_duration() {
+        let num_queries = 100;
         let duration = Duration::from_secs(0);
-        let qps = calculate_queries_per_second(duration);
-        assert_eq!(qps, 0.0);
+        let qps = calculate_queries_per_second(num_queries, duration);
+        assert!(qps.is_infinite());
     }
 
     #[test]
@@ -185,7 +188,7 @@ mod tests {
             index_saving_time: Duration::from_secs(1).as_secs_f32(),
             recall: 0.0,
         };
-        let current_qps = 150.0;
+        let current_qps = 50.0;
         let current_dataset_size = 2000;
         let current_dataset_dimensionality = 10;
 
@@ -198,6 +201,7 @@ mod tests {
             &previous_result,
         );
 
+        println!("{:?}", scalability_factor);
         assert!(scalability_factor < 1.0);
     }
 

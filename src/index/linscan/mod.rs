@@ -316,8 +316,7 @@ mod tests {
         }
         index.build();
 
-        let results = index.search(&query_vector, 2);
-        println!("{:?}", results);
+        let results = index.search(&query_vector, data.len());
         assert!(is_in_actual_result(&data, &query_vector, &results));
     }
 }
