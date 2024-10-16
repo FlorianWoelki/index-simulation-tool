@@ -1,14 +1,10 @@
-use rand::seq::SliceRandom;
+use rand::{seq::SliceRandom, Rng};
 use rayon::iter::{
     IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator,
 };
 
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, Mutex, RwLock},
-};
+use std::{cmp::Ordering, sync::Mutex};
 
-use ordered_float::OrderedFloat;
 use rand::{rngs::StdRng, SeedableRng};
 
 use crate::{data::vector::SparseVector, index::DistanceMetric};
@@ -22,6 +18,10 @@ fn initialize_centers(
         .choose_multiple(rng, num_clusters)
         .cloned()
         .collect()
+}
+
+fn initialize_single_center(vectors: &Vec<SparseVector>, rng: &mut StdRng) -> SparseVector {
+    vectors[rng.gen_range(0..vectors.len())].clone()
 }
 
 pub fn kmeans(
@@ -39,87 +39,64 @@ pub fn kmeans(
 
     // Initializes the cluster centers by randomly selecting `k` nodes from the input vector.
     let mut centers = initialize_centers(vectors, num_clusters, &mut rng);
-    let assignments = Arc::new(RwLock::new(vec![0; vectors.len()]));
 
     for _ in 0..iterations {
-        vectors.par_iter().enumerate().for_each(|(i, node)| {
-            let (closest, _) = centers
-                .par_iter()
-                .enumerate()
-                .map(|(j, center)| {
-                    let distance = node.distance(center, metric);
-                    (j, distance)
-                })
-                .reduce(
-                    || (usize::MAX, f32::MAX),
-                    |(min_j, min_dist), (j, dist)| {
-                        if dist < min_dist {
-                            (j, dist)
-                        } else {
-                            (min_j, min_dist)
-                        }
-                    },
-                );
-
-            assignments.write().unwrap()[i] = closest;
-        });
+        let assignments: Vec<usize> = vectors
+            .par_iter()
+            .map(|node| {
+                centers
+                    .iter()
+                    .enumerate()
+                    .map(|(j, center)| {
+                        let distance = node.distance(center, metric);
+                        (j, distance)
+                    })
+                    .min_by(|&(_, a), &(_, b)| a.partial_cmp(&b).unwrap_or(Ordering::Equal))
+                    .unwrap()
+                    .0
+            })
+            .collect();
 
         // Recalculate the cluster centers based on the new assignments.
-        let new_centers: Vec<Mutex<BTreeMap<usize, f32>>> = (0..num_clusters)
-            .map(|_| Mutex::new(BTreeMap::new()))
+        let new_centers: Vec<Mutex<(SparseVector, f32, usize)>> = centers
+            .iter()
+            .map(|center| Mutex::new((center.clone(), f32::MAX, 0)))
             .collect();
-        let counts = Arc::new(Mutex::new(vec![0; num_clusters]));
 
         vectors
             .par_iter()
-            .zip(assignments.read().unwrap().par_iter())
+            .zip(assignments.par_iter())
             .for_each(|(node, &cluster)| {
-                let mut center = new_centers[cluster].lock().unwrap();
-                for (index, &value) in node.indices.iter().zip(node.values.iter()) {
-                    *center.entry(*index).or_insert(0.0) += value.0;
+                let mut center_data = new_centers[cluster].lock().unwrap();
+                let current_distance = node.distance(&center_data.0, metric);
+                if current_distance < center_data.1 {
+                    *center_data = (node.clone(), current_distance, 1);
+                } else {
+                    center_data.2 += 1;
                 }
-                drop(center);
-
-                let mut counts = counts.lock().unwrap();
-                counts[cluster] += 1;
             });
 
-        let max_change = Arc::new(Mutex::new(0.0));
-
-        centers.par_iter_mut().enumerate().for_each(|(i, center)| {
-            let counts = counts.lock().unwrap();
-
-            if counts[i] == 0 {
-                let mut rng = rng.clone();
-                *center = vectors.choose(&mut rng).unwrap().clone();
-                return;
-            }
-
-            let mut new_indices = Vec::new();
-            let mut new_values = Vec::new();
-            let new_center = new_centers[i].lock().unwrap();
-            for (&index, &sum_value) in new_center.iter() {
-                new_indices.push(index);
-                new_values.push(OrderedFloat(sum_value / counts[i] as f32));
-            }
-
-            let new_center = SparseVector {
-                indices: new_indices,
-                values: new_values,
-            };
-
-            let change = center.distance(&new_center, metric);
-            {
-                let mut max_change = max_change.lock().unwrap();
-                if change > *max_change {
-                    *max_change = change;
+        let new_centers: Vec<SparseVector> = new_centers
+            .into_iter()
+            .map(|mutex| {
+                let (center, _, count) = mutex.into_inner().unwrap();
+                if count > 0 {
+                    center
+                } else {
+                    initialize_single_center(vectors, &mut rng)
                 }
-            }
+            })
+            .collect();
 
-            *center = new_center;
-        });
+        let max_change = centers
+            .par_iter_mut()
+            .zip(new_centers.par_iter())
+            .map(|(old_center, new_center)| old_center.distance(new_center, metric))
+            .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            .unwrap_or(0.0);
 
-        let max_change = *max_change.lock().unwrap();
+        centers = new_centers;
+
         if max_change < tolerance {
             break;
         }
@@ -130,6 +107,8 @@ pub fn kmeans(
 
 #[cfg(test)]
 mod tests {
+    use ordered_float::OrderedFloat;
+
     use super::*;
 
     fn create_sparse_vector(indices: Vec<usize>, values: Vec<f32>) -> SparseVector {

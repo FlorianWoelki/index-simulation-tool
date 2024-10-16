@@ -27,7 +27,7 @@ impl SparseVector {
         (cosine_sim.acos() / std::f32::consts::PI).clamp(0.0, 1.0)
     }
 
-    fn dot(&self, other: &SparseVector) -> f32 {
+    pub fn dot(&self, other: &SparseVector) -> f32 {
         let mut i = 0;
         let mut j = 0;
         let mut result = 0.0;

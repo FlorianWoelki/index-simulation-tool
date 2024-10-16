@@ -85,7 +85,7 @@ impl IVFPQIndex {
                     .iter()
                     .enumerate()
                     .map(|(i, coarse_codeword)| (i, vec.distance(coarse_codeword, &self.metric)))
-                    .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+                    .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
                     .map(|(i, _)| i)
                     .unwrap_or(0)
             })
@@ -123,7 +123,7 @@ impl IVFPQIndex {
                     .iter()
                     .enumerate()
                     .map(|(k, code)| (k, subvector.distance(code, &self.metric)))
-                    .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+                    .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
                     .map(|(k, _)| k)
                     .unwrap_or(0)
             })
@@ -214,8 +214,10 @@ impl SparseIndex for IVFPQIndex {
                             .par_iter()
                             .map(|vec| {
                                 let sub_vec_dims = vec.indices.len() / self.num_subvectors;
-                                let start_idx = m * sub_vec_dims;
-                                let end_idx = ((m + 1) * sub_vec_dims).min(vec.indices.len());
+                                let remaining_dims = vec.indices.len() % self.num_subvectors;
+                                let start_idx = m * sub_vec_dims + m.min(remaining_dims);
+                                let end_idx =
+                                    start_idx + sub_vec_dims + (m < remaining_dims) as usize;
                                 SparseVector {
                                     indices: vec.indices[start_idx..end_idx].to_vec(),
                                     values: vec.values[start_idx..end_idx].to_vec(),

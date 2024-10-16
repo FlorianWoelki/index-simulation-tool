@@ -209,23 +209,15 @@ async fn generate_datasets(
 
 fn create_index(index_type: &str, distance_metric: DistanceMetric, seed: u64) -> IndexType {
     match index_type {
-        "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 32, 32, 400, 200, distance_metric)),
+        "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 16, 32, 200, 100, distance_metric)),
         "lsh-simhash" => {
-            IndexType::Lsh(LSHIndex::new(20, 4, LSHHashType::SimHash, distance_metric))
+            IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::SimHash, distance_metric))
         }
         "lsh-minhash" => {
-            IndexType::Lsh(LSHIndex::new(20, 4, LSHHashType::MinHash, distance_metric))
+            IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::MinHash, distance_metric))
         }
         "pq" => IndexType::Pq(PQIndex::new(3, 50, 256, 0.01, distance_metric, seed)),
-        "ivfpq" => IndexType::Ivfpq(IVFPQIndex::new(
-            3,
-            100,
-            200,
-            256,
-            0.01,
-            distance_metric,
-            seed,
-        )),
+        "ivfpq" => IndexType::Ivfpq(IVFPQIndex::new(6, 256, 8, 100, 0.1, distance_metric, seed)),
         "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
         "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
         "annoy" => IndexType::Annoy(AnnoyIndex::new(10, 20, 100, distance_metric)),
@@ -239,10 +231,10 @@ async fn main() {
     let dimensions = args.dimensions.unwrap_or(10000);
     let amount = args.features.unwrap_or(1000);
     let distance_metric = args.distance_metric;
+    let index_type_input = args.index_type.as_str();
 
     // let seed = thread_rng().gen_range(0..10000);
     let seeds = vec![42, 7890, 54321, 191098, 1521];
-    let index_type_input = args.index_type.as_str();
 
     let mut rng = thread_rng();
     let benchmark_config = BenchmarkConfig::new(
@@ -330,7 +322,9 @@ async fn main() {
             move || {
                 let mut index = index_clone.lock().unwrap();
                 let (_, build_report) = measure_resources!({
+                    println!("\nBuilding the index...");
                     index.build();
+                    println!("...finished build the index");
                 });
 
                 // Benchmark for measuring searching.
