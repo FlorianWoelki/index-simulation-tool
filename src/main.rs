@@ -209,7 +209,7 @@ async fn generate_datasets(
 
 fn create_index(index_type: &str, distance_metric: DistanceMetric, seed: u64) -> IndexType {
     match index_type {
-        "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 16, 32, 200, 100, distance_metric)),
+        "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 16, 86, 400, 400, distance_metric)),
         "lsh-simhash" => {
             IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::SimHash, distance_metric))
         }
