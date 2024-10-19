@@ -47,6 +47,7 @@ fn generate_structured_sparse_data(
     data
 }
 
+#[allow(dead_code)]
 fn tsne(
     data: &[SparseVector],
     n_components: usize,
@@ -205,6 +206,7 @@ fn kl_divergence(p: &DMatrix<f64>, q: &DMatrix<f64>) -> f64 {
         .sum()
 }
 
+#[allow(dead_code)]
 fn plot_tsne_result(data: &[SparseVector]) {
     let mut plot = Plot::new();
 

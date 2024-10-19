@@ -1,8 +1,6 @@
 use ordered_float::OrderedFloat;
 use rand::{seq::SliceRandom, Rng};
-use rayon::iter::{
-    IndexedParallelIterator, IntoParallelRefIterator, IntoParallelRefMutIterator, ParallelIterator,
-};
+use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 use std::{cmp::Ordering, sync::Mutex};
 

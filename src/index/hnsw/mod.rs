@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     cmp::Reverse,
     collections::{BinaryHeap, HashMap, HashSet},
     fs::File,
@@ -8,9 +7,7 @@ use std::{
 
 use ordered_float::OrderedFloat;
 use rand::Rng;
-use rayon::iter::{
-    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator, ParallelIterator,
-};
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 
 use crate::data::{vector::SparseVector, QueryResult};
