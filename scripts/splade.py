@@ -5,6 +5,7 @@ import pandas as pd
 import re
 import torch
 import numpy as np
+import msgpack
 
 model_id = 'naver/splade-cocondenser-ensembledistil'
 tokenizer = AutoTokenizer.from_pretrained(model_id)
@@ -38,26 +39,39 @@ for example in tqdm(training_dataset, desc="Processing"):
     if len(texts) == 11: # temporary
         break
 
+def sparse_vector_to_dict(vector):
+    return {int(idx): float(val) for idx, val in enumerate(vector) if val != 0}
+
 # Generate sparse vectors.
 sparse_vectors = []
 for text in tqdm(texts, desc="Generating sparse vectors"):
-    sparse_vectors.append(create_splade(text))
+    sparse_vectors.append(sparse_vector_to_dict(create_splade(text)))
 
 num_queries = 2
 queries = []
 query_vectors = []
 groundtruth = []
+groundtruth_vectors = []
 for _ in range(num_queries):
     random_doc = np.random.choice(texts)
 
     query = generate_related_query(random_doc)
-    query_vector = create_splade(query)
     queries.append(query)
-    query_vectors.append(query_vector)
+    query_vectors.append(sparse_vector_to_dict(create_splade(query)))
 
     groundtruth.append(random_doc)
+    groundtruth_vectors.append(sparse_vector_to_dict(create_splade(random_doc)))
+
+with open('data.msgpack', 'wb') as f:
+    msgpack.dump(sparse_vectors, f)
+
+with open('queries.msgpack', 'wb') as f:
+    msgpack.dump(query_vectors, f)
+
+with open('groundtruth.msgpack', 'wb') as f:
+    msgpack.dump(groundtruth_vectors, f)
 
 print(f"Generated {len(texts)} document vectors, {num_queries} query vectors.")
 print(f"Sample query: {queries[0]}")
 print(f"Sample groundtruth: {groundtruth[0]}")
-print("Dataset saved to 'splade_sparse_vectors_dataset.csv'")
+print("Datasets saved to 'data.msgpack', 'queries.msgpack', and 'groundtruth.msgpack'")
