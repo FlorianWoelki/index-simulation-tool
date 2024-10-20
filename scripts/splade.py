@@ -40,7 +40,13 @@ for example in tqdm(training_dataset, desc="Processing"):
         break
 
 def sparse_vector_to_dict(vector):
-    return {int(idx): float(val) for idx, val in enumerate(vector) if val != 0}
+    indices = []
+    values = []
+    for idx, val in enumerate(vector):
+        if val != 0:
+            indices.append(idx)
+            values.append(float(val))
+    return {"indices": indices, "values": values}
 
 # Generate sparse vectors.
 sparse_vectors = []
