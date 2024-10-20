@@ -344,6 +344,32 @@ async fn main() {
             Some((build_report, search_report)) => (build_report, search_report),
             None => {
                 println!("Build & Search index timed out");
+                build_logger.add_record(GenericBenchmarkResult::from(
+                    &ResourceReport {
+                        execution_time: Duration::new(0, 0),
+                        final_cpu: 0.0,
+                        final_memory: 0.0,
+                        initial_cpu: 0.0,
+                        initial_memory: 0.0,
+                    },
+                    data_generator.dim,
+                    data_generator.count,
+                ));
+                index_logger.add_record(IndexBenchmarkResult {
+                    execution_time: 0.0,
+                    index_loading_time: 0.0,
+                    index_saving_time: 0.0,
+                    queries_per_second: 0.0,
+                    recall: 0.0,
+                    search_time: 0.0,
+                    scalability_factor: None,
+                    index_disk_space: 0.0,
+                    dataset_dimensionality: data_generator.dim,
+                    dataset_size: data_generator.count,
+                    build_time: 0.0,
+                    add_vector_performance: 0.0,
+                    remove_vector_performance: 0.0,
+                });
                 continue;
             }
         };
