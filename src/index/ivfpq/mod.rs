@@ -199,42 +199,48 @@ impl SparseIndex for IVFPQIndex {
             cluster_vectors[code].lock().unwrap().push(vec.clone());
         });
 
-        self.sub_quantizers = (0..self.num_coarse_clusters)
-            .into_par_iter()
-            .map(|c| {
-                let cluster_vecs = cluster_vectors[c].lock().unwrap();
-                if cluster_vecs.is_empty() {
-                    return vec![];
-                }
+        let mut all_subvectors: Vec<Vec<Vec<SparseVector>>> =
+            vec![vec![Vec::new(); self.num_subvectors]; self.num_coarse_clusters];
 
-                (0..self.num_subvectors)
-                    .into_par_iter()
-                    .map(|m| {
-                        let sub_vectors_m: Vec<SparseVector> = cluster_vecs
-                            .par_iter()
-                            .map(|vec| {
-                                let sub_vec_dims = vec.indices.len() / self.num_subvectors;
-                                let remaining_dims = vec.indices.len() % self.num_subvectors;
-                                let start_idx = m * sub_vec_dims + m.min(remaining_dims);
-                                let end_idx =
-                                    start_idx + sub_vec_dims + (m < remaining_dims) as usize;
-                                SparseVector {
-                                    indices: vec.indices[start_idx..end_idx].to_vec(),
-                                    values: vec.values[start_idx..end_idx].to_vec(),
-                                }
-                            })
-                            .collect();
-                        kmeans(
-                            &sub_vectors_m,
-                            self.num_clusters,
-                            self.kmeans_iterations,
-                            self.tolerance,
-                            self.random_seed + c as u64 + m as u64,
-                            &self.metric,
-                        )
-                    })
-                    .collect()
+        // Pre-compute subvectors
+        for (i, vec) in self.vectors.iter().enumerate() {
+            let coarse_code = self.coarse_codes[i];
+            let sub_vec_dims = vec.indices.len() / self.num_subvectors;
+            let remaining_dims = vec.indices.len() % self.num_subvectors;
+
+            for m in 0..self.num_subvectors {
+                let start_idx = m * sub_vec_dims + m.min(remaining_dims);
+                let end_idx = start_idx + sub_vec_dims + (m < remaining_dims) as usize;
+                let subvec = SparseVector {
+                    indices: vec.indices[start_idx..end_idx].to_vec(),
+                    values: vec.values[start_idx..end_idx].to_vec(),
+                };
+                all_subvectors[coarse_code][m].push(subvec);
+            }
+        }
+
+        self.sub_quantizers = (0..self.num_coarse_clusters * self.num_subvectors)
+            .into_par_iter()
+            .map(|index| {
+                let c = index / self.num_subvectors;
+                let m = index % self.num_subvectors;
+
+                if all_subvectors[c][m].is_empty() {
+                    vec![]
+                } else {
+                    kmeans(
+                        &all_subvectors[c][m],
+                        self.num_clusters,
+                        self.kmeans_iterations,
+                        self.tolerance,
+                        self.random_seed + c as u64 + m as u64,
+                        &self.metric,
+                    )
+                }
             })
+            .collect::<Vec<_>>()
+            .chunks(self.num_subvectors)
+            .map(|chunk| chunk.to_vec())
             .collect();
 
         self.pq_codes = self.encode(&self.vectors);

@@ -217,7 +217,7 @@ fn create_index(index_type: &str, distance_metric: DistanceMetric, seed: u64) ->
             IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::MinHash, distance_metric))
         }
         "pq" => IndexType::Pq(PQIndex::new(3, 50, 256, 0.01, distance_metric, seed)),
-        "ivfpq" => IndexType::Ivfpq(IVFPQIndex::new(6, 256, 8, 100, 0.1, distance_metric, seed)),
+        "ivfpq" => IndexType::Ivfpq(IVFPQIndex::new(6, 256, 16, 500, 0.1, distance_metric, seed)),
         "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
         "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
         "annoy" => IndexType::Annoy(AnnoyIndex::new(10, 20, 100, distance_metric)),
