@@ -30,6 +30,12 @@ pub fn calculate_recall(
     correct_results as f32 / k as f32
 }
 
+/// A scalability factor greater than one indicates that the algorithm is scaling
+/// better than linear expectations, maintaining or improving its relative performance
+/// despite increases in data size and dimensionality.
+/// Conversely, a factor equal to one suggests perfect linear scaling, while a factor
+/// less than one indicates that the indexing algorithm's performance decreases more
+/// than what linear scaling would predict as the dataset grows or becomes more complex.
 pub fn calculate_scalability_factor(
     (queries_per_second, dataset_size, dataset_dimensionality): (f32, usize, usize),
     previous_result: &IndexBenchmarkResult,
