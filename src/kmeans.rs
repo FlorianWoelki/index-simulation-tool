@@ -19,7 +19,7 @@ fn initialize_centers(
         .collect()
 }
 
-fn initialize_single_center(vectors: &Vec<SparseVector>, rng: &mut StdRng) -> SparseVector {
+fn initialize_single_center(vectors: &[SparseVector], rng: &mut StdRng) -> SparseVector {
     vectors[rng.gen_range(0..vectors.len())].clone()
 }
 
@@ -148,7 +148,7 @@ mod tests {
 
         assert_eq!(centers.len(), num_clusters);
 
-        let expected_centers = vec![
+        let expected_centers = [
             create_sparse_vector(vec![0, 1], vec![1.25, 1.9]),
             create_sparse_vector(vec![0, 1], vec![6.5, 8.0]),
         ];
