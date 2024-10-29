@@ -46,6 +46,17 @@ pub fn read_sparse_vectors(
     Ok(sparse_vectors)
 }
 
+pub fn read_groundtruth(filename: &str) -> Result<Vec<Vec<usize>>, Box<dyn std::error::Error>> {
+    let mut file = File::open(filename)?;
+    let mut buffer = Vec::new();
+    file.read_to_end(&mut buffer)?;
+
+    let mut deserializer = Deserializer::new(&buffer[..]);
+    let groundtruth = Vec::<Vec<usize>>::deserialize(&mut deserializer)?;
+
+    Ok(groundtruth)
+}
+
 #[cfg(test)]
 mod tests {
     use rmp_serde::Serializer;
