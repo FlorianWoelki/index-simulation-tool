@@ -36,7 +36,7 @@ texts = []
 for example in tqdm(training_dataset, desc="Processing"):
     text = clean_text(example['Overview'])
     texts.append(text)
-    if len(texts) == 11: # temporary
+    if len(texts) == 25000: # temporary
         break
 
 def sparse_vector_to_dict(vector):
@@ -65,7 +65,7 @@ sparse_vectors = []
 for text in tqdm(texts, desc="Generating sparse vectors"):
     sparse_vectors.append(sparse_vector_to_dict(create_splade(text)))
 
-num_queries = 2
+num_queries = round(len(texts) / 10) # Like in `generator_sparse.rs` file
 queries = []
 query_vectors = []
 groundtruth = []
