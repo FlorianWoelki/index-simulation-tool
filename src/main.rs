@@ -35,7 +35,6 @@ use index::{
     pq::PQIndex,
     DistanceMetric, IndexType, SparseIndex,
 };
-use ordered_float::OrderedFloat;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
 
 mod benchmark;
@@ -62,55 +61,19 @@ struct Args {
 }
 
 #[allow(dead_code)]
-async fn plot_msmarco_dataset() {
-    let (groundtruth, vectors, query_vectors) = data::ms_marco::load_msmarco_dataset().unwrap();
-    let mut query_sparse_vectors = vec![];
-    let mut groundtruth_sparse_vectors = vec![];
+async fn plot_movie_dataset() {
+    let vectors = read_sparse_vectors("./scripts/data-50k.msgpack").unwrap();
+    let query_vectors = read_sparse_vectors("./scripts/queries-50k.msgpack").unwrap();
+    let groundtruth = read_groundtruth("./scripts/groundtruth-50k.msgpack").unwrap();
 
-    // TODO: Parallelize this in the future.
-    for (indices, values) in groundtruth.0.iter().zip(groundtruth.1.iter()) {
-        let vector = SparseVector {
-            indices: indices.iter().map(|i| *i as usize).collect(),
-            values: values.iter().map(|v| OrderedFloat(*v)).collect(),
-        };
-        groundtruth_sparse_vectors.push(vector);
-    }
-    for (indices, values) in query_vectors.iter() {
-        let sparse_vector = SparseVector {
-            indices: indices.clone(),
-            values: values
-                .iter()
-                .map(|&v| ordered_float::OrderedFloat(v))
-                .collect(),
-        };
-        query_sparse_vectors.push(sparse_vector);
-    }
-
-    let vectors_sparse_vectors = vectors
-        .par_iter()
-        .map(|(indices, values)| {
-            let sparse_vector = SparseVector {
-                indices: indices.clone(),
-                values: values
-                    .iter()
-                    .map(|&v| ordered_float::OrderedFloat(v))
-                    .collect(),
-            };
-            sparse_vector
-        })
+    let groundtruth_flat = groundtruth
+        .iter()
+        .map(|nn| vectors[nn[0]].clone())
         .collect::<Vec<SparseVector>>();
 
-    plot_sparsity_distribution(
-        &vectors_sparse_vectors,
-        format!("amount: {}", vectors_sparse_vectors.len()).as_str(),
-    )
-    .show();
-    plot_nearest_neighbor_distances(
-        &query_sparse_vectors,
-        &groundtruth_sparse_vectors,
-        &DistanceMetric::Cosine,
-    )
-    .show();
+    plot_sparsity_distribution(&vectors, format!("amount: {}", vectors.len()).as_str()).show();
+    plot_nearest_neighbor_distances(&query_vectors, &groundtruth_flat, &DistanceMetric::Jaccard)
+        .show();
 }
 
 #[allow(dead_code)]
@@ -250,9 +213,9 @@ async fn main() {
     fs::create_dir_all(&dir_path).expect("Failed to create directory");
 
     if dataset_type == "real" {
-        let vectors = read_sparse_vectors("./scripts/data.msgpack").unwrap();
-        let query_vectors = read_sparse_vectors("./scripts/queries.msgpack").unwrap();
-        let groundtruth = read_groundtruth("./scripts/groundtruth.msgpack").unwrap();
+        let vectors = read_sparse_vectors("./scripts/data-50k.msgpack").unwrap();
+        let query_vectors = read_sparse_vectors("./scripts/queries-50k.msgpack").unwrap();
+        let groundtruth = read_groundtruth("./scripts/groundtruth-50k.msgpack").unwrap();
 
         let seed = 42;
 
