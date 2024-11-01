@@ -36,7 +36,7 @@ texts = []
 for example in tqdm(training_dataset, desc="Processing"):
     text = clean_text(example['Overview'])
     texts.append(text)
-    if len(texts) == 25000: # temporary
+    if len(texts) == 25000: # Temporary due to resource constraints.
         break
 
 def sparse_vector_to_dict(vector):
@@ -49,16 +49,11 @@ def sparse_vector_to_dict(vector):
     return {"indices": indices, "values": values}
 
 def compute_similarity(vec1, vec2):
-    # Convert sparse vectors to dense format for similarity computation
-    dense1 = torch.zeros(model.config.vocab_size)
-    dense2 = torch.zeros(model.config.vocab_size)
-
-    for idx, val in zip(vec1["indices"], vec1["values"]):
-        dense1[idx] = val
-    for idx, val in zip(vec2["indices"], vec2["values"]):
-        dense2[idx] = val
-
-    return float(torch.cosine_similarity(dense1.unsqueeze(0), dense2.unsqueeze(0)))
+    set1 = set(vec1['indices'])
+    set2 = set(vec2['indices'])
+    intersection = len(set1.intersection(set2))
+    union = len(set1.union(set2))
+    return intersection / union if union > 0 else 0.0
 
 # Generate sparse vectors.
 sparse_vectors = []
@@ -72,7 +67,7 @@ groundtruth = []
 k = 10
 
 print("\n=== Generated Queries and Groundtruth ===")
-for i in range(num_queries):
+for i in tqdm(range(num_queries), desc="Generating queries"):
     random_doc = np.random.choice(texts)
     query = generate_related_query(random_doc)
     queries.append(query)
@@ -88,16 +83,6 @@ for i in range(num_queries):
     # Sort by similarity and get top k indices
     top_k_indices = [idx for idx, _ in sorted(similarities, key=lambda x: x[1], reverse=True)[:k]]
     groundtruth.append(top_k_indices)
-
-    print(f"\nQuery {i+1}:")
-    print(f"Query Text: {query}")
-    print(f"Query Vector: {query_vec}")
-    print(f"\nTop {k} Groundtruth Documents:")
-    for rank, idx in enumerate(top_k_indices):
-        print(f"\nRank {rank+1}:")
-        print(f"Text: {texts[idx]}")
-        print(f"Vector: {sparse_vectors[idx]}")
-        print(f"Similarity Score: {similarities[idx][1]:.4f}")
 
 with open('data.msgpack', 'wb') as f:
     msgpack.dump(sparse_vectors, f)
