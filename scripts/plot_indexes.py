@@ -2,15 +2,15 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
-algo = 'linscan'
+algo = 'hnsw'
 distance_metrics = ['Angular', 'Cosine', 'Dot', 'Euclidean', 'Jaccard']
 
 dfs = {}
 dfs_build = {}
 
 for metric in distance_metrics:
-    dfs[metric] = pd.read_csv(f"../index/{metric}/{algo}/{algo}.csv")
-    dfs_build[metric] = pd.read_csv(f"../index/{metric}/{algo}/{algo}_build.csv")
+    dfs[metric] = pd.read_csv(f"../index/artificial/{metric}/{algo}/{algo}.csv")
+    dfs_build[metric] = pd.read_csv(f"../index/artificial/{metric}/{algo}/{algo}_build.csv")
 
 fig, ax = plt.subplots(figsize=(12, 7))
 current_index = 0
