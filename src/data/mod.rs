@@ -6,7 +6,6 @@ use serde::Deserialize;
 use vector::SparseVector;
 
 pub mod generator_sparse;
-pub mod ms_marco;
 pub mod pca;
 pub mod plot;
 pub mod tsne;
