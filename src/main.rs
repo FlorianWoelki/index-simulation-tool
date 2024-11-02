@@ -173,29 +173,60 @@ async fn generate_datasets(
     file_paths
 }
 
-fn create_index(index_type: &str, distance_metric: DistanceMetric, seed: u64) -> IndexType {
-    match index_type {
-        "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 16, 86, 400, 400, distance_metric)),
-        "lsh-simhash" => {
-            IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::SimHash, distance_metric))
+fn create_index(
+    index_type: &str,
+    distance_metric: DistanceMetric,
+    real: bool,
+    seed: u64,
+) -> IndexType {
+    if real {
+        match index_type {
+            "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 16, 86, 400, 400, distance_metric)),
+            "lsh-simhash" => {
+                IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::SimHash, distance_metric))
+            }
+            "lsh-minhash" => {
+                IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::MinHash, distance_metric))
+            }
+            "pq" => IndexType::Pq(PQIndex::new(3, 50, 256, 0.01, distance_metric, seed)),
+            "ivfpq" => IndexType::Ivfpq(IVFPQIndex::new(
+                6,
+                256,
+                16,
+                500,
+                0.01,
+                distance_metric,
+                seed,
+            )),
+            "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
+            "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
+            "annoy" => IndexType::Annoy(AnnoyIndex::new(10, 20, 100, distance_metric)),
+            _ => panic!("Unsupported index type"),
         }
-        "lsh-minhash" => {
-            IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::MinHash, distance_metric))
+    } else {
+        match index_type {
+            "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 16, 86, 400, 400, distance_metric)),
+            "lsh-simhash" => {
+                IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::SimHash, distance_metric))
+            }
+            "lsh-minhash" => {
+                IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::MinHash, distance_metric))
+            }
+            "pq" => IndexType::Pq(PQIndex::new(3, 50, 256, 0.01, distance_metric, seed)),
+            "ivfpq" => IndexType::Ivfpq(IVFPQIndex::new(
+                6,
+                256,
+                16,
+                500,
+                0.01,
+                distance_metric,
+                seed,
+            )),
+            "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
+            "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
+            "annoy" => IndexType::Annoy(AnnoyIndex::new(10, 20, 100, distance_metric)),
+            _ => panic!("Unsupported index type"),
         }
-        "pq" => IndexType::Pq(PQIndex::new(3, 50, 256, 0.01, distance_metric, seed)),
-        "ivfpq" => IndexType::Ivfpq(IVFPQIndex::new(
-            6,
-            256,
-            16,
-            500,
-            0.01,
-            distance_metric,
-            seed,
-        )),
-        "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
-        "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
-        "annoy" => IndexType::Annoy(AnnoyIndex::new(10, 20, 100, distance_metric)),
-        _ => panic!("Unsupported index type"),
     }
 }
 
@@ -219,7 +250,7 @@ async fn main() {
 
         let seed = 42;
 
-        let mut index = create_index(&index_type_input, distance_metric, seed);
+        let mut index = create_index(&index_type_input, distance_metric, true, seed);
         let mut rng = thread_rng();
 
         let total_index_start = Instant::now();
@@ -436,7 +467,7 @@ async fn main() {
             let dimensions = benchmark_config.start_dimensions * (i + 1);
             let file_name = format!("{}_{}_{}", index_type_input, amount, dimensions);
 
-            let mut index = create_index(&index_type_input, distance_metric, seed);
+            let mut index = create_index(&index_type_input, distance_metric, false, seed);
 
             println!("\nLoading data...");
             let data_generator = SparseDataGenerator::new(
