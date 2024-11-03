@@ -181,7 +181,7 @@ fn create_index(
 ) -> IndexType {
     if real {
         match index_type {
-            "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 16, 86, 400, 400, distance_metric)),
+            "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 32, 86, 500, 500, distance_metric)),
             "lsh-simhash" => {
                 IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::SimHash, distance_metric))
             }
@@ -259,17 +259,69 @@ async fn main() {
             index.add_vector_before_build(&vector);
         }
 
-        let (_, build_report) = measure_resources!({
-            println!("\nBuilding the index...");
-            index.build();
-            println!("...finished build the index");
-        });
+        let timeout = Duration::from_secs(60 * 60);
 
-        // Benchmark for measuring searching.
+        let index = Arc::new(Mutex::new(index));
+        let index_clone = Arc::clone(&index);
         let query_vector = query_vectors[0].clone();
-        let (_, search_report) = measure_resources!({
-            index.search(&query_vector, 10);
-        });
+
+        let result = execute_with_timeout(
+            move || {
+                let mut index = index_clone.lock().unwrap();
+                let (_, build_report) = measure_resources!({
+                    println!("\nBuilding the index...");
+                    index.build();
+                    println!("...finished build the index");
+                });
+
+                // Benchmark for measuring searching.
+                let (_, search_report) = measure_resources!({
+                    index.search(&query_vector, 10);
+
+                    // println!("{:?}", vectors[result[0].index]);
+                    // println!("{:?}", groundtruth[0][0]);
+                });
+
+                (build_report, search_report)
+            },
+            timeout,
+        );
+
+        let (build_report, search_report) = match result {
+            Some((build_report, search_report)) => (build_report, search_report),
+            None => {
+                println!("Build & Search index timed out");
+                build_logger.add_record(GenericBenchmarkResult::from(
+                    &ResourceReport {
+                        execution_time: Duration::new(0, 0),
+                        final_cpu: 0.0,
+                        final_memory: 0.0,
+                        initial_cpu: 0.0,
+                        initial_memory: 0.0,
+                    },
+                    0,
+                    0,
+                ));
+                index_logger.add_record(IndexBenchmarkResult {
+                    execution_time: 0.0,
+                    index_loading_time: 0.0,
+                    index_saving_time: 0.0,
+                    queries_per_second: 0.0,
+                    recall: 0.0,
+                    search_time: 0.0,
+                    scalability_factor: None,
+                    index_disk_space: 0.0,
+                    dataset_dimensionality: 0,
+                    dataset_size: 0,
+                    build_time: 0.0,
+                    add_vector_performance: 0.0,
+                    remove_vector_performance: 0.0,
+                });
+                return;
+            }
+        };
+
+        let mut index = Arc::try_unwrap(index).unwrap().into_inner().unwrap();
 
         build_logger.add_record(GenericBenchmarkResult::from(&build_report, 0, 0));
 
