@@ -200,7 +200,7 @@ fn create_index(
             )),
             "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
             "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
-            "annoy" => IndexType::Annoy(AnnoyIndex::new(10, 20, 100, distance_metric)),
+            "annoy" => IndexType::Annoy(AnnoyIndex::new(25, 50, 200, distance_metric)),
             _ => panic!("Unsupported index type"),
         }
     } else {
@@ -259,73 +259,23 @@ async fn main() {
             index.add_vector_before_build(&vector);
         }
 
-        let timeout = Duration::from_secs(5 * 60);
+        let (_, build_report) = measure_resources!({
+            println!("\nBuilding the index...");
+            index.build();
+            println!("...finished build the index");
+        });
 
-        let index = Arc::new(Mutex::new(index));
-        let index_clone = Arc::clone(&index);
+        // Benchmark for measuring searching.
         let query_vector = query_vectors[0].clone();
-
-        let result = execute_with_timeout(
-            move || {
-                let mut index = index_clone.lock().unwrap();
-                let (_, build_report) = measure_resources!({
-                    println!("\nBuilding the index...");
-                    index.build();
-                    println!("...finished build the index");
-                });
-
-                // Benchmark for measuring searching.
-                let (_, search_report) = measure_resources!({
-                    index.search(&query_vector, 10);
-                });
-
-                (build_report, search_report)
-            },
-            timeout,
-        );
-
-        let (build_report, search_report) = match result {
-            Some((build_report, search_report)) => (build_report, search_report),
-            None => {
-                println!("Build & Search index timed out");
-                build_logger.add_record(GenericBenchmarkResult::from(
-                    &ResourceReport {
-                        execution_time: Duration::new(0, 0),
-                        final_cpu: 0.0,
-                        final_memory: 0.0,
-                        initial_cpu: 0.0,
-                        initial_memory: 0.0,
-                    },
-                    0,
-                    0,
-                ));
-                index_logger.add_record(IndexBenchmarkResult {
-                    execution_time: 0.0,
-                    index_loading_time: 0.0,
-                    index_saving_time: 0.0,
-                    queries_per_second: 0.0,
-                    recall: 0.0,
-                    search_time: 0.0,
-                    scalability_factor: None,
-                    index_disk_space: 0.0,
-                    dataset_dimensionality: 0,
-                    dataset_size: 0,
-                    build_time: 0.0,
-                    add_vector_performance: 0.0,
-                    remove_vector_performance: 0.0,
-                });
-                return;
-            }
-        };
-
-        let mut index = Arc::try_unwrap(index).unwrap().into_inner().unwrap();
+        let (_, search_report) = measure_resources!({
+            index.search(&query_vector, 10);
+        });
 
         build_logger.add_record(GenericBenchmarkResult::from(&build_report, 0, 0));
 
-        print_measurement_report(&build_report);
-        print_measurement_report(&search_report);
-
         let total_index_duration = total_index_start.elapsed();
+
+        println!("--- Finished measuring index duration");
 
         // Calculate recall.
         let accumulated_recall = Mutex::new(0.0);
@@ -345,9 +295,9 @@ async fn main() {
                     .collect::<Vec<_>>();
 
                 let iter_recall = calculate_recall(&search_results, groundtruth_vectors, k);
-                // println!("{}", iter_recall);
                 let mut accumulated_recall = accumulated_recall.lock().unwrap();
                 *accumulated_recall += iter_recall;
+                println!("{}", iter_recall);
             });
 
         let recall = *accumulated_recall.lock().unwrap() / query_vectors.len() as f32;
