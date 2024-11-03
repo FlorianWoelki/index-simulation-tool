@@ -259,7 +259,7 @@ async fn main() {
             index.add_vector_before_build(&vector);
         }
 
-        let timeout = Duration::from_secs(60 * 60);
+        let timeout = Duration::from_secs(5 * 60);
 
         let index = Arc::new(Mutex::new(index));
         let index_clone = Arc::clone(&index);
