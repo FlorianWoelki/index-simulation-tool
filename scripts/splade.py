@@ -36,8 +36,8 @@ texts = []
 for example in tqdm(training_dataset, desc="Processing"):
     text = clean_text(example['Overview'])
     texts.append(text)
-    # if len(texts) == 25000: # Temporary due to resource constraints.
-    #     break
+    if len(texts) == 10_000: # Temporary due to resource constraints.
+        break
 
 def sparse_vector_to_dict(vector):
     indices = []
@@ -84,13 +84,13 @@ for i in tqdm(range(num_queries), desc="Generating queries"):
     top_k_indices = [idx for idx, _ in sorted(similarities, key=lambda x: x[1], reverse=True)[:k]]
     groundtruth.append(top_k_indices)
 
-with open('data-50k.msgpack', 'wb') as f:
+with open('data-10k.msgpack', 'wb') as f:
     msgpack.dump(sparse_vectors, f)
 
-with open('queries-50k.msgpack', 'wb') as f:
+with open('queries-10k.msgpack', 'wb') as f:
     msgpack.dump(query_vectors, f)
 
-with open('groundtruth-50k.msgpack', 'wb') as f:
+with open('groundtruth-10k.msgpack', 'wb') as f:
     msgpack.dump(groundtruth, f)
 
 print("\n=== Summary ===")
