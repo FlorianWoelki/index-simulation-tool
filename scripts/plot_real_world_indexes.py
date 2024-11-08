@@ -4,14 +4,14 @@ import numpy as np
 import seaborn as sns
 
 distance_metric = "Jaccard"
-algos = ["linscan", "annoy", "hnsw", "lsh-minhash", "lsh-simhash"]
+algos = ["linscan", "annoy", "hnsw", "ivfpq", "lsh-minhash", "lsh-simhash"]
 
 dfs = {}
 dfs_build = {}
 
 for algo in algos:
-    dfs[algo] = pd.read_csv(f"../index/real/{distance_metric}/{algo}/{algo}.csv")
-    dfs_build[algo] = pd.read_csv(f"../index/real/{distance_metric}/{algo}/{algo}_build.csv")
+    dfs[algo] = pd.read_csv(f"../index/10k/{distance_metric}/{algo}/{algo}.csv")
+    dfs_build[algo] = pd.read_csv(f"../index/10k/{distance_metric}/{algo}/{algo}_build.csv")
 
 fig, ax = plt.subplots(figsize=(12, 7))
 current_index = 0
@@ -156,12 +156,11 @@ def plot_saving_and_loading_time(fig):
 
 def plot_cpu_memory_disk(fig):
     fig.clear()
-    axs = fig.subplots(1, 3)
+    axs = fig.subplots(1, 2)
 
     # Get values for the latest dataset size
     cpu_usage, cpu_usage_labels = sort_data([dfs_build[algo]['consumed_cpu'].iloc[-1] for algo in algos], algos)
     memory_usage, memory_usage_labels = sort_data([dfs_build[algo]['consumed_memory'].iloc[-1] for algo in algos], algos)
-    disk_space, disk_space_labels = sort_data([dfs[algo]['index_disk_space'].iloc[-1] for algo in algos], algos)
 
     # Plot CPU usage
     bars1 = axs[0].bar(cpu_usage_labels, cpu_usage, color="gray")
@@ -185,44 +184,24 @@ def plot_cpu_memory_disk(fig):
                 f'{height:.1f}', ha='center', va='bottom')
     plt.setp(axs[1].xaxis.get_majorticklabels(), rotation=45)
 
-    # Plot disk space
-    bars3 = axs[2].bar(disk_space_labels, disk_space, color="gray")
-    axs[2].set_title('Index Size by Algorithm')
-    axs[2].set_xlabel('Algorithm')
-    axs[2].set_ylabel('Disk Space (MB)')
-    for bar in bars3:
-        height = bar.get_height()
-        axs[2].text(bar.get_x() + bar.get_width()/2., height,
-                f'{height:.1f}', ha='center', va='bottom')
-    plt.setp(axs[2].xaxis.get_majorticklabels(), rotation=45)
-
     plt.tight_layout()
 
-def plot_scalability_and_execution_time(fig):
+def plot_disk_size_and_execution_time(fig):
     fig.clear()
     axs = fig.subplots(1, 2)
 
-    # Get values for the latest dataset size where scalability factor exists
-    scalability = []
-    for algo in algos:
-        valid_data = dfs[algo][np.isfinite(dfs[algo]['scalability_factor'])]
-        if len(valid_data) > 0:
-            scalability.append(valid_data['scalability_factor'].iloc[-1])
-        else:
-            scalability.append(0)  # or np.nan
-
+    disk_space, disk_space_labels = sort_data([dfs[algo]['index_disk_space'].iloc[-1] for algo in algos], algos)
     execution_times, execution_times_labels = sort_data([dfs[algo]['execution_time'].iloc[-1] for algo in algos], algos)
 
-    # Plot scalability factor
-    bars1 = axs[0].bar(algos, scalability, color="gray")
-    axs[0].set_title('Scalability Factor by Algorithm')
+    # Plot disk space
+    bars1 = axs[0].bar(disk_space_labels, disk_space, color="gray")
+    axs[0].set_title('Index Size by Algorithm')
     axs[0].set_xlabel('Algorithm')
-    axs[0].set_ylabel('Scalability Factor')
+    axs[0].set_ylabel('Disk Space (MB)')
     for bar in bars1:
         height = bar.get_height()
-        if height > 0:  # Only show label if value exists
-            axs[0].text(bar.get_x() + bar.get_width()/2., height,
-                    f'{height:.3f}', ha='center', va='bottom')
+        axs[0].text(bar.get_x() + bar.get_width()/2., height,
+                f'{height:.1f}', ha='center', va='bottom')
     plt.setp(axs[0].xaxis.get_majorticklabels(), rotation=45)
 
     # Plot execution time
@@ -244,7 +223,7 @@ plot_functions = [
     plot_build_and_search_time,
     plot_saving_and_loading_time,
     plot_cpu_memory_disk,
-    plot_scalability_and_execution_time,
+    plot_disk_size_and_execution_time,
 ]
 
 def update_plot(index):
