@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
-algo = 'hnsw'
+algo = 'lsh-simhash'
 distance_metrics = ['Angular', 'Cosine', 'Dot', 'Euclidean', 'Jaccard']
 
 dfs = {}
@@ -47,13 +47,13 @@ def plot_add_and_remove_vector(fig):
 
     axs[0].set_title('Add Vector Performance vs Dataset Size')
     axs[0].set_xlabel('Dataset Size')
-    axs[0].set_ylabel('Time (in s)')
+    axs[0].set_ylabel('Time (s)')
     axs[0].legend()
     axs[0].grid(True)
 
     axs[1].set_title('Remove Vector Performance vs Dataset Size')
     axs[1].set_xlabel('Dataset Size')
-    axs[1].set_ylabel('Time (in s)')
+    axs[1].set_ylabel('Time (s)')
     axs[1].legend()
     axs[1].grid(True)
 
@@ -69,13 +69,13 @@ def plot_build_and_search_time(fig):
 
     axs[0].set_title('Build Time vs Dataset Size')
     axs[0].set_xlabel('Dataset Size')
-    axs[0].set_ylabel('Time (in s)')
+    axs[0].set_ylabel('Time (s)')
     axs[0].legend()
     axs[0].grid(True)
 
     axs[1].set_title('Search Time vs Dataset Size')
     axs[1].set_xlabel('Dataset Size')
-    axs[1].set_ylabel('Time (in s)')
+    axs[1].set_ylabel('Time (s)')
     axs[1].legend()
     axs[1].grid(True)
 
@@ -91,13 +91,13 @@ def plot_saving_and_loading_time(fig):
 
     axs[0].set_title('Index Saving Time vs Dataset Size')
     axs[0].set_xlabel('Dataset Size')
-    axs[0].set_ylabel('Time (in s)')
+    axs[0].set_ylabel('Time (s)')
     axs[0].legend()
     axs[0].grid(True)
 
     axs[1].set_title('Index Loading Time vs Dataset Size')
     axs[1].set_xlabel('Dataset Size')
-    axs[1].set_ylabel('Time (in s)')
+    axs[1].set_ylabel('Time (s)')
     axs[1].legend()
     axs[1].grid(True)
 
@@ -114,19 +114,19 @@ def plot_cpu_memory_disk(fig):
 
     axs[0].set_title('Consumed CPU vs Dataset Size')
     axs[0].set_xlabel('Dataset Size')
-    axs[0].set_ylabel('Consumed CPU (in %)')
+    axs[0].set_ylabel('Consumed CPU (%)')
     axs[0].legend()
     axs[0].grid(True)
 
     axs[1].set_title('Consumed Memory vs Dataset Size')
     axs[1].set_xlabel('Dataset Size')
-    axs[1].set_ylabel('Consumed Memory (in mb)')
+    axs[1].set_ylabel('Consumed Memory (MB)')
     axs[1].legend()
     axs[1].grid(True)
 
     axs[2].set_title('Index Disk Space vs Dataset Size')
     axs[2].set_xlabel('Dataset Size')
-    axs[2].set_ylabel('Index Disk Space (in mb)')
+    axs[2].set_ylabel('Index Disk Space (MB)')
     axs[2].legend()
     axs[2].grid(True)
 
@@ -149,7 +149,7 @@ def plot_scalability_and_execution_time(fig):
 
     axs[1].set_title('Execution Time vs Dataset Size')
     axs[1].set_xlabel('Dataset Size')
-    axs[1].set_ylabel('Execution Time (in s)')
+    axs[1].set_ylabel('Execution Time (s)')
     axs[1].legend()
     axs[1].grid(True)
 

@@ -70,7 +70,7 @@ def plot_add_and_remove_vector(fig):
     bars1 = axs[0].bar(add_perf_labels, add_perf, color="gray")
     axs[0].set_title('Add Vector Performance by Algorithm')
     axs[0].set_xlabel('Algorithm')
-    axs[0].set_ylabel('Time (in s)')
+    axs[0].set_ylabel('Time (s)')
     for bar in bars1:
         height = bar.get_height()
         axs[0].text(bar.get_x() + bar.get_width()/2., height,
@@ -81,7 +81,7 @@ def plot_add_and_remove_vector(fig):
     bars2 = axs[1].bar(remove_perf_labels, remove_perf, color="gray")
     axs[1].set_title('Remove Vector Performance by Algorithm')
     axs[1].set_xlabel('Algorithm')
-    axs[1].set_ylabel('Time (in s)')
+    axs[1].set_ylabel('Time (s)')
     for bar in bars2:
         height = bar.get_height()
         axs[1].text(bar.get_x() + bar.get_width()/2., height,
@@ -102,7 +102,7 @@ def plot_build_and_search_time(fig):
     bars1 = axs[0].bar(build_times_labels, build_times, color="gray")
     axs[0].set_title('Build Time by Algorithm')
     axs[0].set_xlabel('Algorithm')
-    axs[0].set_ylabel('Time (in s)')
+    axs[0].set_ylabel('Time (s)')
     for bar in bars1:
         height = bar.get_height()
         axs[0].text(bar.get_x() + bar.get_width()/2., height,
@@ -113,7 +113,7 @@ def plot_build_and_search_time(fig):
     bars2 = axs[1].bar(search_times_labels, search_times, color="gray")
     axs[1].set_title('Search Time by Algorithm')
     axs[1].set_xlabel('Algorithm')
-    axs[1].set_ylabel('Time (in s)')
+    axs[1].set_ylabel('Time (s)')
     for bar in bars2:
         height = bar.get_height()
         axs[1].text(bar.get_x() + bar.get_width()/2., height,
@@ -134,7 +134,7 @@ def plot_saving_and_loading_time(fig):
     bars1 = axs[0].bar(save_times_labels, save_times, color="gray")
     axs[0].set_title('Index Saving Time by Algorithm')
     axs[0].set_xlabel('Algorithm')
-    axs[0].set_ylabel('Time (in s)')
+    axs[0].set_ylabel('Time (s)')
     for bar in bars1:
         height = bar.get_height()
         axs[0].text(bar.get_x() + bar.get_width()/2., height,
@@ -145,7 +145,7 @@ def plot_saving_and_loading_time(fig):
     bars2 = axs[1].bar(load_times_labels, load_times, color="gray")
     axs[1].set_title('Index Loading Time by Algorithm')
     axs[1].set_xlabel('Algorithm')
-    axs[1].set_ylabel('Time (in s)')
+    axs[1].set_ylabel('Time (s)')
     for bar in bars2:
         height = bar.get_height()
         axs[1].text(bar.get_x() + bar.get_width()/2., height,
@@ -208,7 +208,7 @@ def plot_disk_size_and_execution_time(fig):
     bars2 = axs[1].bar(execution_times_labels, execution_times, color="gray")
     axs[1].set_title('Execution Time by Algorithm')
     axs[1].set_xlabel('Algorithm')
-    axs[1].set_ylabel('Time (in s)')
+    axs[1].set_ylabel('Time (s)')
     for bar in bars2:
         height = bar.get_height()
         axs[1].text(bar.get_x() + bar.get_width()/2., height,
