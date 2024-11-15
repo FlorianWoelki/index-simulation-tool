@@ -15,7 +15,6 @@ use benchmark::{
 };
 use data::{
     generator_sparse::SparseDataGenerator,
-    pca::pca,
     plot::{plot_nearest_neighbor_distances, plot_sparsity_distribution},
     read_groundtruth, read_sparse_vectors,
     vector::SparseVector,
@@ -181,6 +180,7 @@ fn create_index(
 ) -> IndexType {
     if real {
         match index_type {
+            // 50k
             "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 32, 86, 500, 500, distance_metric)),
             "lsh-simhash" => {
                 IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::SimHash, distance_metric))
@@ -190,10 +190,10 @@ fn create_index(
             }
             "pq" => IndexType::Pq(PQIndex::new(3, 50, 256, 0.01, distance_metric, seed)),
             "ivfpq" => IndexType::Ivfpq(IVFPQIndex::new(
-                6,
-                256,
                 16,
-                500,
+                5000,
+                1024,
+                1000,
                 0.01,
                 distance_metric,
                 seed,
@@ -201,6 +201,27 @@ fn create_index(
             "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
             "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
             "annoy" => IndexType::Annoy(AnnoyIndex::new(25, 50, 200, distance_metric)),
+            // 10k
+            // "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 24, 48, 200, 200, distance_metric)),
+            // "lsh-simhash" => {
+            //     IndexType::Lsh(LSHIndex::new(20, 6, LSHHashType::SimHash, distance_metric))
+            // }
+            // "lsh-minhash" => {
+            //     IndexType::Lsh(LSHIndex::new(20, 6, LSHHashType::MinHash, distance_metric))
+            // }
+            // "pq" => IndexType::Pq(PQIndex::new(3, 50, 256, 0.01, distance_metric, seed)),
+            // "ivfpq" => IndexType::Ivfpq(IVFPQIndex::new(
+            //     16,
+            //     2048,
+            //     128,
+            //     1000,
+            //     0.01,
+            //     distance_metric,
+            //     42,
+            // )),
+            // "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
+            // "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
+            // "annoy" => IndexType::Annoy(AnnoyIndex::new(15, 30, 130, distance_metric)),
             _ => panic!("Unsupported index type"),
         }
     } else {
@@ -248,7 +269,7 @@ async fn main() {
         let query_vectors = read_sparse_vectors("./scripts/queries-50k.msgpack").unwrap();
         let groundtruth = read_groundtruth("./scripts/groundtruth-50k.msgpack").unwrap();
 
-        let seed = 42;
+        let seed = 1521;
 
         let mut index = create_index(&index_type_input, distance_metric, true, seed);
         let mut rng = thread_rng();
@@ -259,7 +280,7 @@ async fn main() {
             index.add_vector_before_build(&vector);
         }
 
-        let timeout = Duration::from_secs(5 * 60);
+        let timeout = Duration::from_secs(60 * 60);
 
         let index = Arc::new(Mutex::new(index));
         let index_clone = Arc::clone(&index);
@@ -486,38 +507,38 @@ async fn main() {
             println!("...finished loading data");
 
             let timeout = Duration::from_secs(5 * 60);
-            let transformed_result = if let Some(reduction_technique) = &args.reduction_technique {
-                match reduction_technique.as_str() {
-                    "pca" => execute_with_timeout(
-                        move || {
-                            println!("\nTransforming data with reduction technique...",);
-                            let (transformed_vectors, _, _) =
-                                pca(&vectors, dimensions, dimensions / 2);
-                            println!("✅ Transformed input vectors");
-                            let (query_vectors, _, _) =
-                                pca(&query_vectors, dimensions, dimensions / 2);
-                            println!("✅ Transformed query vectors");
+            // let transformed_result = if let Some(reduction_technique) = &args.reduction_technique {
+            //     match reduction_technique.as_str() {
+            //         "pca" => execute_with_timeout(
+            //             move || {
+            //                 println!("\nTransforming data with reduction technique...",);
+            //                 let (transformed_vectors, _, _) =
+            //                     pca(&vectors, dimensions, dimensions / 2);
+            //                 println!("✅ Transformed input vectors");
+            //                 let (query_vectors, _, _) =
+            //                     pca(&query_vectors, dimensions, dimensions / 2);
+            //                 println!("✅ Transformed query vectors");
 
-                            (transformed_vectors, query_vectors)
-                        },
-                        timeout,
-                    ),
-                    _ => {
-                        println!("Unsupported reduction technique: {}", reduction_technique);
-                        None
-                    }
-                }
-            } else {
-                Some((vectors, query_vectors))
-            };
+            //                 (transformed_vectors, query_vectors)
+            //             },
+            //             timeout,
+            //         ),
+            //         _ => {
+            //             println!("Unsupported reduction technique: {}", reduction_technique);
+            //             None
+            //         }
+            //     }
+            // } else {
+            //     Some((vectors, query_vectors))
+            // };
 
-            let (vectors, query_vectors) = match transformed_result {
-                Some((vectors, query_vectors)) => (vectors, query_vectors),
-                None => {
-                    println!("Failed to process vectors due to timeout or unsupported operation");
-                    continue;
-                }
-            };
+            // let (vectors, query_vectors) = match transformed_result {
+            //     Some((vectors, query_vectors)) => (vectors, query_vectors),
+            //     None => {
+            //         println!("Failed to process vectors due to timeout or unsupported operation");
+            //         continue;
+            //     }
+            // };
 
             let total_index_start = Instant::now();
 

@@ -6,9 +6,7 @@ use serde::Deserialize;
 use vector::SparseVector;
 
 pub mod generator_sparse;
-pub mod pca;
 pub mod plot;
-pub mod tsne;
 pub mod vector;
 
 #[derive(Debug, PartialEq)]
