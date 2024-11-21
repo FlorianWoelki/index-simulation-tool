@@ -408,7 +408,7 @@ async fn main() {
         let mut total_remove_duration = Duration::new(0, 0);
         for _ in 0..added_vectors.len() {
             let remove_vector_start = Instant::now();
-            index.remove_vector(vectors.len() + 1); // Always this because the vector gets removed from the array, therefore reducing the length.
+            index.remove_vector(vectors.len()); // Always this because the vector gets removed from the array, therefore reducing the length.
             let remove_vector_duration = remove_vector_start.elapsed();
 
             total_remove_duration += remove_vector_duration;
@@ -679,7 +679,7 @@ async fn main() {
             let mut total_remove_duration = Duration::new(0, 0);
             for _ in 0..added_vectors.len() {
                 let remove_vector_start = Instant::now();
-                index.remove_vector(vectors.len() + 1); // Always this because the vector gets removed from the array, therefore reducing the length.
+                index.remove_vector(vectors.len()); // Always this because the vector gets removed from the array, therefore reducing the length.
                 let remove_vector_duration = remove_vector_start.elapsed();
 
                 total_remove_duration += remove_vector_duration;

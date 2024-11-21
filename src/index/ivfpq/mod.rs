@@ -167,7 +167,7 @@ impl SparseIndex for IVFPQIndex {
     }
 
     fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
-        if id < self.vectors.len() {
+        if id <= self.vectors.len() {
             let removed_vector = self.vectors.remove(id);
 
             self.coarse_codes.remove(id);

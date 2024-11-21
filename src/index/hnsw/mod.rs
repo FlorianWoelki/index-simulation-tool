@@ -197,7 +197,7 @@ impl SparseIndex for HNSWIndex {
     }
 
     fn remove_vector(&mut self, index: usize) -> Option<SparseVector> {
-        if index >= self.vectors.len() {
+        if index > self.vectors.len() {
             return None;
         }
 

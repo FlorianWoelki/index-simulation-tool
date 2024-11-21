@@ -103,7 +103,7 @@ impl SparseIndex for LSHIndex {
     }
 
     fn remove_vector(&mut self, id: usize) -> Option<SparseVector> {
-        if id >= self.vectors.len() {
+        if id > self.vectors.len() {
             return None;
         }
 
