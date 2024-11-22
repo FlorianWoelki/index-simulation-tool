@@ -27,6 +27,7 @@ pub struct SparseDataGenerator {
     metric: DistanceMetric,
     system: sysinfo::System,
     seed: u64,
+    query_count: Option<usize>,
 
     pub vectors: Vec<SparseVector>,
     pub query_vectors: Vec<SparseVector>,
@@ -43,6 +44,7 @@ impl SparseDataGenerator {
     /// * `range` - The range of values for non-zero elements.
     /// * `sparsity` - The probability of an element being zero (sparsity factor). The higher the value, the sparser the data.
     /// * `metric` - The DistanceMetric that will be used to fetch the groundtruth vectors.
+    /// * `query_count` - Optional number of query vectors to generate. Defaults to 10% of count if None.
     ///
     /// # Returns
     ///
@@ -54,6 +56,7 @@ impl SparseDataGenerator {
         sparsity: f32,
         metric: DistanceMetric,
         seed: u64,
+        query_count: Option<usize>,
     ) -> Self {
         SparseDataGenerator {
             dim,
@@ -63,6 +66,7 @@ impl SparseDataGenerator {
             metric,
             system: sysinfo::System::new(),
             seed,
+            query_count,
             vectors: vec![],
             query_vectors: vec![],
             groundtruth: vec![],
@@ -116,8 +120,8 @@ impl SparseDataGenerator {
             results.append(&mut result);
         }
 
-        let query_vectors =
-            self.generate_vectors(self.dim, self.count / 10, self.range, self.sparsity);
+        let query_count = self.query_count.unwrap_or(self.count / 10);
+        let query_vectors = self.generate_vectors(self.dim, query_count, self.range, self.sparsity);
 
         let mut groundtruth_vectors = Vec::with_capacity(query_vectors.len());
         for query_vector in &query_vectors {
@@ -221,8 +225,15 @@ mod tests {
         let dim = 100;
         let range = (0.0, 1.0);
         let sparsity = 0.5;
-        let mut generator =
-            SparseDataGenerator::new(dim, count, range, sparsity, DistanceMetric::Euclidean, seed);
+        let mut generator = SparseDataGenerator::new(
+            dim,
+            count,
+            range,
+            sparsity,
+            DistanceMetric::Euclidean,
+            seed,
+            None,
+        );
         generator.generate().await;
 
         assert_eq!(generator.vectors.len(), count);
@@ -267,14 +278,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_custom_query_count() {
+        let seed = 42;
+        let count = 100;
+        let dim = 100;
+        let range = (0.0, 1.0);
+        let sparsity = 0.5;
+        let custom_query_count = 5;
+
+        let mut generator = SparseDataGenerator::new(
+            dim,
+            count,
+            range,
+            sparsity,
+            DistanceMetric::Euclidean,
+            seed,
+            Some(custom_query_count),
+        );
+        generator.generate().await;
+
+        assert_eq!(generator.vectors.len(), count);
+        assert_eq!(generator.query_vectors.len(), custom_query_count);
+        assert_eq!(generator.groundtruth.len(), generator.query_vectors.len());
+    }
+
+    #[tokio::test]
     async fn test_sparsity() {
         let seed = 42;
         let count = 10;
         let dim = 100;
         let range = (0.0, 1.0);
         let sparsity = 0.8;
-        let mut generator =
-            SparseDataGenerator::new(dim, count, range, sparsity, DistanceMetric::Euclidean, seed);
+        let mut generator = SparseDataGenerator::new(
+            dim,
+            count,
+            range,
+            sparsity,
+            DistanceMetric::Euclidean,
+            seed,
+            None,
+        );
         generator.generate().await;
 
         assert_eq!(generator.vectors.len(), count);
@@ -301,8 +344,15 @@ mod tests {
         let range = (0.0, 1.0);
         let sparsity = 0.5;
         let k = 10;
-        let mut generator =
-            SparseDataGenerator::new(dim, count, range, sparsity, DistanceMetric::Euclidean, seed);
+        let mut generator = SparseDataGenerator::new(
+            dim,
+            count,
+            range,
+            sparsity,
+            DistanceMetric::Euclidean,
+            seed,
+            None,
+        );
         generator.generate().await;
 
         assert_eq!(generator.query_vectors.len(), count / 10);
@@ -347,7 +397,7 @@ mod tests {
         let expected_groundtruth = vec![0, 1, 2];
 
         let generator =
-            SparseDataGenerator::new(0, 0, (0.0, 1.0), 0.0, DistanceMetric::Euclidean, seed);
+            SparseDataGenerator::new(0, 0, (0.0, 1.0), 0.0, DistanceMetric::Euclidean, seed, None);
         let groundtruth_vectors = generator.find_nearest_neighbors(&vectors, &query_vector, 3);
 
         assert_eq!(groundtruth_vectors, expected_groundtruth);

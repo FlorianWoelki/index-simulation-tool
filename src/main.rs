@@ -99,8 +99,15 @@ async fn plot_artificially_generated_data() {
     // - High-dimensional sparse data: Manhattan distance
     let amount = 1000;
     let dim = 10000;
-    let mut data_generator =
-        SparseDataGenerator::new(dim, amount, (0.0, 1.0), 0.95, DistanceMetric::Cosine, 42);
+    let mut data_generator = SparseDataGenerator::new(
+        dim,
+        amount,
+        (0.0, 1.0),
+        0.95,
+        DistanceMetric::Cosine,
+        42,
+        None,
+    );
     data_generator.generate().await;
 
     // Get the first element of the groundtruth data
@@ -500,13 +507,14 @@ async fn main() {
                 0.96,
                 distance_metric,
                 seed,
+                None,
             ); // Dummy values
             let (vectors, query_vectors, groundtruth) = data_generator
                 .load_data(dataset_path)
                 .expect("Failed to load dataset");
             println!("...finished loading data");
 
-            let timeout = Duration::from_secs(5 * 60);
+            // let timeout = Duration::from_secs(5 * 60);
             // let transformed_result = if let Some(reduction_technique) = &args.reduction_technique {
             //     match reduction_technique.as_str() {
             //         "pca" => execute_with_timeout(
@@ -787,6 +795,7 @@ async fn generate_data(
         config.sparsity,
         config.distance_metric,
         seed,
+        None,
     );
     generator.generate().await;
     generator

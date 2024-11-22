@@ -47,42 +47,6 @@ impl SparseVector {
         result
     }
 
-    pub fn squared_distance(&self, other: &SparseVector) -> f32 {
-        let dot_product = self.dot(other);
-        let self_norm = self.dot(self);
-        let other_norm = other.dot(other);
-        self_norm + other_norm - 2.0 * dot_product
-    }
-
-    pub fn add_scaled(&mut self, other: &SparseVector, scale: f32) {
-        let mut i = 0;
-        let mut j = 0;
-        let mut new_indices = Vec::new();
-        let mut new_values = Vec::new();
-
-        while i < self.indices.len() || j < other.indices.len() {
-            if j == other.indices.len()
-                || (i < self.indices.len() && self.indices[i] < other.indices[j])
-            {
-                new_indices.push(self.indices[i]);
-                new_values.push(self.values[i]);
-                i += 1;
-            } else if i == self.indices.len() || self.indices[i] > other.indices[j] {
-                new_indices.push(other.indices[j]);
-                new_values.push(OrderedFloat(other.values[j].0 * scale));
-                j += 1;
-            } else {
-                new_indices.push(self.indices[i]);
-                new_values.push(OrderedFloat(self.values[i].0 + other.values[j].0 * scale));
-                i += 1;
-                j += 1;
-            }
-        }
-
-        self.indices = new_indices;
-        self.values = new_values;
-    }
-
     /// Jaccard distance is based on the Jaccard similarity coefficient, which
     /// measures the overlap between two sets. The Jaccard distance is 1 minus
     /// the Jaccard similarity.
