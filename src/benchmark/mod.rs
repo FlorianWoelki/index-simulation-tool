@@ -102,6 +102,8 @@ pub struct IndexBenchmarkResult {
 
     // Quality metrics.
     pub recall: f32,
+    pub precision: f32,
+    pub f1_score: f32,
 
     // Scalability metrics.
     pub scalability_factor: Option<f32>, // Optional because the first benchmark doesn't have a previous result to compare to.

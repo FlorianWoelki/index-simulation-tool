@@ -242,6 +242,8 @@ mod tests {
             index_loading_time: Duration::from_secs(1).as_secs_f32(),
             index_saving_time: Duration::from_secs(1).as_secs_f32(),
             recall: 0.0,
+            precision: 0.0,
+            f1_score: 0.0,
         };
         let current_qps = 210.0;
         let current_dataset_size = 2000;
@@ -275,6 +277,8 @@ mod tests {
             index_loading_time: Duration::from_secs(1).as_secs_f32(),
             index_saving_time: Duration::from_secs(1).as_secs_f32(),
             recall: 0.0,
+            precision: 0.0,
+            f1_score: 0.0,
         };
         let current_qps = 50.0;
         let current_dataset_size = 2000;
@@ -309,6 +313,8 @@ mod tests {
             index_loading_time: Duration::from_secs(1).as_secs_f32(),
             index_saving_time: Duration::from_secs(1).as_secs_f32(),
             recall: 0.0,
+            precision: 0.0,
+            f1_score: 0.0,
         };
         let current_qps = 100.0;
         let current_dataset_size = 1000;

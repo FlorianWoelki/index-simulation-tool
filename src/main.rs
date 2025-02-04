@@ -10,7 +10,10 @@ use benchmark::{
     execute_with_timeout,
     logger::BenchmarkLogger,
     macros::measure_system::ResourceReport,
-    metrics::{calculate_queries_per_second, calculate_recall, calculate_scalability_factor},
+    metrics::{
+        calculate_f1_score, calculate_precision, calculate_queries_per_second, calculate_recall,
+        calculate_scalability_factor,
+    },
     BenchmarkConfig, GenericBenchmarkResult, IndexBenchmarkResult,
 };
 use data::{
@@ -188,47 +191,47 @@ fn create_index(
     if real {
         match index_type {
             // 50k
-            "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 32, 86, 500, 500, distance_metric)),
-            "lsh-simhash" => {
-                IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::SimHash, distance_metric))
-            }
-            "lsh-minhash" => {
-                IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::MinHash, distance_metric))
-            }
-            "pq" => IndexType::Pq(PQIndex::new(3, 50, 256, 0.01, distance_metric, seed)),
-            "ivfpq" => IndexType::Ivfpq(IVFPQIndex::new(
-                16,
-                5000,
-                1024,
-                1000,
-                0.01,
-                distance_metric,
-                seed,
-            )),
-            "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
-            "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
-            "annoy" => IndexType::Annoy(AnnoyIndex::new(25, 50, 200, distance_metric)),
-            // 10k
-            // "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 24, 48, 200, 200, distance_metric)),
+            // "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 32, 86, 500, 500, distance_metric)),
             // "lsh-simhash" => {
-            //     IndexType::Lsh(LSHIndex::new(20, 6, LSHHashType::SimHash, distance_metric))
+            //     IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::SimHash, distance_metric))
             // }
             // "lsh-minhash" => {
-            //     IndexType::Lsh(LSHIndex::new(20, 6, LSHHashType::MinHash, distance_metric))
+            //     IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::MinHash, distance_metric))
             // }
             // "pq" => IndexType::Pq(PQIndex::new(3, 50, 256, 0.01, distance_metric, seed)),
             // "ivfpq" => IndexType::Ivfpq(IVFPQIndex::new(
             //     16,
-            //     2048,
-            //     128,
+            //     5000,
+            //     1024,
             //     1000,
             //     0.01,
             //     distance_metric,
-            //     42,
+            //     seed,
             // )),
             // "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
             // "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
-            // "annoy" => IndexType::Annoy(AnnoyIndex::new(15, 30, 130, distance_metric)),
+            // "annoy" => IndexType::Annoy(AnnoyIndex::new(25, 50, 200, distance_metric)),
+            // 10k
+            "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 24, 48, 200, 200, distance_metric)),
+            "lsh-simhash" => {
+                IndexType::Lsh(LSHIndex::new(20, 6, LSHHashType::SimHash, distance_metric))
+            }
+            "lsh-minhash" => {
+                IndexType::Lsh(LSHIndex::new(20, 6, LSHHashType::MinHash, distance_metric))
+            }
+            "pq" => IndexType::Pq(PQIndex::new(3, 50, 256, 0.01, distance_metric, seed)),
+            "ivfpq" => IndexType::Ivfpq(IVFPQIndex::new(
+                16,
+                2048,
+                128,
+                1000,
+                0.01,
+                distance_metric,
+                42,
+            )),
+            "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
+            "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
+            "annoy" => IndexType::Annoy(AnnoyIndex::new(15, 30, 130, distance_metric)),
             _ => panic!("Unsupported index type"),
         }
     } else {
@@ -272,9 +275,9 @@ async fn main() {
     fs::create_dir_all(&dir_path).expect("Failed to create directory");
 
     if dataset_type == "real" {
-        let vectors = read_sparse_vectors("./scripts/data-50k.msgpack").unwrap();
-        let query_vectors = read_sparse_vectors("./scripts/queries-50k.msgpack").unwrap();
-        let groundtruth = read_groundtruth("./scripts/groundtruth-50k.msgpack").unwrap();
+        let vectors = read_sparse_vectors("./scripts/data-10k.msgpack").unwrap();
+        let query_vectors = read_sparse_vectors("./scripts/queries-10k.msgpack").unwrap();
+        let groundtruth = read_groundtruth("./scripts/groundtruth-10k.msgpack").unwrap();
 
         let seed = 1521;
 
@@ -336,6 +339,8 @@ async fn main() {
                     index_saving_time: 0.0,
                     queries_per_second: 0.0,
                     recall: 0.0,
+                    precision: 0.0,
+                    f1_score: 0.0,
                     search_time: 0.0,
                     scalability_factor: None,
                     index_disk_space: 0.0,
@@ -357,8 +362,8 @@ async fn main() {
 
         println!("--- Finished measuring index duration");
 
-        // Calculate recall.
         let accumulated_recall = Mutex::new(0.0);
+        let accumulated_precision = Mutex::new(0.0);
         query_vectors
             .par_iter()
             .enumerate()
@@ -367,7 +372,7 @@ async fn main() {
                     .iter()
                     .map(|&i| vectors[i].clone())
                     .collect::<Vec<SparseVector>>();
-                let k = 10;
+                let k = 5;
                 let results = index.search(query_vector, k);
                 let search_results = results
                     .iter()
@@ -375,13 +380,19 @@ async fn main() {
                     .collect::<Vec<_>>();
 
                 let iter_recall = calculate_recall(&search_results, groundtruth_vectors, k);
+                let iter_precision = calculate_precision(&search_results, groundtruth_vectors, k);
                 let mut accumulated_recall = accumulated_recall.lock().unwrap();
+                let mut accumulated_precision = accumulated_precision.lock().unwrap();
                 *accumulated_recall += iter_recall;
-                println!("{}", iter_recall);
+                *accumulated_precision += iter_precision;
             });
 
         let recall = *accumulated_recall.lock().unwrap() / query_vectors.len() as f32;
         println!("Average recall: {:?}", recall);
+        let precision = *accumulated_precision.lock().unwrap() / query_vectors.len() as f32;
+        println!("Average precision: {:?}", precision);
+        let f1_score = calculate_f1_score(precision, recall);
+        println!("F1 score: {}", f1_score);
 
         // Benchmark for measuring adding a vector to the index.
         println!("Measuring the addition of a vector to the index...");
@@ -457,6 +468,8 @@ async fn main() {
             index_saving_time: total_save_duration.as_secs_f32(),
             queries_per_second,
             recall,
+            precision,
+            f1_score,
             search_time: search_report.execution_time.as_secs_f32(),
             scalability_factor: None,
             index_disk_space,
@@ -603,6 +616,8 @@ async fn main() {
                         index_saving_time: 0.0,
                         queries_per_second: 0.0,
                         recall: 0.0,
+                        precision: 0.0,
+                        f1_score: 0.0,
                         search_time: 0.0,
                         scalability_factor: None,
                         index_disk_space: 0.0,
@@ -631,6 +646,7 @@ async fn main() {
 
             // Calculate recall.
             let accumulated_recall = Mutex::new(0.0);
+            let accumulated_precision = Mutex::new(0.0);
             query_vectors
                 .par_iter()
                 .enumerate()
@@ -647,6 +663,7 @@ async fn main() {
                         .collect::<Vec<_>>();
 
                     let iter_recall = calculate_recall(&search_results, groundtruth_vectors, k);
+                    println!("{:?}", iter_recall);
                     // println!("{}", iter_recall);
                     let mut accumulated_recall = accumulated_recall.lock().unwrap();
                     *accumulated_recall += iter_recall;
@@ -654,6 +671,10 @@ async fn main() {
 
             let recall = *accumulated_recall.lock().unwrap() / query_vectors.len() as f32;
             println!("Average recall: {:?}", recall);
+            let precision = *accumulated_precision.lock().unwrap() / query_vectors.len() as f32;
+            println!("Average precision: {:?}", precision);
+            let f1_score = calculate_f1_score(precision, recall);
+            println!("F1 score: {}", f1_score);
 
             // Benchmark for measuring adding a vector to the index.
             println!("Measuring the addition of a vector to the index...");
@@ -734,6 +755,8 @@ async fn main() {
                 index_saving_time: total_save_duration.as_secs_f32(),
                 queries_per_second,
                 recall,
+                precision,
+                f1_score,
                 search_time: search_report.execution_time.as_secs_f32(),
                 scalability_factor,
                 index_disk_space,
