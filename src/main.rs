@@ -60,6 +60,8 @@ struct Args {
     distance_metric: DistanceMetric,
     #[clap(long, short = 't', action)]
     dataset_type: String,
+    #[clap(long, short = 's', action)]
+    real_dataset_size: Option<usize>, // TODO: Restrict to only use 50k or 10k
 }
 
 #[allow(dead_code)]
@@ -191,47 +193,47 @@ fn create_index(
     if real {
         match index_type {
             // 50k
-            // "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 32, 86, 500, 500, distance_metric)),
-            // "lsh-simhash" => {
-            //     IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::SimHash, distance_metric))
-            // }
-            // "lsh-minhash" => {
-            //     IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::MinHash, distance_metric))
-            // }
-            // "pq" => IndexType::Pq(PQIndex::new(3, 50, 256, 0.01, distance_metric, seed)),
-            // "ivfpq" => IndexType::Ivfpq(IVFPQIndex::new(
-            //     16,
-            //     5000,
-            //     1024,
-            //     1000,
-            //     0.01,
-            //     distance_metric,
-            //     seed,
-            // )),
-            // "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
-            // "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
-            // "annoy" => IndexType::Annoy(AnnoyIndex::new(25, 50, 200, distance_metric)),
-            // 10k
-            "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 24, 48, 200, 200, distance_metric)),
+            "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 32, 86, 500, 500, distance_metric)),
             "lsh-simhash" => {
-                IndexType::Lsh(LSHIndex::new(20, 6, LSHHashType::SimHash, distance_metric))
+                IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::SimHash, distance_metric))
             }
             "lsh-minhash" => {
-                IndexType::Lsh(LSHIndex::new(20, 6, LSHHashType::MinHash, distance_metric))
+                IndexType::Lsh(LSHIndex::new(32, 8, LSHHashType::MinHash, distance_metric))
             }
             "pq" => IndexType::Pq(PQIndex::new(3, 50, 256, 0.01, distance_metric, seed)),
             "ivfpq" => IndexType::Ivfpq(IVFPQIndex::new(
                 16,
-                2048,
-                128,
+                5000,
+                1024,
                 1000,
                 0.01,
                 distance_metric,
-                42,
+                seed,
             )),
             "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
             "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
-            "annoy" => IndexType::Annoy(AnnoyIndex::new(15, 30, 130, distance_metric)),
+            "annoy" => IndexType::Annoy(AnnoyIndex::new(25, 50, 200, distance_metric)),
+            // 10k
+            // "hnsw" => IndexType::Hnsw(HNSWIndex::new(0.5, 24, 48, 200, 200, distance_metric)),
+            // "lsh-simhash" => {
+            //     IndexType::Lsh(LSHIndex::new(20, 6, LSHHashType::SimHash, distance_metric))
+            // }
+            // "lsh-minhash" => {
+            //     IndexType::Lsh(LSHIndex::new(20, 6, LSHHashType::MinHash, distance_metric))
+            // }
+            // "pq" => IndexType::Pq(PQIndex::new(3, 50, 256, 0.01, distance_metric, seed)),
+            // "ivfpq" => IndexType::Ivfpq(IVFPQIndex::new(
+            //     16,
+            //     2048,
+            //     128,
+            //     1000,
+            //     0.01,
+            //     distance_metric,
+            //     42,
+            // )),
+            // "nsw" => IndexType::Nsw(NSWIndex::new(32, 200, 200, distance_metric)),
+            // "linscan" => IndexType::LinScan(LinScanIndex::new(distance_metric)),
+            // "annoy" => IndexType::Annoy(AnnoyIndex::new(15, 30, 130, distance_metric)),
             _ => panic!("Unsupported index type"),
         }
     } else {
@@ -267,6 +269,7 @@ async fn main() {
     let dataset_type = args.dataset_type;
     let distance_metric = args.distance_metric;
     let index_type_input = args.index_type.as_str();
+    let real_dataset_size = args.real_dataset_size;
 
     let mut index_logger: BenchmarkLogger<IndexBenchmarkResult> = BenchmarkLogger::new();
     let mut build_logger: BenchmarkLogger<GenericBenchmarkResult> = BenchmarkLogger::new();
@@ -275,9 +278,18 @@ async fn main() {
     fs::create_dir_all(&dir_path).expect("Failed to create directory");
 
     if dataset_type == "real" {
-        let vectors = read_sparse_vectors("./scripts/data-10k.msgpack").unwrap();
-        let query_vectors = read_sparse_vectors("./scripts/queries-10k.msgpack").unwrap();
-        let groundtruth = read_groundtruth("./scripts/groundtruth-10k.msgpack").unwrap();
+        let real_dataset_size = real_dataset_size.unwrap_or(10);
+        let vectors =
+            read_sparse_vectors(format!("./scripts/data-{}k.msgpack", real_dataset_size).as_str())
+                .unwrap();
+        let query_vectors = read_sparse_vectors(
+            format!("./scripts/queries-{}k.msgpack", real_dataset_size).as_str(),
+        )
+        .unwrap();
+        let groundtruth = read_groundtruth(
+            format!("./scripts/groundtruth-{}k.msgpack", real_dataset_size).as_str(),
+        )
+        .unwrap();
 
         let seed = 1521;
 
@@ -372,7 +384,7 @@ async fn main() {
                     .iter()
                     .map(|&i| vectors[i].clone())
                     .collect::<Vec<SparseVector>>();
-                let k = 5;
+                let k = 10;
                 let results = index.search(query_vector, k);
                 let search_results = results
                     .iter()
