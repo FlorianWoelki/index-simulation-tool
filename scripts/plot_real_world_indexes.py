@@ -24,6 +24,53 @@ def sort_data(values, labels):
     return list(sorted_values), list(sorted_labels)
 
 
+def plot_recall_precision_f1_score(fig):
+    fig.clear()
+    axs = fig.subplots(1, 3)
+
+    recalls, recalls_labels = sort_data([dfs[algo]['recall'].iloc[-1] for algo in algos], algos)
+    precisions, precisions_labels = sort_data([dfs[algo]['precision'].iloc[-1] for algo in algos], algos)
+    f1_scores, f1_scores_labels = sort_data([dfs[algo]['f1_score'].iloc[-1] for algo in algos], algos)
+
+    # Plot recall
+    bars1 = axs[0].bar(recalls_labels, recalls, color="gray")
+    axs[0].set_title('Recall by Algorithm')
+    axs[0].set_xlabel('Algorithm')
+    axs[0].set_ylabel('Recall')
+    # Add value labels on top of bars
+    for bar in bars1:
+        height = bar.get_height()
+        axs[0].text(bar.get_x() + bar.get_width()/2., height,
+                f'{height:.3f}', ha='center', va='bottom')
+    plt.setp(axs[0].xaxis.get_majorticklabels(), rotation=45)
+
+    # Plot precision
+    bars2 = axs[1].bar(precisions_labels, precisions, color="gray")
+    axs[1].set_title('Precision by Algorithm')
+    axs[1].set_xlabel('Algorithm')
+    axs[1].set_ylabel('Precision')
+    # Add value labels on top of bars
+    for bar in bars2:
+        height = bar.get_height()
+        axs[1].text(bar.get_x() + bar.get_width()/2., height,
+                f'{height:.3f}', ha='center', va='bottom')
+    plt.setp(axs[1].xaxis.get_majorticklabels(), rotation=45)
+
+    # Plot precision
+    bars3 = axs[2].bar(f1_scores_labels, f1_scores, color="gray")
+    axs[2].set_title('F1 Score by Algorithm')
+    axs[2].set_xlabel('Algorithm')
+    axs[2].set_ylabel('F1 Score')
+    # Add value labels on top of bars
+    for bar in bars3:
+        height = bar.get_height()
+        axs[2].text(bar.get_x() + bar.get_width()/2., height,
+                f'{height:.3f}', ha='center', va='bottom')
+    plt.setp(axs[2].xaxis.get_majorticklabels(), rotation=45)
+
+    plt.tight_layout()
+
+
 def plot_recall_and_qps(fig):
     fig.clear()
     axs = fig.subplots(1, 2)
@@ -224,6 +271,7 @@ plot_functions = [
     plot_saving_and_loading_time,
     plot_cpu_memory_disk,
     plot_disk_size_and_execution_time,
+    plot_recall_precision_f1_score,
 ]
 
 def update_plot(index):
